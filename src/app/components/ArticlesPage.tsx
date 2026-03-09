@@ -594,8 +594,11 @@ export default function ArticlesPage() {
     setShowGoogleSyncModal(false);
   };
 
-  const executeGoogleSheetSync = async () => {
-    if ((googleSyncMonth && !googleSyncYear) || (!googleSyncMonth && googleSyncYear)) {
+  const executeGoogleSheetSync = async (options?: { month?: string; year?: string; closeModalOnSuccess?: boolean }) => {
+    const selectedMonth = options?.month ?? googleSyncMonth;
+    const selectedYear = options?.year ?? googleSyncYear;
+
+    if ((selectedMonth && !selectedYear) || (!selectedMonth && selectedYear)) {
       setGoogleSyncError("Hãy chọn đủ cả tháng và năm, hoặc để trống để dùng tab mới nhất.");
       return;
     }
@@ -607,8 +610,8 @@ export default function ArticlesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          month: googleSyncMonth ? Number(googleSyncMonth) : undefined,
-          year: googleSyncYear ? Number(googleSyncYear) : undefined,
+          month: selectedMonth ? Number(selectedMonth) : undefined,
+          year: selectedYear ? Number(selectedYear) : undefined,
         }),
       });
       const data = await res.json();
@@ -618,6 +621,9 @@ export default function ArticlesPage() {
 
       setGoogleSyncResult(data as GoogleSheetSyncResult);
       fetchArticles(pagination.page || 1, search, filters);
+      if (options?.closeModalOnSuccess) {
+        setShowGoogleSyncModal(false);
+      }
     } catch (error) {
       setGoogleSyncError(String(error));
       setGoogleSyncResult(null);
@@ -790,10 +796,26 @@ export default function ArticlesPage() {
             </>
           )}
           {isAdmin && (
+            <button
+              className="btn-ios-pill btn-ios-primary"
+              onClick={() => executeGoogleSheetSync({ month: "", year: "", closeModalOnSuccess: true })}
+              disabled={googleSyncLoading}
+              title="Đồng bộ tab tháng mới nhất ngay lập tức"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
+              {googleSyncLoading ? "Đang đồng bộ..." : "Đồng bộ ngay"}
+            </button>
+          )}
+          {isAdmin && (
             <button className="btn-ios-pill btn-ios-secondary" onClick={openGoogleSyncModal} disabled={googleSyncLoading}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
-              Đồng bộ Sheet
+              Chọn tháng để đồng bộ
             </button>
+          )}
+          {isAdmin && !googleSyncLoading && googleSyncResult && (
+            <div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600, padding: "0 6px" }}>
+              Đã sync {googleSyncResult.sheetName}: thêm {googleSyncResult.inserted}, bỏ qua {googleSyncResult.duplicates}
+            </div>
           )}
           {isAdmin && (
             <button data-testid="articles-open-delete-tool" className="btn-ios-pill" onClick={openDeleteTool} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
@@ -1375,7 +1397,7 @@ export default function ArticlesPage() {
               <button className="btn-ios-pill btn-ios-secondary" onClick={closeGoogleSyncModal} disabled={googleSyncLoading}>
                 Đóng
               </button>
-              <button className="btn-ios-pill btn-ios-primary" onClick={executeGoogleSheetSync} disabled={googleSyncLoading}>
+              <button className="btn-ios-pill btn-ios-primary" onClick={() => executeGoogleSheetSync()} disabled={googleSyncLoading}>
                 {googleSyncLoading ? (
                   <><span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>sync</span> Đang đồng bộ...</>
                 ) : (

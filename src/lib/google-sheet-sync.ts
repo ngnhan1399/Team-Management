@@ -185,6 +185,45 @@ function resolveMapping(mapping: Record<string, ImportFieldId | null>) {
   return resolved;
 }
 
+function resolveGoogleSheetFieldFromHeader(header: string): ImportFieldId | null {
+  const folded = foldText(header);
+
+  if (folded.includes("id bai viet") || folded === "id bai") return "articleId";
+  if (folded.includes("ngay viet")) return "date";
+  if (folded.includes("ten bai viet") || folded === "ten bai") return "title";
+  if (folded.includes("loai bai viet")) return "articleType";
+  if (folded.includes("do dai") || folded.includes("so tu") || folded.includes("khoang tu")) return "wordCountRange";
+  if (folded.includes("but danh")) return "penName";
+  if (folded.includes("tinh trang duyet") || folded.includes("trang thai duyet")) return "status";
+  if (folded.includes("nguoi duyet")) return "reviewerName";
+  if (folded.includes("link bai viet") || folded === "link") return "link";
+  if (folded.includes("noi dung sua") || folded === "note" || folded === "notes") return "notes";
+
+  return null;
+}
+
+function applyGoogleSheetHeaderOverrides(
+  mapping: Record<string, ImportFieldId | null>,
+  headers: Array<{ key: string; header: string }>
+) {
+  const nextMapping = { ...mapping };
+
+  for (const column of headers) {
+    const forcedField = resolveGoogleSheetFieldFromHeader(column.header);
+    if (!forcedField) continue;
+
+    for (const [key, currentField] of Object.entries(nextMapping)) {
+      if (key !== column.key && currentField === forcedField) {
+        nextMapping[key] = null;
+      }
+    }
+
+    nextMapping[column.key] = forcedField;
+  }
+
+  return nextMapping;
+}
+
 function buildArticlePayload(
   normalized: NormalizedArticle,
   mappedFields: Set<ImportFieldId>
@@ -245,7 +284,12 @@ export async function executeGoogleSheetSync(
     throw new Error("Tab Google Sheets đang chọn chưa có dòng dữ liệu hợp lệ để đồng bộ.");
   }
 
-  const mapping = resolveMapping(prepared.analysis.mapping);
+  const mapping = resolveMapping(
+    applyGoogleSheetHeaderOverrides(
+      prepared.analysis.mapping,
+      prepared.analysis.columns.map((column) => ({ key: column.key, header: column.header }))
+    )
+  );
   const missingRequiredFields = REQUIRED_FIELDS.filter((field) => !Object.values(mapping).includes(field));
   if (missingRequiredFields.length > 0) {
     throw new Error(`Không thể đồng bộ vì sheet "${selectedSheet.name}" thiếu mapping cho: ${missingRequiredFields.join(", ")}.`);

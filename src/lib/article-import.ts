@@ -685,6 +685,7 @@ function normalizeArticleText(value: unknown): string {
 
 function mapCategory(value: string): "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đánh giá" | "Khác" {
   const folded = foldText(value);
+  if (folded.includes("ict")) return "ICT";
   if (folded.includes("gia dung")) return "Gia dụng";
   if (folded.includes("thu thuat")) return "Thủ thuật";
   if (folded.includes("giai tri")) return "Giải trí";
@@ -801,9 +802,12 @@ export function normalizeImportedArticleRow(
   if (rawPenName.length > 80) issues.push("Bút danh quá dài, khả năng mapping sai");
 
   const penName = fuzzyMatchPenName(rawPenName, collaboratorPenNames);
-  const category = mapCategory(rawCategory);
+  const categorySource = rawCategory || rawArticleType;
+  const contentTypeSource = rawContentType || rawArticleType;
+
+  const category = mapCategory(categorySource);
   const wordCountRange = mapWordCountRange(rawWordCountRange);
-  const contentType = mapContentType(rawContentType);
+  const contentType = mapContentType(contentTypeSource);
   const articleType = mapArticleType(rawArticleType, category, wordCountRange);
   const status = mapStatus(rawStatus);
   const reviewerName = rawReviewerName ? fuzzyMatchPenName(rawReviewerName, collaboratorPenNames) : "";
