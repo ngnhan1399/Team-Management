@@ -1,7 +1,7 @@
 import { ensureDatabaseInitialized } from "@/db";
 import { getCurrentUserContext } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { executeGoogleSheetSync } from "@/lib/google-sheet-sync";
+import { executeGoogleSheetSync, refreshScopedArticlesFromGoogleSheet } from "@/lib/google-sheet-sync";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -23,6 +23,18 @@ function parseOptionalNumber(value: unknown, label: string) {
   return parsed;
 }
 
+function parseArticleIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0)
+    )
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     await ensureDatabaseInitialized();
@@ -41,6 +53,7 @@ export async function POST(request: NextRequest) {
     const month = parseOptionalNumber(body.month, "Tháng");
     const year = parseOptionalNumber(body.year, "Năm");
     const sourceUrl = normalizeText(body.sourceUrl);
+    const articleIds = parseArticleIds(body.articleIds);
 
     if ((month === null) !== (year === null)) {
       return NextResponse.json(
@@ -57,12 +70,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Năm không hợp lệ." }, { status: 400 });
     }
 
-    const result = await executeGoogleSheetSync({
-      sourceUrl: sourceUrl || undefined,
-      month,
-      year,
-      createdByUserId: context.user.id,
-    });
+    const result = articleIds.length > 0
+      ? await refreshScopedArticlesFromGoogleSheet({
+        sourceUrl: sourceUrl || undefined,
+        month,
+        year,
+        createdByUserId: context.user.id,
+        articleIds,
+      })
+      : await executeGoogleSheetSync({
+        sourceUrl: sourceUrl || undefined,
+        month,
+        year,
+        createdByUserId: context.user.id,
+      });
 
     await writeAuditLog({
       userId: context.user.id,
@@ -70,6 +91,8 @@ export async function POST(request: NextRequest) {
       entity: "article",
       payload: {
         ...result,
+        scope: articleIds.length > 0 ? "filtered" : "full",
+        articleIds,
         triggeredBy: "manual",
       },
     });

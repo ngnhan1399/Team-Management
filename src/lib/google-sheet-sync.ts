@@ -34,9 +34,31 @@ type SyncLinkRow = {
   id: number;
   sourceRowKey: string;
   articleIdRef: number | null;
+  sourceUrl?: string;
+  sheetName?: string;
+  sheetMonth?: number;
+  sheetYear?: number;
 };
 
 type NormalizedArticle = ReturnType<typeof normalizeImportedArticleRow>["normalized"];
+
+type PreparedRowLookupEntry = {
+  rowNumber: number;
+  sourceRowKey: string;
+  normalized: NormalizedArticle;
+  payload: Partial<typeof articles.$inferInsert>;
+};
+
+type PreparedRowLookup = {
+  bySourceRowKey: Map<string, PreparedRowLookupEntry>;
+  byArticleId: Map<string, PreparedRowLookupEntry>;
+  byComposite: Map<string, PreparedRowLookupEntry>;
+  byTitlePenName: Map<string, PreparedRowLookupEntry>;
+  byLink: Map<string, PreparedRowLookupEntry>;
+  skipped: number;
+  errors: string[];
+  warnings: string[];
+};
 
 export interface ExecuteGoogleSheetSyncOptions {
   sourceUrl?: string;
@@ -44,6 +66,10 @@ export interface ExecuteGoogleSheetSyncOptions {
   year?: number | null;
   sheetName?: string;
   createdByUserId?: number | null;
+}
+
+export interface RefreshScopedGoogleSheetSyncOptions extends ExecuteGoogleSheetSyncOptions {
+  articleIds: number[];
 }
 
 export interface GoogleSheetSyncExecutionResult {
@@ -389,6 +415,182 @@ function buildArticlePayload(
   return values;
 }
 
+async function getCollaboratorPenNames() {
+  return (await db
+    .select({ penName: collaborators.penName })
+    .from(collaborators)
+    .all())
+    .map((item) => item.penName);
+}
+
+function resolvePreparedGoogleSheetMapping(
+  prepared: Awaited<ReturnType<typeof loadGoogleSheetImport>>["prepared"],
+  sheetName: string
+) {
+  const mapping = resolveMapping(
+    resolveGoogleSheetMapping(
+      prepared.analysis.columns.map((column) => ({
+        key: column.key,
+        header: column.header,
+        suggestedField: column.suggestedField,
+        suggestionScore: column.suggestionScore,
+      }))
+    )
+  );
+  const missingRequiredFields = REQUIRED_FIELDS.filter((field) => !Object.values(mapping).includes(field));
+  if (missingRequiredFields.length > 0) {
+    throw new Error(`Không thể đồng bộ vì sheet "${sheetName}" thiếu mapping cho: ${missingRequiredFields.join(", ")}.`);
+  }
+
+  return {
+    mapping,
+    mappedFields: new Set(Object.values(mapping)),
+  };
+}
+
+function buildPreparedRowLookup(
+  prepared: Awaited<ReturnType<typeof loadGoogleSheetImport>>["prepared"],
+  collaboratorPenNames: string[],
+  fallbackDate: string,
+  mapping: Record<string, ImportFieldId>,
+  mappedFields: Set<ImportFieldId>
+): PreparedRowLookup {
+  const bySourceRowKey = new Map<string, PreparedRowLookupEntry>();
+  const byArticleId = new Map<string, PreparedRowLookupEntry>();
+  const byComposite = new Map<string, PreparedRowLookupEntry>();
+  const byTitlePenName = new Map<string, PreparedRowLookupEntry>();
+  const byLink = new Map<string, PreparedRowLookupEntry>();
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  let skipped = 0;
+  let rowsUsingFallbackDate = 0;
+
+  for (const row of prepared.rawRows) {
+    const { normalized, issues, shouldSkip, usedFallbackDate } = normalizeImportedArticleRow(
+      row,
+      mapping,
+      collaboratorPenNames,
+      { fallbackDate }
+    );
+    const rowIssues = [...issues];
+
+    if (shouldSkip) {
+      continue;
+    }
+
+    if (usedFallbackDate) {
+      rowsUsingFallbackDate += 1;
+    }
+
+    if (!normalized.date || !normalized.title || !normalized.penName) {
+      rowIssues.push("Thiếu dữ liệu bắt buộc");
+    }
+
+    if (rowIssues.length > 0) {
+      skipped += 1;
+      if (errors.length < 20) {
+        errors.push(`Dòng ${row.rowNumber}: ${rowIssues.join("; ")}`);
+      }
+      continue;
+    }
+
+    const articleId = normalized.articleId?.trim() || "";
+    const link = normalized.link?.trim() || "";
+    const entry: PreparedRowLookupEntry = {
+      rowNumber: row.rowNumber,
+      sourceRowKey: buildSourceRowKey({
+        ...normalized,
+        articleId: articleId || undefined,
+        link: link || undefined,
+      }),
+      normalized,
+      payload: buildArticlePayload(
+        {
+          ...normalized,
+          articleId: articleId || undefined,
+          link: link || undefined,
+        },
+        mappedFields
+      ),
+    };
+
+    bySourceRowKey.set(entry.sourceRowKey, entry);
+    if (articleId && !byArticleId.has(articleId)) {
+      byArticleId.set(articleId, entry);
+    }
+    if (link) {
+      const linkKey = normalizeLinkKey(link);
+      if (!byLink.has(linkKey)) {
+        byLink.set(linkKey, entry);
+      }
+    }
+
+    const compositeKey = normalizeCompositeKey(normalized.title, normalized.penName, normalized.date as string);
+    if (!byComposite.has(compositeKey)) {
+      byComposite.set(compositeKey, entry);
+    }
+
+    const titlePenNameKey = normalizeTitlePenNameKey(normalized.title, normalized.penName);
+    if (!byTitlePenName.has(titlePenNameKey)) {
+      byTitlePenName.set(titlePenNameKey, entry);
+    }
+  }
+
+  if (rowsUsingFallbackDate > 0) {
+    warnings.push(
+      `${rowsUsingFallbackDate} dòng không có "Ngày viết" trong sheet gốc đã được gán tạm ngày ${fallbackDate} theo tab hiện tại.`
+    );
+  }
+
+  return {
+    bySourceRowKey,
+    byArticleId,
+    byComposite,
+    byTitlePenName,
+    byLink,
+    skipped,
+    errors,
+    warnings,
+  };
+}
+
+function findPreparedRowForArticle(
+  article: ExistingArticleRow,
+  lookup: PreparedRowLookup,
+  syncLink?: SyncLinkRow | null
+) {
+  if (syncLink?.sourceRowKey) {
+    const matchedBySourceRowKey = lookup.bySourceRowKey.get(syncLink.sourceRowKey);
+    if (matchedBySourceRowKey) {
+      return matchedBySourceRowKey;
+    }
+  }
+
+  const articleId = article.articleId?.trim();
+  if (articleId) {
+    const matchedByArticleId = lookup.byArticleId.get(articleId);
+    if (matchedByArticleId) {
+      return matchedByArticleId;
+    }
+  }
+
+  const link = article.link?.trim();
+  if (link) {
+    const matchedByLink = lookup.byLink.get(normalizeLinkKey(link));
+    if (matchedByLink) {
+      return matchedByLink;
+    }
+  }
+
+  const compositeKey = normalizeCompositeKey(article.title, article.penName, article.date);
+  const matchedByComposite = lookup.byComposite.get(compositeKey);
+  if (matchedByComposite) {
+    return matchedByComposite;
+  }
+
+  return lookup.byTitlePenName.get(normalizeTitlePenNameKey(article.title, article.penName));
+}
+
 function setLookupMaps(
   articleIdMap: Map<string, ExistingArticleRow>,
   compositeMap: Map<string, ExistingArticleRow>,
@@ -449,16 +651,242 @@ function doesArticlePayloadDiffer(
   );
 }
 
+export async function refreshScopedArticlesFromGoogleSheet(
+  options: RefreshScopedGoogleSheetSyncOptions
+): Promise<GoogleSheetSyncExecutionResult> {
+  await ensureDatabaseInitialized();
+
+  const targetArticleIds = Array.from(
+    new Set(
+      options.articleIds
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0)
+    )
+  );
+
+  if (targetArticleIds.length === 0) {
+    throw new Error("Chưa có bài viết nào trong danh sách đang lọc để đồng bộ nhanh.");
+  }
+
+  const collaboratorPenNames = await getCollaboratorPenNames();
+  const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+  const targetArticles = await db
+    .select({
+      id: articles.id,
+      articleId: articles.articleId,
+      title: articles.title,
+      penName: articles.penName,
+      date: articles.date,
+      link: articles.link,
+      category: articles.category,
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      wordCountRange: articles.wordCountRange,
+      status: articles.status,
+      reviewerName: articles.reviewerName,
+      notes: articles.notes,
+    })
+    .from(articles)
+    .where(inArray(articles.id, targetArticleIds))
+    .all();
+
+  if (targetArticles.length === 0) {
+    throw new Error("Không tìm thấy bài viết nào trong hệ thống để đồng bộ nhanh.");
+  }
+
+  const syncLinks = await db
+    .select({
+      id: articleSyncLinks.id,
+      sourceRowKey: articleSyncLinks.sourceRowKey,
+      articleIdRef: articleSyncLinks.articleIdRef,
+      sourceUrl: articleSyncLinks.sourceUrl,
+      sheetName: articleSyncLinks.sheetName,
+      sheetMonth: articleSyncLinks.sheetMonth,
+      sheetYear: articleSyncLinks.sheetYear,
+    })
+    .from(articleSyncLinks)
+    .where(inArray(articleSyncLinks.articleIdRef, targetArticleIds))
+    .all() as SyncLinkRow[];
+
+  const syncLinkByArticleId = new Map<number, SyncLinkRow>();
+  for (const syncLink of syncLinks) {
+    const articleIdRef = Number(syncLink.articleIdRef || 0);
+    if (articleIdRef > 0 && syncLink.sourceUrl === sourceUrl && !syncLinkByArticleId.has(articleIdRef)) {
+      syncLinkByArticleId.set(articleIdRef, syncLink);
+    }
+  }
+
+  const groups = new Map<string, { sheetName?: string; month: number; year: number; articleIds: number[] }>();
+  const warnings: string[] = [];
+  let skipped = 0;
+
+  for (const article of targetArticles) {
+    const syncLink = syncLinkByArticleId.get(article.id);
+    const resolvedMonth = syncLink?.sheetMonth ?? options.month ?? getYearMonthFromDate(article.date)?.month ?? null;
+    const resolvedYear = syncLink?.sheetYear ?? options.year ?? getYearMonthFromDate(article.date)?.year ?? null;
+    const resolvedSheetName = syncLink?.sheetName || undefined;
+
+    if (!resolvedMonth || !resolvedYear) {
+      skipped += 1;
+      if (warnings.length < 20) {
+        warnings.push(`Không xác định được tab tháng cho bài "${article.title}".`);
+      }
+      continue;
+    }
+
+    const key = resolvedSheetName
+      ? `sheet:${resolvedSheetName}`
+      : `month:${resolvedMonth}:${resolvedYear}`;
+    const existingGroup = groups.get(key);
+    if (existingGroup) {
+      existingGroup.articleIds.push(article.id);
+      continue;
+    }
+
+    groups.set(key, {
+      sheetName: resolvedSheetName,
+      month: resolvedMonth,
+      year: resolvedYear,
+      articleIds: [article.id],
+    });
+  }
+
+  if (groups.size === 0) {
+    throw new Error("Không tìm thấy tab Google Sheet phù hợp cho danh sách đang lọc.");
+  }
+
+  let updated = 0;
+  let duplicates = 0;
+  const errors: string[] = [];
+  let resultSheetName = "";
+  let resultMonth = options.month ?? null;
+  let resultYear = options.year ?? null;
+
+  for (const group of groups.values()) {
+    const { prepared, selectedSheet } = await loadGoogleSheetImport({
+      sourceUrl,
+      sheetName: group.sheetName,
+      month: group.month,
+      year: group.year,
+      collaboratorPenNames,
+    });
+    const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
+    const lookup = buildPreparedRowLookup(
+      prepared,
+      collaboratorPenNames,
+      buildSheetFallbackDate(selectedSheet.month, selectedSheet.year),
+      mapping,
+      mappedFields
+    );
+
+    warnings.push(...lookup.warnings.filter((warning) => !warnings.includes(warning)).slice(0, Math.max(0, 20 - warnings.length)));
+    errors.push(...lookup.errors.slice(0, Math.max(0, 20 - errors.length)));
+    skipped += lookup.skipped;
+
+    resultSheetName = resultSheetName || selectedSheet.name;
+    resultMonth = resultMonth ?? selectedSheet.month;
+    resultYear = resultYear ?? selectedSheet.year;
+
+    const groupArticles = targetArticles.filter((article) => group.articleIds.includes(article.id));
+    for (const article of groupArticles) {
+      const syncLink = syncLinkByArticleId.get(article.id) ?? null;
+      const matchedRow = findPreparedRowForArticle(article, lookup, syncLink);
+
+      if (!matchedRow) {
+        skipped += 1;
+        if (warnings.length < 20) {
+          warnings.push(`Không tìm thấy bài "${article.title}" trong sheet ${selectedSheet.name}.`);
+        }
+        continue;
+      }
+
+      duplicates += 1;
+      if (!doesArticlePayloadDiffer(article, matchedRow.payload)) {
+        if (syncLink && (
+          syncLink.sourceRowKey !== matchedRow.sourceRowKey
+          || syncLink.sheetName !== selectedSheet.name
+          || syncLink.sheetMonth !== selectedSheet.month
+          || syncLink.sheetYear !== selectedSheet.year
+        )) {
+          await db
+            .update(articleSyncLinks)
+            .set({
+              sourceRowKey: matchedRow.sourceRowKey,
+              sheetName: selectedSheet.name,
+              sheetMonth: selectedSheet.month,
+              sheetYear: selectedSheet.year,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(articleSyncLinks.id, syncLink.id))
+            .run();
+        }
+        continue;
+      }
+
+      await db
+        .update(articles)
+        .set({
+          ...matchedRow.payload,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(articles.id, article.id))
+        .run();
+
+      if (syncLink) {
+        await db
+          .update(articleSyncLinks)
+          .set({
+            sourceRowKey: matchedRow.sourceRowKey,
+            sheetName: selectedSheet.name,
+            sheetMonth: selectedSheet.month,
+            sheetYear: selectedSheet.year,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(articleSyncLinks.id, syncLink.id))
+          .run();
+      } else {
+        await db
+          .insert(articleSyncLinks)
+          .values({
+            sourceUrl,
+            sheetName: selectedSheet.name,
+            sheetMonth: selectedSheet.month,
+            sheetYear: selectedSheet.year,
+            sourceRowKey: matchedRow.sourceRowKey,
+            articleIdRef: article.id,
+          })
+          .run();
+      }
+
+      updated += 1;
+    }
+  }
+
+  return {
+    sourceUrl,
+    sheetName: resultSheetName || "Scoped sync",
+    month: resultMonth ?? options.month ?? 0,
+    year: resultYear ?? options.year ?? 0,
+    requestedMonth: options.month ?? null,
+    requestedYear: options.year ?? null,
+    requestedSheetName: options.sheetName,
+    total: targetArticles.length,
+    inserted: 0,
+    updated,
+    duplicates,
+    deleted: 0,
+    skipped,
+    errors: errors.slice(0, 20),
+    warnings: warnings.slice(0, 20),
+  };
+}
+
 export async function executeGoogleSheetSync(
   options: ExecuteGoogleSheetSyncOptions = {}
 ): Promise<GoogleSheetSyncExecutionResult> {
   await ensureDatabaseInitialized();
 
-  const collaboratorPenNames = (await db
-    .select({ penName: collaborators.penName })
-    .from(collaborators)
-    .all())
-    .map((item) => item.penName);
+  const collaboratorPenNames = await getCollaboratorPenNames();
 
   const { prepared, selectedSheet, sourceUrl } = await loadGoogleSheetImport({
     sourceUrl: options.sourceUrl,
@@ -472,22 +900,7 @@ export async function executeGoogleSheetSync(
     throw new Error("Tab Google Sheets đang chọn chưa có dòng dữ liệu hợp lệ để đồng bộ.");
   }
 
-  const mapping = resolveMapping(
-    resolveGoogleSheetMapping(
-      prepared.analysis.columns.map((column) => ({
-        key: column.key,
-        header: column.header,
-        suggestedField: column.suggestedField,
-        suggestionScore: column.suggestionScore,
-      }))
-    )
-  );
-  const missingRequiredFields = REQUIRED_FIELDS.filter((field) => !Object.values(mapping).includes(field));
-  if (missingRequiredFields.length > 0) {
-    throw new Error(`Không thể đồng bộ vì sheet "${selectedSheet.name}" thiếu mapping cho: ${missingRequiredFields.join(", ")}.`);
-  }
-
-  const mappedFields = new Set(Object.values(mapping));
+  const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
   const existingArticles = await db
     .select({
       id: articles.id,

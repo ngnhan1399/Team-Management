@@ -623,11 +623,35 @@ export default function ArticlesPage() {
   };
 
   const getQuickSyncSelection = () => {
+    const scopedArticleIds = articles.map((article) => article.id).filter((articleId) => Number.isInteger(articleId) && articleId > 0);
+    const hasScopedFilters = Boolean(
+      search.trim()
+      || filters.penName
+      || filters.status
+      || filters.category
+      || filters.articleType
+      || filters.contentType
+    );
+
+    if (hasScopedFilters) {
+      return {
+        month: filters.month,
+        year: filters.year,
+        description: scopedArticleIds.length > 0
+          ? `${scopedArticleIds.length} bài đang hiển thị theo bộ lọc hiện tại`
+          : "danh sách đang lọc",
+        articleIds: scopedArticleIds,
+        preserveView: true,
+      };
+    }
+
     if (filters.month && filters.year) {
       return {
         month: filters.month,
         year: filters.year,
         description: `Tháng ${filters.month}/${filters.year}`,
+        articleIds: [] as number[],
+        preserveView: false,
       };
     }
 
@@ -635,8 +659,12 @@ export default function ArticlesPage() {
       month: "",
       year: "",
       description: "tab tháng mới nhất",
+      articleIds: [] as number[],
+      preserveView: false,
     };
   };
+
+  const quickSyncSelection = getQuickSyncSelection();
 
   const focusSyncedArticles = (month: number, year: number) => {
     const nextFilters = {
@@ -656,12 +684,20 @@ export default function ArticlesPage() {
   };
 
   const executeGoogleSheetSync = async (options?: { month?: string; year?: string; closeModalOnSuccess?: boolean; useCurrentFilters?: boolean }) => {
-    const derivedSelection = options?.useCurrentFilters ? getQuickSyncSelection() : null;
+    const derivedSelection = options?.useCurrentFilters ? quickSyncSelection : null;
     const selectedMonth = derivedSelection ? derivedSelection.month : (options?.month ?? googleSyncMonth);
     const selectedYear = derivedSelection ? derivedSelection.year : (options?.year ?? googleSyncYear);
+    const scopedArticleIds = derivedSelection?.articleIds ?? [];
+    const preserveView = derivedSelection?.preserveView ?? false;
 
     if ((selectedMonth && !selectedYear) || (!selectedMonth && selectedYear)) {
       setGoogleSyncError("Hãy chọn đủ cả tháng và năm, hoặc để trống để dùng tab mới nhất.");
+      return;
+    }
+
+    if (preserveView && scopedArticleIds.length === 0) {
+      setGoogleSyncError("Danh sách đang lọc hiện chưa có bài viết nào để đồng bộ nhanh.");
+      setGoogleSyncResult(null);
       return;
     }
 
@@ -674,6 +710,7 @@ export default function ArticlesPage() {
         body: JSON.stringify({
           month: selectedMonth ? Number(selectedMonth) : undefined,
           year: selectedYear ? Number(selectedYear) : undefined,
+          articleIds: scopedArticleIds.length > 0 ? scopedArticleIds : undefined,
         }),
       });
       const data = await res.json();
@@ -685,7 +722,11 @@ export default function ArticlesPage() {
       setGoogleSyncResult(syncResult);
       setGoogleSyncMonth(String(syncResult.month));
       setGoogleSyncYear(String(syncResult.year));
-      focusSyncedArticles(syncResult.month, syncResult.year);
+      if (preserveView) {
+        fetchArticles(pagination.page || 1, search, filters);
+      } else {
+        focusSyncedArticles(syncResult.month, syncResult.year);
+      }
       if (options?.closeModalOnSuccess) {
         setShowGoogleSyncModal(false);
       }
@@ -865,15 +906,19 @@ export default function ArticlesPage() {
               className="btn-ios-pill btn-ios-primary"
               onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true, useCurrentFilters: true })}
               disabled={googleSyncLoading}
-              title={filters.month && filters.year
-                ? `Đồng bộ ngay theo bộ lọc Tháng ${filters.month}/${filters.year}`
-                : "Đồng bộ tab tháng mới nhất ngay lập tức"}
+              title={quickSyncSelection.preserveView
+                ? `Đồng bộ nhanh đúng ${quickSyncSelection.description}`
+                : filters.month && filters.year
+                  ? `Đồng bộ ngay theo bộ lọc Tháng ${filters.month}/${filters.year}`
+                  : "Đồng bộ tab tháng mới nhất ngay lập tức"}
               style={{ minWidth: 170, justifyContent: "center" }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
               {googleSyncLoading
                 ? "Đang đồng bộ..."
-                : filters.month && filters.year
+                : quickSyncSelection.preserveView
+                  ? "Đồng bộ kết quả lọc"
+                  : filters.month && filters.year
                   ? `Đồng bộ ${filters.month}/${filters.year}`
                   : "Đồng bộ ngay"}
             </button>
