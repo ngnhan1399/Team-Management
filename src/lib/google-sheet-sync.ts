@@ -191,6 +191,10 @@ function normalizeLinkKey(link: string) {
   return link.toLowerCase().trim();
 }
 
+function buildSheetFallbackDate(month: number, year: number) {
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
 function buildSourceRowKey(normalized: NormalizedArticle) {
   const articleId = normalized.articleId?.trim();
   if (articleId) return `articleId:${articleId}`;
@@ -451,11 +455,27 @@ export async function executeGoogleSheetSync(
   let deleted = 0;
   let skipped = 0;
   const errors: string[] = [];
+  const runtimeWarnings: string[] = [];
+  let rowsUsingFallbackDate = 0;
+  const fallbackDate = buildSheetFallbackDate(selectedSheet.month, selectedSheet.year);
 
   for (const row of prepared.rawRows) {
     try {
-      const { normalized, issues } = normalizeImportedArticleRow(row, mapping, collaboratorPenNames);
+      const { normalized, issues, shouldSkip, usedFallbackDate } = normalizeImportedArticleRow(
+        row,
+        mapping,
+        collaboratorPenNames,
+        { fallbackDate }
+      );
       const rowIssues = [...issues];
+
+      if (shouldSkip) {
+        continue;
+      }
+
+      if (usedFallbackDate) {
+        rowsUsingFallbackDate += 1;
+      }
 
       if (!normalized.date || !normalized.title || !normalized.penName) {
         rowIssues.push("Thiếu dữ liệu bắt buộc");
@@ -541,6 +561,12 @@ export async function executeGoogleSheetSync(
     }
   }
 
+  if (rowsUsingFallbackDate > 0) {
+    runtimeWarnings.push(
+      `${rowsUsingFallbackDate} dòng không có "Ngày viết" trong sheet gốc đã được gán tạm ngày ${fallbackDate} theo tab ${selectedSheet.name}.`
+    );
+  }
+
   const staleLinks = existingSyncLinks.filter((link) => !seenSourceRowKeys.has(link.sourceRowKey));
   const staleArticleIds = Array.from(
     new Set(
@@ -576,6 +602,6 @@ export async function executeGoogleSheetSync(
     deleted,
     skipped,
     errors,
-    warnings: prepared.analysis.warnings,
+    warnings: [...prepared.analysis.warnings, ...runtimeWarnings],
   };
 }

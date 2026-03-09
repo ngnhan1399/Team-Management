@@ -78,6 +78,10 @@ interface PrepareArticleImportOptions {
   collaboratorPenNames?: string[];
 }
 
+interface NormalizeImportedArticleRowOptions {
+  fallbackDate?: string | null;
+}
+
 type FieldDefinition = {
   id: ImportFieldId;
   label: string;
@@ -767,10 +771,23 @@ export function fuzzyMatchPenName(rawName: string, collaboratorPenNames: string[
   return rawName;
 }
 
+function deriveArticleIdFromLink(link: string): string | undefined {
+  if (!link) return undefined;
+
+  const slugMatch = link.match(/-(\d{5,})(?:[/?#]|$)/);
+  if (slugMatch?.[1]) return slugMatch[1];
+
+  const trailingMatch = link.match(/\/(\d{5,})(?:[/?#]|$)/);
+  if (trailingMatch?.[1]) return trailingMatch[1];
+
+  return undefined;
+}
+
 export function normalizeImportedArticleRow(
   row: PreparedArticleImportRow,
   mapping: Record<string, ImportFieldId>,
-  collaboratorPenNames: string[]
+  collaboratorPenNames: string[],
+  options: NormalizeImportedArticleRowOptions = {}
 ) {
   const fieldToColumn = new Map<ImportFieldId, string>();
   for (const [columnKey, field] of Object.entries(mapping)) {
@@ -794,16 +811,28 @@ export function normalizeImportedArticleRow(
   const rawReviewerName = normalizeArticleText(getValue("reviewerName"));
   const rawNotes = normalizeArticleText(getValue("notes"));
   const rawArticleId = normalizeArticleText(getValue("articleId"));
+  const rawDateText = normalizeArticleText(rawDate);
 
   const issues: string[] = [];
-  const date = parseDateValue(rawDate);
+  const parsedDate = parseDateValue(rawDate);
+  const usedFallbackDate = Boolean(!parsedDate && !rawDateText && options.fallbackDate && rawTitle && rawPenName);
+  const date = parsedDate || (usedFallbackDate ? options.fallbackDate! : null);
   const titleLooksLikeDate = parseDateValue(rawTitle) !== null;
+  const articleId = rawArticleId || deriveArticleIdFromLink(rawLink) || undefined;
+  const shouldSkip =
+    !rawTitle &&
+    !rawPenName &&
+    !rawDateText &&
+    !articleId &&
+    !rawLink;
 
-  if (!rawTitle) issues.push("Thiếu tiêu đề");
-  if (!rawPenName) issues.push("Thiếu bút danh");
-  if (!date) issues.push("Ngày viết không hợp lệ");
-  if (titleLooksLikeDate) issues.push("Tiêu đề đang có dạng ngày tháng, khả năng mapping sai");
-  if (rawPenName.length > 80) issues.push("Bút danh quá dài, khả năng mapping sai");
+  if (!shouldSkip) {
+    if (!rawTitle) issues.push("Thiếu tiêu đề");
+    if (!rawPenName) issues.push("Thiếu bút danh");
+    if (!date) issues.push("Ngày viết không hợp lệ");
+    if (titleLooksLikeDate) issues.push("Tiêu đề đang có dạng ngày tháng, khả năng mapping sai");
+    if (rawPenName.length > 80) issues.push("Bút danh quá dài, khả năng mapping sai");
+  }
 
   const penName = fuzzyMatchPenName(rawPenName, collaboratorPenNames);
   const categorySource = rawCategory || rawArticleType;
@@ -818,7 +847,7 @@ export function normalizeImportedArticleRow(
 
   return {
     normalized: {
-      articleId: rawArticleId || undefined,
+      articleId,
       date,
       title: rawTitle,
       penName,
@@ -832,5 +861,7 @@ export function normalizeImportedArticleRow(
       notes: rawNotes || undefined,
     },
     issues,
+    shouldSkip,
+    usedFallbackDate,
   };
 }
