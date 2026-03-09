@@ -594,6 +594,23 @@ export default function ArticlesPage() {
     setShowGoogleSyncModal(false);
   };
 
+  const focusSyncedArticles = (month: number, year: number) => {
+    const nextFilters = {
+      penName: "",
+      status: "",
+      category: "",
+      articleType: "",
+      contentType: "",
+      month: String(month),
+      year: String(year),
+    };
+
+    setSearch("");
+    setFilters(nextFilters);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    fetchArticles(1, "", nextFilters);
+  };
+
   const executeGoogleSheetSync = async (options?: { month?: string; year?: string; closeModalOnSuccess?: boolean }) => {
     const selectedMonth = options?.month ?? googleSyncMonth;
     const selectedYear = options?.year ?? googleSyncYear;
@@ -619,8 +636,11 @@ export default function ArticlesPage() {
         throw new Error(data.error || "Không thể đồng bộ Google Sheet");
       }
 
-      setGoogleSyncResult(data as GoogleSheetSyncResult);
-      fetchArticles(pagination.page || 1, search, filters);
+      const syncResult = data as GoogleSheetSyncResult;
+      setGoogleSyncResult(syncResult);
+      setGoogleSyncMonth(String(syncResult.month));
+      setGoogleSyncYear(String(syncResult.year));
+      focusSyncedArticles(syncResult.month, syncResult.year);
       if (options?.closeModalOnSuccess) {
         setShowGoogleSyncModal(false);
       }
@@ -1273,7 +1293,8 @@ export default function ArticlesPage() {
                   Hệ thống dùng chung một engine đồng bộ cho cả <strong>Đồng bộ ngay</strong> và <strong>Đồng bộ theo tháng</strong>.
                   Nếu để trống, hệ thống lấy tab tháng mới nhất. Nếu chọn tháng/năm, hệ thống sync đúng tab đó. Dữ liệu sẽ
                   được <strong>mirror theo sheet gốc</strong>: bài có trong sheet thì giữ, bài trùng thì bỏ qua, bài không còn
-                  trong sheet sẽ bị xóa khỏi danh sách đã đồng bộ của tab đó.
+                  trong sheet sẽ bị xóa khỏi danh sách đã đồng bộ của tab đó. Sau khi đồng bộ xong, danh sách bài viết sẽ tự
+                  chuyển sang đúng tháng vừa sync để bạn thấy ngay dữ liệu đã được lưu.
                 </div>
                 <a
                   href="https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251"
