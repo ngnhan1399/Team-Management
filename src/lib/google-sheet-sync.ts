@@ -207,18 +207,18 @@ function applyGoogleSheetHeaderOverrides(
   headers: Array<{ key: string; header: string }>
 ) {
   const nextMapping = { ...mapping };
+  const assignedFields = new Set<ImportFieldId>();
 
   for (const column of headers) {
     const forcedField = resolveGoogleSheetFieldFromHeader(column.header);
     if (!forcedField) continue;
-
-    for (const [key, currentField] of Object.entries(nextMapping)) {
-      if (key !== column.key && currentField === forcedField) {
-        nextMapping[key] = null;
-      }
+    if (assignedFields.has(forcedField)) {
+      nextMapping[column.key] = null;
+      continue;
     }
 
     nextMapping[column.key] = forcedField;
+    assignedFields.add(forcedField);
   }
 
   return nextMapping;
