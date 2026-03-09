@@ -801,13 +801,19 @@ export default function ArticlesPage() {
               onClick={() => executeGoogleSheetSync({ month: "", year: "", closeModalOnSuccess: true })}
               disabled={googleSyncLoading}
               title="Đồng bộ tab tháng mới nhất ngay lập tức"
+              style={{ minWidth: 170, justifyContent: "center" }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
               {googleSyncLoading ? "Đang đồng bộ..." : "Đồng bộ ngay"}
             </button>
           )}
           {isAdmin && (
-            <button className="btn-ios-pill btn-ios-secondary" onClick={openGoogleSyncModal} disabled={googleSyncLoading}>
+            <button
+              className="btn-ios-pill btn-ios-secondary"
+              onClick={openGoogleSyncModal}
+              disabled={googleSyncLoading}
+              style={{ minWidth: 210, justifyContent: "center" }}
+            >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
               Chọn tháng để đồng bộ
             </button>
@@ -1264,9 +1270,10 @@ export default function ArticlesPage() {
             <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <div style={{ padding: 16, borderRadius: 16, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.14)" }}>
                 <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.7 }}>
-                  Hệ thống sẽ đọc Google Sheet công việc, tự tìm tab <strong>tháng/năm mới nhất</strong> nếu bạn để trống,
-                  hoặc khớp đúng tab theo tháng/năm bạn chọn rồi nhập vào danh sách bài viết. Những bài đã có sẵn sẽ
-                  được bỏ qua để tránh trùng lặp dữ liệu khi đồng bộ nhiều lần.
+                  Hệ thống dùng chung một engine đồng bộ cho cả <strong>Đồng bộ ngay</strong> và <strong>Đồng bộ theo tháng</strong>.
+                  Nếu để trống, hệ thống lấy tab tháng mới nhất. Nếu chọn tháng/năm, hệ thống sync đúng tab đó. Dữ liệu sẽ
+                  được <strong>mirror theo sheet gốc</strong>: bài có trong sheet thì giữ, bài trùng thì bỏ qua, bài không còn
+                  trong sheet sẽ bị xóa khỏi danh sách đã đồng bộ của tab đó.
                 </div>
                 <a
                   href="https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251"
@@ -1393,11 +1400,11 @@ export default function ArticlesPage() {
               <button className="btn-ios-pill btn-ios-secondary" onClick={closeGoogleSyncModal} disabled={googleSyncLoading}>
                 Đóng
               </button>
-              <button className="btn-ios-pill btn-ios-primary" onClick={() => executeGoogleSheetSync()} disabled={googleSyncLoading}>
+              <button className="btn-ios-pill btn-ios-primary" onClick={() => executeGoogleSheetSync()} disabled={googleSyncLoading} style={{ minWidth: 190, justifyContent: "center" }}>
                 {googleSyncLoading ? (
                   <><span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>sync</span> Đang đồng bộ...</>
                 ) : (
-                  <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span> Đồng bộ ngay</>
+                  <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span> Đồng bộ tháng đã chọn</>
                 )}
               </button>
             </div>
