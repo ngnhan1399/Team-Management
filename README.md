@@ -1,31 +1,85 @@
-# CTV Management
+# Team Management
 
-Ung dung web quan ly cong tac vien viet bai: bai viet, binh luan/review, KPI, lich bien tap, nhuan but, ngan sach va audit log. Phan tro ly AI da duoc go bo.
+Ứng dụng web hỗ trợ quản lý cộng tác viên và quy trình sản xuất nội dung trong một đội ngũ làm việc thực tế.
 
-## Tech Stack
+Mục tiêu của dự án là gom toàn bộ các phần việc rời rạc như quản lý bài viết, theo dõi tiến độ, lịch biên tập, nhuận bút, ngân sách và lịch sử thao tác vào một nơi duy nhất để đội ngũ vận hành dễ hơn, minh bạch hơn và tiết kiệm thời gian hơn.
 
-- Next.js App Router + React + TypeScript
-- Drizzle ORM + PostgreSQL
-- Local dev va production: PostgreSQL
-- Auth: JWT cookie + bcrypt
-- Import/Export: XLSX
-- Deployment target dai han: DigitalOcean App Platform + Managed PostgreSQL
+## Dự án này giải quyết bài toán gì?
 
-## Bien moi truong
+Trong quá trình làm nội dung, dữ liệu thường bị chia nhỏ ở nhiều nơi: file Excel, tin nhắn, ghi chú tay, hoặc cập nhật thủ công giữa nhiều người. Điều đó dễ dẫn tới thiếu đồng bộ, khó kiểm soát tiến độ và mất thời gian khi tổng hợp báo cáo.
 
-Tao `.env.local` tu `.env.example` roi cau hinh toi thieu:
+`Team Management` được xây dựng để xử lý các vấn đề đó theo hướng rõ ràng và có thể mở rộng:
+
+- Quản lý cộng tác viên và thông tin làm việc tập trung
+- Theo dõi bài viết từ lúc tạo đến lúc hoàn thành
+- Ghi nhận review, bình luận và lịch sử xử lý
+- Theo dõi KPI, lịch biên tập và nhuận bút
+- Kiểm soát ngân sách và audit log phục vụ vận hành nội bộ
+
+Phần trợ lý AI đã được tạm gỡ khỏi hệ thống để ưu tiên sự ổn định cho phiên bản vận hành thật.
+
+## Tính năng chính
+
+- Quản lý danh sách cộng tác viên và trạng thái hoạt động
+- Quản lý bài viết, người phụ trách, deadline và tiến độ
+- Review nội dung, bình luận và theo dõi thay đổi
+- Theo dõi KPI theo đầu việc
+- Quản lý lịch biên tập theo kế hoạch nội dung
+- Tính nhuận bút và theo dõi ngân sách
+- Lưu audit log để truy vết thao tác quan trọng
+- Import và export dữ liệu bằng Excel
+
+## Công nghệ sử dụng
+
+- `Next.js App Router`
+- `React`
+- `TypeScript`
+- `Drizzle ORM`
+- `PostgreSQL`
+- `JWT Cookie + bcrypt` cho xác thực
+- `XLSX` cho import/export dữ liệu
+
+Định hướng triển khai dài hạn của dự án là:
+
+- `DigitalOcean App Platform`
+- `DigitalOcean Managed PostgreSQL`
+
+## Cấu trúc triển khai hiện tại
+
+Repo đã được chuẩn bị sẵn để đi theo hướng production:
+
+- `Dockerfile` để build và chạy app theo môi trường production
+- `.do/app.template.yaml` làm mẫu cấu hình cho DigitalOcean App Platform
+- `/api/health` để health check khi deploy
+- `output: "standalone"` để tối ưu runtime container
+
+Tài liệu triển khai chi tiết nằm tại [docs/digitalocean-production-plan.md](docs/digitalocean-production-plan.md).
+
+## Biến môi trường cần có
+
+Tạo file `.env.local` từ `.env.example`, sau đó cấu hình tối thiểu:
 
 - `JWT_SECRET`
 - `DATABASE_URL`
 - `APP_ORIGIN`
 
-Bien tuy chon:
+Biến bổ sung khi cần:
 
-- `DATABASE_SSL`: dung khi provider yeu cau SSL va URL chua kem `sslmode=require`
+- `DATABASE_SSL`
 - `SEED_ADMIN_EMAIL`
 - `SEED_ADMIN_PASSWORD`
 
-## Chay local
+## Cài đặt và chạy local
+
+Trước khi chạy, bạn cần có PostgreSQL local hoặc một PostgreSQL server mà bạn có quyền kết nối tới.
+
+Ví dụ mặc định của dự án:
+
+```bash
+postgresql://postgres:postgres@127.0.0.1:5432/ctv_management
+```
+
+Các bước khởi chạy:
 
 ```bash
 npm install
@@ -33,50 +87,62 @@ npm run db:seed
 npm run dev
 ```
 
-Mac dinh repo ky vong ban da co PostgreSQL local tai `postgresql://postgres:postgres@127.0.0.1:5432/ctv_management` hoac da tu set `DATABASE_URL`.
+Sau khi chạy thành công, ứng dụng sẽ sẵn sàng ở môi trường local để bạn kiểm tra giao diện và luồng nghiệp vụ.
 
-## Seed du lieu
+## Seed dữ liệu mẫu
 
-`npm run db:seed` se:
+Lệnh:
 
-- tao schema neu database chua co
-- seed bang gia nhuan but
-- seed du lieu cong tac vien demo da an danh
-- seed 1 tai khoan admin demo
+```bash
+npm run db:seed
+```
 
-Neu khong truyen `SEED_ADMIN_PASSWORD`, script se sinh mat khau ngau nhien va in ra terminal.
+Script seed sẽ:
 
-## Scripts
+- Tạo schema nếu database chưa có
+- Tạo dữ liệu mẫu phục vụ trải nghiệm nhanh
+- Seed bảng giá nhuận bút
+- Tạo tài khoản admin demo
 
-- `npm run dev`: chay local
+Nếu bạn không truyền `SEED_ADMIN_PASSWORD`, hệ thống sẽ tự sinh mật khẩu tạm thời và in ra terminal.
+
+## Scripts thường dùng
+
+- `npm run dev`: chạy môi trường phát triển
 - `npm run build`: build production
-- `npm run start`: chay production build
-- `npm run lint`: kiem tra lint
-- `npm run db:seed`: tao schema + seed du lieu demo
-- `npm run test:smoke`: kiem tra schema + API trong yeu
-- `npm run test:e2e-smoke`: build production va chay smoke test browser
+- `npm run start`: chạy production build
+- `npm run lint`: kiểm tra mã nguồn
+- `npm run db:seed`: tạo schema và dữ liệu mẫu
+- `npm run test:smoke`: kiểm tra schema và các API chính
+- `npm run test:e2e-smoke`: build production và chạy smoke test giao diện
 
-## Deploy DigitalOcean
+## Lưu ý bảo mật
 
-Repo nay da duoc them cac thanh phan de dua len DigitalOcean App Platform:
+- Không commit `.env.local`
+- `JWT_SECRET` nên dài ít nhất `32` ký tự
+- Các route ghi dữ liệu có kiểm tra `same-origin`
+- Tự đăng ký tài khoản đã bị vô hiệu hóa
+- Tài khoản do admin tạo nên được đổi mật khẩu ngay sau lần đăng nhập đầu tiên
+- Không dùng local filesystem của container làm nơi lưu dữ liệu production
 
-- `Dockerfile`: image production cho App Platform
-- `.do/app.template.yaml`: app spec mau
-- `/api/health`: endpoint health check
-- `output: "standalone"`: toi uu cho runtime container
+## Phù hợp với ai?
 
-Tai lieu chi tiet nam o [docs/digitalocean-production-plan.md](docs/digitalocean-production-plan.md).
+Dự án này phù hợp nếu bạn đang cần một công cụ nội bộ để:
 
-Luu y quan trong:
+- Quản lý đội ngũ cộng tác viên viết bài
+- Theo dõi quy trình sản xuất nội dung theo nhóm
+- Kiểm soát nhuận bút, ngân sách và tiến độ thực hiện
+- Chuẩn hóa dữ liệu vận hành trước khi mở rộng quy mô
 
-- production khong dung local filesystem lam database
-- App Platform nen tro den DigitalOcean Managed PostgreSQL
-- khong de file nghiep vu trong local filesystem cua container production
+## Định hướng phát triển
 
-## Bao mat
+Các bước phù hợp để đưa dự án lên mức vận hành lâu dài:
 
-- Khong commit `.env.local`.
-- `JWT_SECRET` phai dai it nhat 32 ky tu.
-- Cac route POST/PUT/DELETE co kiem tra same-origin cho cookie auth.
-- Tu dang ky tai khoan da bi vo hieu hoa; admin tao tai khoan tu man hinh doi ngu.
-- Nen doi ngay mat khau admin demo sau lan dang nhap dau tien.
+- Hoàn thiện deploy lên DigitalOcean
+- Kết nối PostgreSQL production ổn định
+- Tăng cường quan sát hệ thống và backup dữ liệu
+- Từng bước nâng cấp phân quyền và quy trình vận hành nội bộ
+
+---
+
+Nếu bạn đang tìm một nền tảng quản lý cộng tác viên gọn gàng, rõ ràng và đủ thực dụng để dùng trong công việc thật, đây là một điểm bắt đầu rất tốt để tiếp tục phát triển.
