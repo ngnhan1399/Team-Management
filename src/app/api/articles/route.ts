@@ -1,6 +1,7 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, notifications, payments } from "@/db/schema";
-import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { parseRoyaltyDateParts } from "@/lib/royalty";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
@@ -499,6 +500,16 @@ export async function PUT(request: NextRequest) {
     if (typeof updateData.penName === "string") updateData.penName = updateData.penName.trim();
     if (typeof updateData.date === "string") updateData.date = updateData.date.trim();
     updateData.updatedAt = new Date().toISOString();
+    const shouldMirrorToGoogleSheet = [
+      "status",
+      "reviewerName",
+      "notes",
+      "link",
+      "articleId",
+      "title",
+      "penName",
+      "date",
+    ].some((field) => Object.prototype.hasOwnProperty.call(body, field));
 
     await db.update(articles)
       .set(updateData)
@@ -513,9 +524,18 @@ export async function PUT(request: NextRequest) {
       payload: updateData,
     });
 
+    const sheetSync = shouldMirrorToGoogleSheet
+      ? await mirrorArticleUpdateToGoogleSheet({
+          articleId: id,
+          actorUserId: context.user.id,
+          actorDisplayName: getContextDisplayName(context),
+          reason: "article_put",
+        })
+      : null;
+
     await publishRealtimeEvent(["articles", "dashboard", "royalty"]);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, sheetSync });
   } catch (error) {
     return handleServerError("articles.put", error);
   }

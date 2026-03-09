@@ -1,101 +1,89 @@
-# Google Sheets Webhook Sync
+# Google Sheets Two-Way Sync
 
-Tính năng này cho phép Google Apps Script gọi trực tiếp vào hệ thống mỗi khi bảng tính thay đổi, để đồng bộ danh sách bài viết gần như ngay lập tức.
+Hệ thống hiện hỗ trợ đồng bộ hai chiều:
 
-## Biến môi trường cần có
+- `Google Sheet -> Tool`: khi sửa sheet, Apps Script gọi webhook của app để kéo dữ liệu về.
+- `Tool -> Google Sheet`: khi đổi trạng thái/link/người duyệt/ghi chú trong app, hệ thống gọi ngược sang Apps Script web app để cập nhật dòng tương ứng trong sheet gốc.
+
+## Biến môi trường cần có trên app
 
 ```env
 GOOGLE_SHEETS_ARTICLE_SOURCE_URL=https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251
 GOOGLE_SHEETS_WEBHOOK_SECRET=replace_with_a_long_random_secret
+GOOGLE_SHEETS_SCRIPT_WEB_APP_URL=https://script.google.com/macros/s/your_deployment_id/exec
+GOOGLE_SHEETS_SCRIPT_SECRET=replace_with_the_same_secret_used_in_apps_script
 ```
 
-`GOOGLE_SHEETS_WEBHOOK_SECRET` hiện là biến tùy chọn để bạn tự xoay secret riêng sau này. Nếu chưa set, hệ thống vẫn có sẵn một bootstrap secret nội bộ để chạy nhanh lần đầu.
+`GOOGLE_SHEETS_SCRIPT_SECRET` có thể dùng cùng giá trị với `GOOGLE_SHEETS_WEBHOOK_SECRET` để cấu hình gọn hơn.
 
-## Webhook URL
+## Apps Script
+
+Đã có sẵn file script mẫu đầy đủ tại:
 
 ```text
-https://your-domain/api/articles/google-sync/webhook
+output/google-sheets-webhook.workdocker.gs
 ```
 
-## Google Apps Script mẫu
+File này đã bao gồm:
 
-```javascript
-const WEBHOOK_URL = 'https://your-domain/api/articles/google-sync/webhook';
-const WEBHOOK_SECRET = 'replace_with_a_long_random_secret';
-const SOURCE_URL = 'https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251';
+- `onEdit`
+- `onChange`
+- `doPost`
+- nhận diện tab tháng linh hoạt
+- cập nhật chiều ngược từ tool sang sheet
 
-function normalizeSheetName_(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/gi, 'd')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function parseMonthlySheetName_(sheetName) {
-  const normalized = normalizeSheetName_(sheetName);
-  const withoutCopyPrefix = normalized.replace(/^Ban sao cua\s+/i, '').trim();
-
-  const match =
-    withoutCopyPrefix.match(/^Thang\s*(\d{1,2})(\d{4})$/i)
-    || withoutCopyPrefix.match(/^Thang\s*(\d{1,2})[\s/._-]+(\d{4})$/i)
-    || withoutCopyPrefix.match(/^Thang[\s/._-]+(\d{1,2})[\s/._-]+(\d{4})$/i);
-
-  if (!match) return null;
-
-  return {
-    sheetName,
-    month: Number(match[1]),
-    year: Number(match[2]),
-  };
-}
-
-function sendWebhookPayload_(payload) {
-  if (!payload) return;
-
-  UrlFetchApp.fetch(WEBHOOK_URL, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      'x-google-sheets-secret': WEBHOOK_SECRET,
-    },
-    payload: JSON.stringify({
-      sourceUrl: SOURCE_URL,
-      sheetName: payload.sheetName,
-      month: payload.month,
-      year: payload.year,
-    }),
-    muteHttpExceptions: true,
-  });
-}
-
-function onEdit(e) {
-  const sheet = e && e.range ? e.range.getSheet() : SpreadsheetApp.getActiveSheet();
-  sendWebhookPayload_(parseMonthlySheetName_(sheet.getName()));
-}
-
-function onChange(e) {
-  const spreadsheet = e && e.source ? e.source : SpreadsheetApp.getActiveSpreadsheet();
-  const activeSheet = spreadsheet ? spreadsheet.getActiveSheet() : null;
-  if (!activeSheet) return;
-  sendWebhookPayload_(parseMonthlySheetName_(activeSheet.getName()));
-}
-```
-
-## Cách chạy
+## Cách cài trên Google Sheet
 
 1. Mở Google Sheet.
-2. Vào `Extensions > Apps Script`.
-3. Dán script ở trên.
-4. Tạo `installable trigger` cho hàm `onEdit`.
-5. Tạo thêm `installable trigger` cho hàm `onChange`.
-6. Lưu và cấp quyền cho Apps Script.
+2. Vào `Tiện ích > Apps Script`.
+3. Xóa code cũ và dán toàn bộ nội dung từ `output/google-sheets-webhook.workdocker.gs`.
+4. Lưu lại.
+5. Tạo 2 trigger installable:
+   - `onEdit` với loại sự kiện `Đang chỉnh sửa`
+   - `onChange` với loại sự kiện `Đang thay đổi`
 
-## Hành vi hiện tại
+## Triển khai Apps Script web app
 
-- Nếu người dùng sửa tab tháng, webhook sẽ gọi về app gần như ngay lập tức.
-- Hệ thống nhận diện được cả tab kiểu `Tháng 032026`, `Tháng 03/2026`, `Tháng 3 2026`, và cả `Bản sao của Tháng ...`.
-- Các sheet mới thêm vào vẫn được nhận diện nếu tên tab khớp định dạng tháng/năm.
-- Bài đã có trong hệ thống sẽ được đối soát và cập nhật lại trạng thái/dữ liệu theo sheet gốc, không chỉ thêm mới.
-- Nếu sửa các tab không phải tab tháng, webhook sẽ tự bỏ qua.
+Để app cập nhật ngược sang Google Sheet, script cần được deploy thành web app:
+
+1. Trong Apps Script, bấm `Triển khai`.
+2. Chọn `Lần triển khai mới`.
+3. Loại triển khai: `Ứng dụng web`.
+4. `Thực thi với quyền`: `Tôi`.
+5. `Ai có quyền truy cập`: `Bất kỳ ai có đường liên kết`.
+6. Bấm `Triển khai`.
+7. Copy URL web app vừa tạo.
+8. Dán URL đó vào biến môi trường `GOOGLE_SHEETS_SCRIPT_WEB_APP_URL` của app.
+9. Dán cùng secret của Apps Script vào `GOOGLE_SHEETS_SCRIPT_SECRET`.
+
+## Luồng đồng bộ chiều ngược
+
+Khi một bài viết đã có liên kết với Google Sheet:
+
+- đổi `Trạng thái` trong app
+- đổi `Link bài viết`
+- đổi `Người duyệt`
+- đổi `Ghi chú`
+- gửi review/fix
+
+thì app sẽ gọi sang Apps Script web app để cập nhật các cột tương ứng trong sheet:
+
+- `Tình trạng duyệt`
+- `Người duyệt`
+- `Nội dung sửa / Note`
+- `Link bài viết`
+
+## Quy ước trạng thái
+
+Ánh xạ từ app sang Google Sheet:
+
+- `Published` / `Approved` -> `Done`
+- `Submitted` / `Reviewing` / `NeedsFix` -> `Pending`
+- `Rejected` -> `Rejected`
+- `Draft` -> để trống
+
+## Ghi chú kỹ thuật
+
+- Hệ thống dùng `article_sync_links` để biết bài nào thuộc dòng nào trong sheet.
+- Nếu khóa nhận diện dòng thay đổi sau khi app cập nhật dữ liệu, lần sync sau vẫn sẽ tự bắt lại đúng dòng thay vì xóa nhầm bài.
+- Các tab mới thêm vào vẫn được nhận diện nếu tên tab có dạng tháng/năm, ví dụ `Tháng 032026`, `Tháng 03/2026`, `Tháng 3 2026`, hoặc `Bản sao của Tháng ...`.

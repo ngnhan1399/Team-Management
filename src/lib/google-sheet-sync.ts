@@ -532,6 +532,7 @@ export async function executeGoogleSheetSync(
 
   const existingSyncLinkMap = new Map(existingSyncLinks.map((link) => [link.sourceRowKey, link]));
   const seenSourceRowKeys = new Set<string>();
+  const seenArticleIds = new Set<number>();
 
   let inserted = 0;
   let updated = 0;
@@ -644,6 +645,9 @@ export async function executeGoogleSheetSync(
       }
 
       const existingLink = existingSyncLinkMap.get(sourceRowKey);
+      if (Number.isInteger(resolvedArticleId) && Number(resolvedArticleId) > 0) {
+        seenArticleIds.add(Number(resolvedArticleId));
+      }
       if (existingLink) {
         await db
           .update(articleSyncLinks)
@@ -687,7 +691,7 @@ export async function executeGoogleSheetSync(
     new Set(
       staleLinks
         .map((link) => Number(link.articleIdRef || 0))
-        .filter((id) => Number.isInteger(id) && id > 0)
+        .filter((id) => Number.isInteger(id) && id > 0 && !seenArticleIds.has(id))
     )
   );
 

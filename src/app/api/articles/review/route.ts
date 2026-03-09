@@ -1,6 +1,7 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleReviews, articles, users, collaborators } from "@/db/schema";
-import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextDisplayName, getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
 import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
@@ -115,9 +116,21 @@ export async function POST(request: NextRequest) {
             payload: { errorNotes },
         });
 
+        const sheetSync = await mirrorArticleUpdateToGoogleSheet({
+            articleId,
+            actorUserId: context.user.id,
+            actorDisplayName: getContextDisplayName(context),
+            reason: "article_review_created",
+            overrides: {
+                status: "NeedsFix",
+                reviewerName: getContextDisplayName(context),
+                notes: String(errorNotes || "").trim(),
+            },
+        });
+
         await publishRealtimeEvent(["articles", "dashboard"]);
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, sheetSync });
     } catch (error) {
         return handleServerError("articles.review.post", error);
     }
@@ -192,9 +205,20 @@ export async function PUT(request: NextRequest) {
             payload: { articleId: review.articleId },
         });
 
+        const sheetSync = await mirrorArticleUpdateToGoogleSheet({
+            articleId: review.articleId,
+            actorUserId: context.user.id,
+            actorDisplayName: getContextDisplayName(context),
+            reason: "article_review_fixed",
+            overrides: {
+                status: "Submitted",
+                notes: String(ctvResponse || "").trim(),
+            },
+        });
+
         await publishRealtimeEvent(["articles", "dashboard"]);
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, sheetSync });
     } catch (error) {
         return handleServerError("articles.review.put", error);
     }
