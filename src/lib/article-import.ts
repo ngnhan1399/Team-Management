@@ -812,6 +812,7 @@ export function normalizeImportedArticleRow(
   const rawNotes = normalizeArticleText(getValue("notes"));
   const rawArticleId = normalizeArticleText(getValue("articleId"));
   const rawDateText = normalizeArticleText(rawDate);
+  const validLink = isLikelyUrl(rawLink);
 
   const issues: string[] = [];
   const parsedDate = parseDateValue(rawDate);
@@ -820,11 +821,9 @@ export function normalizeImportedArticleRow(
   const titleLooksLikeDate = parseDateValue(rawTitle) !== null;
   const articleId = rawArticleId || deriveArticleIdFromLink(rawLink) || undefined;
   const shouldSkip =
-    !rawTitle &&
-    !rawPenName &&
-    !rawDateText &&
-    !articleId &&
-    !rawLink;
+    (!rawTitle && !rawPenName && !rawDateText && !articleId && !validLink) ||
+    (!rawTitle && (articleId || validLink || rawReviewerName || rawNotes)) ||
+    (rawTitle && !rawPenName && !parsedDate && !usedFallbackDate && !articleId && !validLink);
 
   if (!shouldSkip) {
     if (!rawTitle) issues.push("Thiếu tiêu đề");
@@ -856,7 +855,7 @@ export function normalizeImportedArticleRow(
       contentType,
       wordCountRange,
       status,
-      link: rawLink || undefined,
+      link: validLink ? rawLink : undefined,
       reviewerName: reviewerName || undefined,
       notes: rawNotes || undefined,
     },

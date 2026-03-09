@@ -311,14 +311,13 @@ function resolveGoogleSheetFieldFromHeader(header: string): ImportFieldId | null
   return null;
 }
 
-function applyGoogleSheetHeaderOverrides(
-  mapping: Record<string, ImportFieldId | null>,
-  headers: Array<{ key: string; header: string }>
+function resolveGoogleSheetMapping(
+  columns: Array<{ key: string; header: string; suggestedField: ImportFieldId | null; suggestionScore: number }>
 ) {
-  const nextMapping = { ...mapping };
+  const nextMapping: Record<string, ImportFieldId | null> = {};
   const assignedFields = new Set<ImportFieldId>();
 
-  for (const column of headers) {
+  for (const column of columns) {
     const forcedField = resolveGoogleSheetFieldFromHeader(column.header);
     if (!forcedField) continue;
     if (assignedFields.has(forcedField)) {
@@ -328,6 +327,29 @@ function applyGoogleSheetHeaderOverrides(
 
     nextMapping[column.key] = forcedField;
     assignedFields.add(forcedField);
+  }
+
+  for (const column of columns) {
+    if (nextMapping[column.key] !== undefined) continue;
+    if (!column.suggestedField) {
+      nextMapping[column.key] = null;
+      continue;
+    }
+
+    const header = foldText(column.header);
+    const headerLooksUnnamed = !header || /^[a-z]{1,2}$/.test(header);
+    const belongsToSecondaryBlock =
+      header.includes("kpi thang") ||
+      header.startsWith("duyet bai") ||
+      header.startsWith("nhuan");
+
+    if (headerLooksUnnamed || belongsToSecondaryBlock || assignedFields.has(column.suggestedField) || column.suggestionScore < 70) {
+      nextMapping[column.key] = null;
+      continue;
+    }
+
+    nextMapping[column.key] = column.suggestedField;
+    assignedFields.add(column.suggestedField);
   }
 
   return nextMapping;
@@ -341,16 +363,14 @@ function buildArticlePayload(
     date: normalized.date as string,
     title: normalized.title,
     penName: normalized.penName,
+    category: normalized.category as never,
+    articleType: normalized.articleType as never,
+    contentType: normalized.contentType as never,
+    wordCountRange: normalized.wordCountRange as never,
+    status: normalized.status as never,
   };
 
   if (mappedFields.has("articleId")) values.articleId = normalized.articleId ?? null;
-  if (mappedFields.has("category")) values.category = normalized.category as never;
-  if (mappedFields.has("articleType") || mappedFields.has("category") || mappedFields.has("wordCountRange")) {
-    values.articleType = normalized.articleType as never;
-  }
-  if (mappedFields.has("contentType")) values.contentType = normalized.contentType as never;
-  if (mappedFields.has("wordCountRange")) values.wordCountRange = normalized.wordCountRange as never;
-  if (mappedFields.has("status")) values.status = normalized.status as never;
   if (mappedFields.has("link")) values.link = normalized.link ?? null;
   if (mappedFields.has("reviewerName")) values.reviewerName = normalized.reviewerName ?? null;
   if (mappedFields.has("notes")) values.notes = normalized.notes ?? null;
@@ -401,9 +421,13 @@ export async function executeGoogleSheetSync(
   }
 
   const mapping = resolveMapping(
-    applyGoogleSheetHeaderOverrides(
-      prepared.analysis.mapping,
-      prepared.analysis.columns.map((column) => ({ key: column.key, header: column.header }))
+    resolveGoogleSheetMapping(
+      prepared.analysis.columns.map((column) => ({
+        key: column.key,
+        header: column.header,
+        suggestedField: column.suggestedField,
+        suggestionScore: column.suggestionScore,
+      }))
     )
   );
   const missingRequiredFields = REQUIRED_FIELDS.filter((field) => !Object.values(mapping).includes(field));
