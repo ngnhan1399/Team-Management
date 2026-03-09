@@ -492,8 +492,32 @@ export default function ArticlesPage() {
 
   const handleSave = async () => {
     if (!formData.title || !formData.penName || !formData.date) return;
-    await fetch("/api/articles", { method: formData.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
-    setShowModal(false); setFormData({}); fetchArticles(pagination.page);
+
+    try {
+      const res = await fetch("/api/articles", {
+        method: formData.id ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Không thể lưu bài viết");
+      }
+
+      if (data.sheetSync && data.sheetSync.attempted && !data.sheetSync.success) {
+        alert(`⚠️ Bài viết đã lưu trong hệ thống nhưng chưa ghi được sang Google Sheet.\n\n${data.sheetSync.message || "Hãy kiểm tra cấu hình Apps Script/Vercel."}`);
+      }
+
+      if (data.sheetSync && data.sheetSync.skipped) {
+        alert(`ℹ️ Bài viết đã lưu trong hệ thống.\nGoogle Sheet chưa được cập nhật: ${data.sheetSync.message}`);
+      }
+
+      setShowModal(false);
+      setFormData({});
+      fetchArticles(pagination.page);
+    } catch (error) {
+      alert("❌ " + String(error));
+    }
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {

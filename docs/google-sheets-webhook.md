@@ -4,6 +4,7 @@ Hệ thống hiện hỗ trợ đồng bộ hai chiều:
 
 - `Google Sheet -> Tool`: khi sửa sheet, Apps Script gọi webhook của app để kéo dữ liệu về.
 - `Tool -> Google Sheet`: khi đổi trạng thái/link/người duyệt/ghi chú trong app, hệ thống gọi ngược sang Apps Script web app để cập nhật dòng tương ứng trong sheet gốc.
+- `Tool -> Google Sheet (tạo mới)`: khi tạo bài viết trực tiếp trong tool, hệ thống sẽ tự ghi bài đó sang tab tháng tương ứng trong Google Sheet gốc để lưu trữ.
 
 ## Biến môi trường cần có trên app
 
@@ -31,6 +32,7 @@ File này đã bao gồm:
 - `doPost`
 - nhận diện tab tháng linh hoạt
 - cập nhật chiều ngược từ tool sang sheet
+- thêm mới bài viết từ tool sang đúng tab tháng của sheet gốc
 
 ## Cách cài trên Google Sheet
 
@@ -72,6 +74,28 @@ thì app sẽ gọi sang Apps Script web app để cập nhật các cột tươ
 - `Người duyệt`
 - `Nội dung sửa / Note`
 - `Link bài viết`
+
+## Khi tạo bài mới trực tiếp trong tool
+
+Nếu bạn tạo bài mới bằng form trong công cụ:
+
+- hệ thống sẽ xác định tab tháng theo `Ngày viết`
+- thử tìm bài tương ứng trong tab đó để tránh trùng
+- nếu chưa có thì thêm một dòng mới vào cuối bảng
+- đồng thời tạo liên kết `article_sync_links` để các lần sync sau tiếp tục đi đúng cùng một dòng
+
+Các trường sẽ được ghi sang sheet theo mapping:
+
+- `ID bài viết` -> `ID bài`
+- `Ngày viết` -> `Ngày viết`
+- `Tiêu đề` -> `Tên bài viết`
+- `Loại bài + Loại nội dung` -> `Loại bài viết`
+- `Độ dài` -> `Độ dài`
+- `Bút danh` -> `Bút danh`
+- `Trạng thái` -> `Tình trạng duyệt`
+- `Ghi chú` -> `Nội dung sửa`
+- `Người duyệt` -> `Người duyệt`
+- `Link bài viết` -> `Link bài viết`
 
 ## Quy ước trạng thái
 

@@ -30,7 +30,9 @@
 
 # Runtime output
 /logs/
-/output/
+/output/*
+!/output/
+!/output/google-sheets-webhook.workdocker.gs
 /tmp/
 /playwright-report/
 /.codex-deploy-temp/

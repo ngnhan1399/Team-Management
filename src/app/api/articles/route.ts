@@ -1,7 +1,7 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, notifications, payments } from "@/db/schema";
 import { getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
-import { mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
+import { createArticleInGoogleSheet, mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { parseRoyaltyDateParts } from "@/lib/royalty";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
@@ -439,9 +439,18 @@ export async function POST(request: NextRequest) {
       payload: { title, penName: finalPenName },
     });
 
+    const sheetSync = insertedArticle?.id
+      ? await createArticleInGoogleSheet({
+          articleId: Number(insertedArticle.id),
+          actorUserId: context.user.id,
+          actorDisplayName: getContextDisplayName(context),
+          reason: "article_post",
+        })
+      : null;
+
     await publishRealtimeEvent(["articles", "dashboard", "royalty"]);
 
-    return NextResponse.json({ success: true, id: Number(insertedArticle?.id) });
+    return NextResponse.json({ success: true, id: Number(insertedArticle?.id), sheetSync });
   } catch (error) {
     return handleServerError("articles.post", error);
   }
