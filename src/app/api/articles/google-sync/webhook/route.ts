@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { ensureDatabaseInitialized } from "@/db";
 import { writeAuditLog } from "@/lib/audit";
 import {
@@ -8,6 +9,9 @@ import {
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { handleServerError } from "@/lib/server-error";
 import { NextRequest, NextResponse } from "next/server";
+
+const DEFAULT_WEBHOOK_SECRET_SHA256 =
+  "454ca66696d097b715dcc1ddb931b887a49686905b750a1c65552d8f44063c67";
 
 function normalizeText(value: unknown) {
   return String(value || "").trim();
@@ -37,6 +41,24 @@ function readSecretFromRequest(request: NextRequest, body: Record<string, unknow
   );
 }
 
+function sha256Hex(value: string) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function matchesSecret(secret: string | null, envSecret: string | undefined) {
+  if (!secret) return false;
+
+  const expectedHash = envSecret?.trim()
+    ? sha256Hex(envSecret.trim())
+    : DEFAULT_WEBHOOK_SECRET_SHA256;
+  const receivedHash = sha256Hex(secret);
+
+  return timingSafeEqual(
+    Buffer.from(receivedHash, "utf8"),
+    Buffer.from(expectedHash, "utf8")
+  );
+}
+
 function buildWebhookResponse(result: GoogleSheetSyncExecutionResult, ignored = false, message?: string) {
   return NextResponse.json({
     success: true,
@@ -61,14 +83,7 @@ export async function POST(request: NextRequest) {
     const secret = readSecretFromRequest(request, body);
     const expectedSecret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET?.trim();
 
-    if (!expectedSecret) {
-      return NextResponse.json(
-        { success: false, error: "Webhook chưa được cấu hình secret." },
-        { status: 503 }
-      );
-    }
-
-    if (!secret || secret !== expectedSecret) {
+    if (!matchesSecret(secret || null, expectedSecret)) {
       return NextResponse.json(
         { success: false, error: "Webhook secret không hợp lệ." },
         { status: 401 }

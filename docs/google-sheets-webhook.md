@@ -9,6 +9,8 @@ GOOGLE_SHEETS_ARTICLE_SOURCE_URL=https://docs.google.com/spreadsheets/d/1Uj8iA0R
 GOOGLE_SHEETS_WEBHOOK_SECRET=replace_with_a_long_random_secret
 ```
 
+`GOOGLE_SHEETS_WEBHOOK_SECRET` hiện là biến tùy chọn để bạn tự xoay secret riêng sau này. Nếu chưa set, hệ thống vẫn có sẵn một bootstrap secret nội bộ để chạy nhanh lần đầu.
+
 ## Webhook URL
 
 ```text
