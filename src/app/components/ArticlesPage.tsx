@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
 import CustomSelect from "./CustomSelect";
 import { useRealtimeRefresh } from "./realtime";
+import { isApprovedArticleStatus } from "@/lib/article-status";
 import type {
   Article,
   ArticleComment,
@@ -42,7 +43,7 @@ const ARTICLE_STATUS_OPTIONS = [
   { value: "Draft", label: "📋 Nháp" },
   { value: "Submitted", label: "📤 Chờ duyệt" },
   { value: "Reviewing", label: "🔎 Đang duyệt" },
-  { value: "Published", label: "✅ Đã duyệt" },
+  { value: "ApprovedLike", label: "✅ Đã duyệt" },
   { value: "NeedsFix", label: "⚠️ Sửa lỗi" },
   { value: "Rejected", label: "⛔ Từ chối" },
 ];
@@ -141,7 +142,7 @@ export default function ArticlesPage() {
   }, [fetchArticles]);
 
   useEffect(() => {
-    const published = articles.filter(a => ["Published", "Approved"].includes(a.status) && a.link && a.link.startsWith("http"));
+    const published = articles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
     if (published.length === 0) {
       setBrokenLinks({});
       return;
@@ -767,7 +768,7 @@ export default function ArticlesPage() {
       return <span style={{ color: "rgba(0,0,0,0.2)" }}>—</span>;
     }
 
-    if (["Published", "Approved"].includes(article.status) && brokenLinks[article.link] === false) {
+    if (isApprovedArticleStatus(article.status) && brokenLinks[article.link] === false) {
       return (
         <span title="Link lỗi" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link_off</span>
@@ -775,7 +776,7 @@ export default function ArticlesPage() {
       );
     }
 
-    if (["Published", "Approved"].includes(article.status) && brokenLinks[article.link] === true) {
+    if (isApprovedArticleStatus(article.status) && brokenLinks[article.link] === true) {
       return (
         <span title="Link hoạt động" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--success)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link</span>
@@ -1063,7 +1064,7 @@ export default function ArticlesPage() {
                         <button data-testid={`article-comment-${a.id}`} onClick={() => openComments(a)} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Bình luận">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>forum</span>
                         </button>
-                        <button onClick={() => { setFormData(a); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
+                        <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                         </button>
                         {(isAdmin || a.canDelete) && (
@@ -1146,7 +1147,7 @@ export default function ArticlesPage() {
                 <div className="form-group">
                   <label className="form-label">Trạng thái hiện tại</label>
                   <CustomSelect
-                    value={formData.status || "Draft"}
+                    value={formData.status === "Approved" ? "Published" : formData.status || "Draft"}
                     onChange={v => setFormData({ ...formData, status: v })}
                     options={[
                       { value: "Draft", label: "Bản nháp" },
@@ -1407,7 +1408,8 @@ export default function ArticlesPage() {
                     {[
                       { label: "Tổng dòng", value: googleSyncResult.total, color: "var(--text-main)", icon: "description" },
                       { label: "Thêm mới", value: googleSyncResult.inserted, color: "var(--accent-teal)", icon: "add_task" },
-                      { label: "Đã có sẵn", value: googleSyncResult.duplicates, color: "var(--accent-blue)", icon: "content_copy" },
+                      { label: "Đã cập nhật", value: googleSyncResult.updated, color: "var(--accent-blue)", icon: "sync" },
+                      { label: "Giữ nguyên", value: Math.max(googleSyncResult.duplicates - googleSyncResult.updated, 0), color: "var(--text-muted)", icon: "content_copy" },
                       { label: "Đã xóa", value: googleSyncResult.deleted, color: "var(--danger)", icon: "delete" },
                       { label: "Lỗi dữ liệu", value: googleSyncResult.skipped, color: "var(--accent-orange)", icon: "warning" },
                     ].map((item) => (

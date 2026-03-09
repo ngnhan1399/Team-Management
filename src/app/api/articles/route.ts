@@ -3,6 +3,7 @@ import { articleComments, articleReviews, articles, articleSyncLinks, notificati
 import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { parseRoyaltyDateParts } from "@/lib/royalty";
+import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -105,7 +106,17 @@ function buildArticleWhere(criteria: ArticleCriteria, isAdmin: boolean): SQL | u
     conditions.push(like(articles.title, `%${criteria.titleQuery}%`));
   }
   if (criteria.status) {
-    conditions.push(eq(articles.status, criteria.status as never));
+    if (isApprovedArticleStatusFilterValue(criteria.status)) {
+      const approvedCondition = or(
+        eq(articles.status, "Published"),
+        eq(articles.status, "Approved")
+      );
+      if (approvedCondition) {
+        conditions.push(approvedCondition);
+      }
+    } else {
+      conditions.push(eq(articles.status, criteria.status as never));
+    }
   }
   if (criteria.category) {
     conditions.push(eq(articles.category, criteria.category as never));

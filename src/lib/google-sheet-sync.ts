@@ -21,6 +21,13 @@ type ExistingArticleRow = {
   penName: string;
   date: string;
   link: string | null;
+  category?: string | null;
+  articleType?: string | null;
+  contentType?: string | null;
+  wordCountRange?: string | null;
+  status?: string | null;
+  reviewerName?: string | null;
+  notes?: string | null;
 };
 
 type SyncLinkRow = {
@@ -49,6 +56,7 @@ export interface GoogleSheetSyncExecutionResult {
   requestedSheetName?: string;
   total: number;
   inserted: number;
+  updated: number;
   duplicates: number;
   deleted: number;
   skipped: number;
@@ -397,6 +405,47 @@ function setLookupMaps(
   }
 }
 
+function removeLookupMaps(
+  articleIdMap: Map<string, ExistingArticleRow>,
+  compositeMap: Map<string, ExistingArticleRow>,
+  titlePenNameMap: Map<string, ExistingArticleRow>,
+  linkMap: Map<string, ExistingArticleRow>,
+  row: ExistingArticleRow
+) {
+  const articleId = row.articleId?.trim();
+  if (articleId) {
+    articleIdMap.delete(articleId);
+  }
+  compositeMap.delete(normalizeCompositeKey(row.title, row.penName, row.date));
+  titlePenNameMap.delete(normalizeTitlePenNameKey(row.title, row.penName));
+  const link = row.link?.trim();
+  if (link) {
+    linkMap.delete(normalizeLinkKey(link));
+  }
+}
+
+function doesArticlePayloadDiffer(
+  existing: ExistingArticleRow,
+  next: Partial<typeof articles.$inferInsert>
+) {
+  const hasField = (field: keyof typeof next) => Object.prototype.hasOwnProperty.call(next, field);
+
+  return (
+    (next.date ?? null) !== (existing.date ?? null)
+    || (next.title ?? null) !== (existing.title ?? null)
+    || (next.penName ?? null) !== (existing.penName ?? null)
+    || (next.category ?? null) !== (existing.category ?? null)
+    || (next.articleType ?? null) !== (existing.articleType ?? null)
+    || (next.contentType ?? null) !== (existing.contentType ?? null)
+    || (next.wordCountRange ?? null) !== (existing.wordCountRange ?? null)
+    || (next.status ?? null) !== (existing.status ?? null)
+    || (hasField("articleId") && (next.articleId ?? null) !== (existing.articleId ?? null))
+    || (hasField("link") && (next.link ?? null) !== (existing.link ?? null))
+    || (hasField("reviewerName") && (next.reviewerName ?? null) !== (existing.reviewerName ?? null))
+    || (hasField("notes") && (next.notes ?? null) !== (existing.notes ?? null))
+  );
+}
+
 export async function executeGoogleSheetSync(
   options: ExecuteGoogleSheetSyncOptions = {}
 ): Promise<GoogleSheetSyncExecutionResult> {
@@ -444,6 +493,13 @@ export async function executeGoogleSheetSync(
       penName: articles.penName,
       date: articles.date,
       link: articles.link,
+      category: articles.category,
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      wordCountRange: articles.wordCountRange,
+      status: articles.status,
+      reviewerName: articles.reviewerName,
+      notes: articles.notes,
     })
     .from(articles)
     .all();
@@ -475,6 +531,7 @@ export async function executeGoogleSheetSync(
   const seenSourceRowKeys = new Set<string>();
 
   let inserted = 0;
+  let updated = 0;
   let duplicates = 0;
   let deleted = 0;
   let skipped = 0;
@@ -526,12 +583,43 @@ export async function executeGoogleSheetSync(
       const target = matchedByArticleId ?? matchedByLink ?? matchedByComposite ?? matchedByTitlePenName;
 
       let resolvedArticleId = target?.id ?? null;
+      const nextPayload = buildArticlePayload({ ...normalized, articleId: articleId ?? undefined }, mappedFields);
 
       if (target) {
         duplicates += 1;
+        if (doesArticlePayloadDiffer(target, nextPayload)) {
+          await db
+            .update(articles)
+            .set({
+              ...nextPayload,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(articles.id, target.id))
+            .run();
+
+          const finalArticleRow: ExistingArticleRow = {
+            id: target.id,
+            articleId: Object.prototype.hasOwnProperty.call(nextPayload, "articleId") ? (nextPayload.articleId ?? null) : (target.articleId ?? null),
+            title: nextPayload.title as string,
+            penName: nextPayload.penName as string,
+            date: nextPayload.date as string,
+            link: Object.prototype.hasOwnProperty.call(nextPayload, "link") ? (nextPayload.link ?? null) : (target.link ?? null),
+            category: nextPayload.category ?? target.category ?? null,
+            articleType: nextPayload.articleType ?? target.articleType ?? null,
+            contentType: nextPayload.contentType ?? target.contentType ?? null,
+            wordCountRange: nextPayload.wordCountRange ?? target.wordCountRange ?? null,
+            status: nextPayload.status ?? target.status ?? null,
+            reviewerName: Object.prototype.hasOwnProperty.call(nextPayload, "reviewerName") ? (nextPayload.reviewerName ?? null) : (target.reviewerName ?? null),
+            notes: Object.prototype.hasOwnProperty.call(nextPayload, "notes") ? (nextPayload.notes ?? null) : (target.notes ?? null),
+          };
+
+          removeLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, target);
+          setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, finalArticleRow);
+          updated += 1;
+        }
       } else {
         const insertValues = {
-          ...buildArticlePayload({ ...normalized, articleId: articleId ?? undefined }, mappedFields),
+          ...nextPayload,
           createdByUserId: options.createdByUserId ?? null,
         } as typeof articles.$inferInsert;
 
@@ -622,6 +710,7 @@ export async function executeGoogleSheetSync(
     requestedSheetName: options.sheetName,
     total: prepared.rawRows.length,
     inserted,
+    updated,
     duplicates,
     deleted,
     skipped,

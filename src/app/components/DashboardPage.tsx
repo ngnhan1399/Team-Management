@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
+import { isApprovedArticleStatus } from "@/lib/article-status";
 import type { DashboardStats, Page } from "./types";
 
 function formatActivityTime(value: string) {
@@ -65,7 +66,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
     </div>
   );
 
-  const published = stats?.articlesByStatus?.find((s) => s.status === "Published")?.count || 0;
+  const published = stats?.articlesByStatus?.reduce((total, item) => (
+    total + (isApprovedArticleStatus(item.status) ? item.count : 0)
+  ), 0) || 0;
   const pending = stats?.articlesByStatus?.find((s) => s.status === "Submitted")?.count || 0;
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? "buổi sáng" : currentHour < 18 ? "buổi chiều" : "buổi tối";

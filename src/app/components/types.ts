@@ -203,6 +203,7 @@ export interface ImportExecuteResult {
 export interface GoogleSheetSyncResult {
   total: number;
   inserted: number;
+  updated: number;
   duplicates: number;
   deleted: number;
   skipped: number;
