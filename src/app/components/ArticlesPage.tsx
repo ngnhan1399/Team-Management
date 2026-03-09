@@ -812,11 +812,6 @@ export default function ArticlesPage() {
               Chọn tháng để đồng bộ
             </button>
           )}
-          {isAdmin && !googleSyncLoading && googleSyncResult && (
-            <div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600, padding: "0 6px" }}>
-              Đã sync {googleSyncResult.sheetName}: thêm {googleSyncResult.inserted}, bỏ qua {googleSyncResult.duplicates}
-            </div>
-          )}
           {isAdmin && (
             <button data-testid="articles-open-delete-tool" className="btn-ios-pill" onClick={openDeleteTool} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_sweep</span>

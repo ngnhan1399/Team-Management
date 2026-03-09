@@ -19,6 +19,7 @@ type ExistingArticleRow = {
   title: string;
   penName: string;
   date: string;
+  link: string | null;
 };
 
 type NormalizedArticle = ReturnType<typeof normalizeImportedArticleRow>["normalized"];
@@ -174,6 +175,14 @@ function normalizeCompositeKey(title: string, penName: string, date: string) {
   return `${title.toLowerCase().trim()}|||${penName.toLowerCase().trim()}|||${date}`;
 }
 
+function normalizeTitlePenNameKey(title: string, penName: string) {
+  return `${title.toLowerCase().trim()}|||${penName.toLowerCase().trim()}`;
+}
+
+function normalizeLinkKey(link: string) {
+  return link.toLowerCase().trim();
+}
+
 function resolveMapping(mapping: Record<string, ImportFieldId | null>) {
   const resolved: Record<string, ImportFieldId> = {};
 
@@ -252,6 +261,8 @@ function buildArticlePayload(
 function setLookupMaps(
   articleIdMap: Map<string, ExistingArticleRow>,
   compositeMap: Map<string, ExistingArticleRow>,
+  titlePenNameMap: Map<string, ExistingArticleRow>,
+  linkMap: Map<string, ExistingArticleRow>,
   row: ExistingArticleRow
 ) {
   const articleId = row.articleId?.trim();
@@ -259,6 +270,11 @@ function setLookupMaps(
     articleIdMap.set(articleId, row);
   }
   compositeMap.set(normalizeCompositeKey(row.title, row.penName, row.date), row);
+  titlePenNameMap.set(normalizeTitlePenNameKey(row.title, row.penName), row);
+  const link = row.link?.trim();
+  if (link) {
+    linkMap.set(normalizeLinkKey(link), row);
+  }
 }
 
 export async function executeGoogleSheetSync(
@@ -303,14 +319,17 @@ export async function executeGoogleSheetSync(
       title: articles.title,
       penName: articles.penName,
       date: articles.date,
+      link: articles.link,
     })
     .from(articles)
     .all();
 
   const articleIdMap = new Map<string, ExistingArticleRow>();
   const compositeMap = new Map<string, ExistingArticleRow>();
+  const titlePenNameMap = new Map<string, ExistingArticleRow>();
+  const linkMap = new Map<string, ExistingArticleRow>();
   for (const row of existingArticles) {
-    setLookupMaps(articleIdMap, compositeMap, row);
+    setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, row);
   }
 
   let inserted = 0;
@@ -336,10 +355,14 @@ export async function executeGoogleSheetSync(
       }
 
       const articleId = normalized.articleId?.trim() || null;
+      const link = normalized.link?.trim() || null;
       const compositeKey = normalizeCompositeKey(normalized.title, normalized.penName, normalized.date as string);
+      const titlePenNameKey = normalizeTitlePenNameKey(normalized.title, normalized.penName);
       const matchedByArticleId = articleId ? articleIdMap.get(articleId) : undefined;
       const matchedByComposite = compositeMap.get(compositeKey);
-      const target = matchedByArticleId ?? matchedByComposite;
+      const matchedByLink = link ? linkMap.get(normalizeLinkKey(link)) : undefined;
+      const matchedByTitlePenName = titlePenNameMap.get(titlePenNameKey);
+      const target = matchedByArticleId ?? matchedByLink ?? matchedByComposite ?? matchedByTitlePenName;
 
       if (target) {
         duplicates += 1;
@@ -356,12 +379,13 @@ export async function executeGoogleSheetSync(
         .returning({ id: articles.id })
         .get();
 
-      setLookupMaps(articleIdMap, compositeMap, {
+      setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, {
         id: Number(insertedRow?.id),
         articleId,
         title: normalized.title,
         penName: normalized.penName,
         date: normalized.date as string,
+        link,
       });
       inserted += 1;
     } catch (rowError) {
