@@ -10,6 +10,7 @@ import type {
   Collaborator,
   ArticleDeleteCriteria,
   ArticleDeletePreview,
+  GoogleSheetSyncResult,
   ImportAnalyzeResult,
   ImportColumnAnalysis,
   ImportExecuteResult,
@@ -91,6 +92,12 @@ export default function ArticlesPage() {
   const [importError, setImportError] = useState("");
   const [importDryRun, setImportDryRun] = useState<ImportDryRunResult | null>(null);
   const [importDryRunLoading, setImportDryRunLoading] = useState(false);
+  const [showGoogleSyncModal, setShowGoogleSyncModal] = useState(false);
+  const [googleSyncMonth, setGoogleSyncMonth] = useState("");
+  const [googleSyncYear, setGoogleSyncYear] = useState("");
+  const [googleSyncLoading, setGoogleSyncLoading] = useState(false);
+  const [googleSyncResult, setGoogleSyncResult] = useState<GoogleSheetSyncResult | null>(null);
+  const [googleSyncError, setGoogleSyncError] = useState("");
   const [deleteMode, setDeleteMode] = useState<"all" | "current_filters" | "custom">("custom");
   const [deleteCriteria, setDeleteCriteria] = useState<ArticleDeleteCriteria>(EMPTY_DELETE_CRITERIA);
   const [deletePreview, setDeletePreview] = useState<ArticleDeletePreview | null>(null);
@@ -574,6 +581,51 @@ export default function ArticlesPage() {
     setImporting(false);
   };
 
+  const openGoogleSyncModal = () => {
+    setGoogleSyncMonth(filters.month || "");
+    setGoogleSyncYear(filters.year || "");
+    setGoogleSyncResult(null);
+    setGoogleSyncError("");
+    setShowGoogleSyncModal(true);
+  };
+
+  const closeGoogleSyncModal = () => {
+    if (googleSyncLoading) return;
+    setShowGoogleSyncModal(false);
+  };
+
+  const executeGoogleSheetSync = async () => {
+    if ((googleSyncMonth && !googleSyncYear) || (!googleSyncMonth && googleSyncYear)) {
+      setGoogleSyncError("Hãy chọn đủ cả tháng và năm, hoặc để trống để dùng tab mới nhất.");
+      return;
+    }
+
+    setGoogleSyncLoading(true);
+    setGoogleSyncError("");
+    try {
+      const res = await fetch("/api/articles/google-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          month: googleSyncMonth ? Number(googleSyncMonth) : undefined,
+          year: googleSyncYear ? Number(googleSyncYear) : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Không thể đồng bộ Google Sheet");
+      }
+
+      setGoogleSyncResult(data as GoogleSheetSyncResult);
+      fetchArticles(pagination.page || 1, search, filters);
+    } catch (error) {
+      setGoogleSyncError(String(error));
+      setGoogleSyncResult(null);
+    } finally {
+      setGoogleSyncLoading(false);
+    }
+  };
+
   const handleReview = async () => {
     if (!reviewArticle || !errorNotes) return;
     await fetch("/api/articles/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ articleId: reviewArticle.id, errorNotes }) });
@@ -694,14 +746,14 @@ export default function ArticlesPage() {
 
   return (
     <>
-      <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Quản lý bài viết</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
             {isAdmin ? "Quản lý và theo dõi toàn bộ bài viết của đội ngũ." : `Theo dõi bài viết thuộc tài khoản ${collaboratorLabel}.`}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {isAdmin && (
             <>
               <input
@@ -736,6 +788,12 @@ export default function ArticlesPage() {
               {importing ? "Đang nhập..." : "Nhập"}
               </label>
             </>
+          )}
+          {isAdmin && (
+            <button className="btn-ios-pill btn-ios-secondary" onClick={openGoogleSyncModal} disabled={googleSyncLoading}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
+              Đồng bộ Sheet
+            </button>
           )}
           {isAdmin && (
             <button data-testid="articles-open-delete-tool" className="btn-ios-pill" onClick={openDeleteTool} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
@@ -1167,6 +1225,161 @@ export default function ArticlesPage() {
               <button data-testid="comment-submit-button" className="btn-ios-pill btn-ios-primary" onClick={submitComment} disabled={commentSaving || !commentContent.trim()}>
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>send</span>
                 {commentSaving ? "Đang gửi..." : "Gửi bình luận"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showGoogleSyncModal && isAdmin && (
+        <div className="modal-overlay" onClick={closeGoogleSyncModal}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 760, width: "92vw" }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="material-symbols-outlined" style={{ color: "var(--accent-blue)" }}>sync</span>
+                Đồng bộ Google Sheet
+              </h3>
+              <button className="modal-close" onClick={closeGoogleSyncModal} disabled={googleSyncLoading}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <div style={{ padding: 16, borderRadius: 16, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.14)" }}>
+                <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.7 }}>
+                  Hệ thống sẽ đọc Google Sheet công việc, tự tìm tab <strong>tháng/năm mới nhất</strong> nếu bạn để trống,
+                  hoặc khớp đúng tab theo tháng/năm bạn chọn rồi cập nhật trực tiếp vào danh sách bài viết.
+                </div>
+                <a
+                  href="https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--accent-blue)", textDecoration: "none", fontSize: 13, fontWeight: 700 }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>open_in_new</span>
+                  Mở Google Sheet nguồn
+                </a>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Tháng cần đồng bộ</label>
+                  <CustomSelect
+                    value={googleSyncMonth}
+                    onChange={(value) => {
+                      setGoogleSyncMonth(value);
+                      setGoogleSyncResult(null);
+                      setGoogleSyncError("");
+                    }}
+                    options={MONTH_OPTIONS}
+                    placeholder="Để trống = tab mới nhất"
+                    menuMode="portal-bottom"
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Năm cần đồng bộ</label>
+                  <CustomSelect
+                    value={googleSyncYear}
+                    onChange={(value) => {
+                      setGoogleSyncYear(value);
+                      setGoogleSyncResult(null);
+                      setGoogleSyncError("");
+                    }}
+                    options={YEAR_OPTIONS}
+                    placeholder="Để trống = tab mới nhất"
+                    menuMode="portal-bottom"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn-ios-pill btn-ios-secondary"
+                  onClick={() => {
+                    setGoogleSyncMonth("");
+                    setGoogleSyncYear("");
+                    setGoogleSyncResult(null);
+                    setGoogleSyncError("");
+                  }}
+                  disabled={googleSyncLoading}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>history</span>
+                  Dùng tab mới nhất
+                </button>
+                <span style={{ display: "inline-flex", alignItems: "center", color: "var(--text-muted)", fontSize: 13 }}>
+                  Chọn đủ tháng và năm nếu bạn muốn nhập một kỳ cụ thể.
+                </span>
+              </div>
+
+              {googleSyncError && (
+                <div style={{ padding: 14, borderRadius: 14, background: "var(--danger-light)", border: "1px solid rgba(239, 68, 68, 0.18)", color: "var(--danger)", fontSize: 13, fontWeight: 700 }}>
+                  {googleSyncError}
+                </div>
+              )}
+
+              {googleSyncResult && (
+                <div style={{ padding: 18, borderRadius: 18, background: "rgba(255,255,255,0.6)", border: "1px solid var(--glass-border)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Tab đã đồng bộ</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-main)" }}>{googleSyncResult.sheetName}</div>
+                    </div>
+                    <span className="tag-pill" style={{ color: "var(--accent-blue)" }}>
+                      {String(googleSyncResult.month).padStart(2, "0")}/{googleSyncResult.year}
+                    </span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+                    {[
+                      { label: "Tổng dòng", value: googleSyncResult.total, color: "var(--text-main)", icon: "description" },
+                      { label: "Thêm mới", value: googleSyncResult.inserted, color: "var(--accent-teal)", icon: "add_task" },
+                      { label: "Cập nhật", value: googleSyncResult.updated, color: "var(--accent-blue)", icon: "sync" },
+                      { label: "Bỏ qua", value: googleSyncResult.skipped, color: "var(--accent-orange)", icon: "skip_next" },
+                    ].map((item) => (
+                      <div key={item.label} style={{ padding: 14, borderRadius: 14, background: "rgba(255,255,255,0.75)", border: "1px solid var(--glass-border)" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 20, color: item.color }}>{item.icon}</span>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: item.color, marginTop: 6 }}>{item.value}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>{item.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {googleSyncResult.warnings.length > 0 && (
+                    <div style={{ marginTop: 16, padding: 14, borderRadius: 14, background: "rgba(249, 115, 22, 0.06)", border: "1px solid rgba(249, 115, 22, 0.15)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--accent-orange)", marginBottom: 8 }}>Cảnh báo phân tích sheet</div>
+                      {googleSyncResult.warnings.map((warning, index) => (
+                        <div key={`google-sync-warning-${index}`} style={{ fontSize: 12, color: "var(--text-main)", marginBottom: index === googleSyncResult.warnings.length - 1 ? 0 : 4 }}>
+                          • {warning}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {googleSyncResult.errors.length > 0 && (
+                    <div style={{ marginTop: 16, padding: 14, borderRadius: 14, background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.15)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Các dòng bị bỏ qua</div>
+                      {googleSyncResult.errors.map((error, index) => (
+                        <div key={`google-sync-error-${index}`} style={{ fontSize: 12, color: "var(--text-main)", marginBottom: index === googleSyncResult.errors.length - 1 ? 0 : 4 }}>
+                          • {error}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-ios-pill btn-ios-secondary" onClick={closeGoogleSyncModal} disabled={googleSyncLoading}>
+                Đóng
+              </button>
+              <button className="btn-ios-pill btn-ios-primary" onClick={executeGoogleSheetSync} disabled={googleSyncLoading}>
+                {googleSyncLoading ? (
+                  <><span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>sync</span> Đang đồng bộ...</>
+                ) : (
+                  <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span> Đồng bộ ngay</>
+                )}
               </button>
             </div>
           </div>

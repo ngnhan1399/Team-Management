@@ -196,6 +196,21 @@ export interface ImportExecuteResult {
   warnings?: string[];
 }
 
+export interface GoogleSheetSyncResult {
+  total: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  warnings: string[];
+  sheetName: string;
+  month: number;
+  year: number;
+  requestedMonth?: number | null;
+  requestedYear?: number | null;
+  sourceUrl: string;
+}
+
 export interface ImportDryRunPreviewRow {
   rowNumber: number;
   canImport: boolean;

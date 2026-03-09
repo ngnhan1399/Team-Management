@@ -62,9 +62,10 @@ export default function MainApp() {
     return () => clearInterval(interval);
   }, [refreshUnreadCount]);
 
-  useEffect(() => {
+  const navigateToPage = useCallback((nextPage: Page) => {
+    setPage(nextPage);
     setSidebarOpen(false);
-  }, [page]);
+  }, []);
 
   const isAdmin = user?.role === "admin";
 
@@ -101,7 +102,7 @@ export default function MainApp() {
               <React.Fragment key={section}>
                 <div className="text-[11px] text-[var(--text-muted)] font-bold uppercase tracking-wider mb-2 mt-6 px-2">{section}</div>
                 {items.map(item => (
-                  <button key={item.id} data-testid={`nav-${item.id}`} onClick={() => setPage(item.id as Page)} className={`sidebar-nav-item ${page === item.id ? "active" : ""}`}>
+                  <button key={item.id} data-testid={`nav-${item.id}`} onClick={() => navigateToPage(item.id as Page)} className={`sidebar-nav-item ${page === item.id ? "active" : ""}`}>
                     <span className="material-symbols-outlined">{item.icon}</span>
                     <span style={{ flex: 1 }}>{item.label}</span>
                     {item.count !== undefined && item.count > 0 && (
@@ -149,7 +150,7 @@ export default function MainApp() {
             <button
               type="button"
               className="mobile-nav-trigger"
-              onClick={() => setPage("notifications")}
+              onClick={() => navigateToPage("notifications")}
               aria-label="Mở thông báo"
               style={{ position: "relative" }}
             >
@@ -161,7 +162,7 @@ export default function MainApp() {
               )}
             </button>
           </div>
-          {page === "dashboard" && <DashboardPage onNavigate={setPage} />}
+          {page === "dashboard" && <DashboardPage onNavigate={navigateToPage} />}
           {page === "articles" && <ArticlesPage />}
           {page === "tasks" && <EditorialTasksPage />}
           {page === "team" && isAdmin && <TeamPage />}
