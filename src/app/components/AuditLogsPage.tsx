@@ -69,7 +69,7 @@ export default function AuditLogsPage() {
 
   return (
     <>
-      <header style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <header className="page-shell-header" style={{ marginBottom: 28 }}>
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Audit Logs</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>Theo dõi ai đã thao tác gì, trên thực thể nào và thời điểm nào.</p>

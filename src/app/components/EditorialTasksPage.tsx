@@ -195,12 +195,12 @@ export default function EditorialTasksPage() {
 
   return (
     <>
-      <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <header className="page-shell-header">
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Lịch biên tập</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>Theo dõi deadline, phân công và SLA theo cộng tác viên.</p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="page-shell-actions" style={{ gap: 10 }}>
           {isAdmin && (
             <>
               <button className="btn-ios-pill btn-ios-secondary" onClick={triggerReminders} disabled={sendingReminders}>

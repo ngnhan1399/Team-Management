@@ -194,7 +194,7 @@ export default function RoyaltyPage() {
 
   return (
     <>
-      <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <header className="page-shell-header">
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Nhuận bút</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
@@ -203,7 +203,7 @@ export default function RoyaltyPage() {
         </div>
       </header>
 
-      <div style={{ display: "flex", gap: 8, padding: 6, background: "rgba(255,255,255,0.03)", borderRadius: 16, width: "fit-content", marginBottom: 32, border: "1px solid var(--glass-border)" }}>
+      <div style={{ display: "flex", gap: 8, padding: 6, background: "rgba(255,255,255,0.03)", borderRadius: 16, width: "100%", maxWidth: "100%", marginBottom: 32, border: "1px solid var(--glass-border)", overflowX: "auto" }}>
         {royaltyTabs.map(t => (
           <button
             key={t.id}
@@ -223,6 +223,7 @@ export default function RoyaltyPage() {
               fontSize: 14,
               fontWeight: 700,
               display: "flex",
+              flex: "0 0 auto",
               alignItems: "center",
               gap: 8,
               cursor: "pointer",
@@ -243,7 +244,7 @@ export default function RoyaltyPage() {
             <>
               {/* Budget Alert Card */}
               {hasBudget && budgetPct >= 80 && (
-                <div className="glass-card" style={{ padding: "24px 32px", marginBottom: 32, display: "flex", gap: 24, alignItems: "center", borderLeft: `6px solid ${gaugeColor}`, background: `${gaugeColor}05` }}>
+                <div className="glass-card" style={{ padding: "24px 32px", marginBottom: 32, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap", borderLeft: `6px solid ${gaugeColor}`, background: `${gaugeColor}05` }}>
                   <div style={{ width: 56, height: 56, borderRadius: 16, background: `${gaugeColor}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 32, color: gaugeColor }}>{budgetPct >= 100 ? "priority_high" : "warning"}</span>
                   </div>

@@ -19,6 +19,7 @@ export default function MainApp() {
   const { user, logout } = useAuth();
   const [page, setPage] = useState<Page>("dashboard");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const displayName = (typeof user?.collaborator?.name === "string" && user.collaborator.name.trim())
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
@@ -61,6 +62,10 @@ export default function MainApp() {
     return () => clearInterval(interval);
   }, [refreshUnreadCount]);
 
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [page]);
+
   const isAdmin = user?.role === "admin";
 
   const navItems = [
@@ -74,9 +79,10 @@ export default function MainApp() {
   ];
 
   return (
-    <div className="flex min-h-screen overflow-hidden">
+    <div className="app-shell">
       <RealtimeToastLayer />
-      <aside className="sidebar">
+      {sidebarOpen && <button className="sidebar-backdrop lg:hidden" aria-label="Đóng menu điều hướng" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div style={{ padding: 24, display: "flex", alignItems: "center", gap: 14 }}>
           <div className="sidebar-logo-icon" style={{ borderRadius: "var(--radius-ios-sm)", background: "var(--accent-blue)", width: 42, height: 42 }}>
             <span className="material-symbols-outlined text-white" style={{ fontSize: 24 }}>article</span>
@@ -126,8 +132,35 @@ export default function MainApp() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto custom-scrollbar bg-[var(--bg-dark)]" style={{ marginLeft: 256 }}>
-        <div className="p-8 max-w-7xl mx-auto">
+      <main className="app-shell-main custom-scrollbar">
+        <div className="app-shell-inner">
+          <div className="mobile-topbar">
+            <button className="mobile-nav-trigger" type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu điều hướng">
+              <span className="material-symbols-outlined" style={{ fontSize: 22 }}>menu</span>
+            </button>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>
+                {isAdmin ? "Quản trị viên" : "Cộng tác viên"}
+              </p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {displayName}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="mobile-nav-trigger"
+              onClick={() => setPage("notifications")}
+              aria-label="Mở thông báo"
+              style={{ position: "relative" }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 22 }}>notifications</span>
+              {unreadCount > 0 && (
+                <span style={{ position: "absolute", top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
           {page === "dashboard" && <DashboardPage onNavigate={setPage} />}
           {page === "articles" && <ArticlesPage />}
           {page === "tasks" && <EditorialTasksPage />}

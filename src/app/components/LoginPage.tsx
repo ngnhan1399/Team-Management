@@ -26,12 +26,12 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
+    <div className="auth-shell">
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(15,23,42,0) 32%, rgba(16,185,129,0.08) 100%)", pointerEvents: "none" }} />
       <div style={{ position: "absolute", top: "-12%", left: "-8%", width: "34%", height: "34%", background: "radial-gradient(circle, rgba(37,99,235,0.16) 0%, transparent 72%)", filter: "blur(70px)", pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: "-10%", right: "-8%", width: "34%", height: "34%", background: "radial-gradient(circle, rgba(20,184,166,0.14) 0%, transparent 72%)", filter: "blur(70px)", pointerEvents: "none" }} />
 
-      <div className="glass-card" style={{ width: 480, padding: 40, borderRadius: "var(--radius-ios-lg)", position: "relative", zIndex: 1 }}>
+      <div className="glass-card auth-card">
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div className="sidebar-logo-icon" style={{ width: 64, height: 64, margin: "0 auto 18px", borderRadius: 18, boxShadow: "0 10px 30px rgba(37,99,235,0.28)", background: "var(--accent-blue)" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 32, color: "white" }}>article</span>
@@ -71,7 +71,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
         </form>
 
         <div style={{ textAlign: "center", marginTop: 28, borderTop: "1px solid var(--glass-border)", paddingTop: 20 }}>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.05em", fontWeight: 600, textTransform: "uppercase" }}>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.05em", fontWeight: 600, textTransform: "uppercase", lineHeight: 1.5 }}>
             Apple-inspired workspace for editors and contributors
           </p>
         </div>

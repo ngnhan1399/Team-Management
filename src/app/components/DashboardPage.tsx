@@ -45,18 +45,18 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
 
   return (
     <>
-      <header style={{ marginBottom: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>{`Chào ${greeting}, ${displayName}`}</h2>
+      <header className="page-shell-header" style={{ marginBottom: 40, alignItems: "flex-start" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+            <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em", lineHeight: 1.1 }}>{`Chào ${greeting}, ${displayName}`}</h2>
             <div style={{ padding: "4px 10px", background: "rgba(16, 185, 129, 0.1)", borderRadius: 20, display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
               <span style={{ fontSize: 11, fontWeight: 700, color: "#059669", textTransform: "uppercase" }}>Hệ thống ổn định</span>
             </div>
           </div>
-          <p style={{ color: "var(--text-muted)", fontSize: 15, fontWeight: 500 }}>{dashboardSubtitle}</p>
+          <p style={{ color: "var(--text-muted)", fontSize: 15, fontWeight: 500, maxWidth: 720 }}>{dashboardSubtitle}</p>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div className="page-shell-actions">
           <button className="btn-ios-pill btn-ios-secondary" style={{ background: "white", boxShadow: "var(--specular-top)" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>file_download</span>
             Báo cáo
@@ -99,7 +99,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
       </div>
 
       {/* Tier 2: Distribution & Insights */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 32, marginBottom: 32 }}>
+      <div className="dashboard-insight-grid">
         <div style={{ background: "white", borderRadius: 32, padding: 32, boxShadow: "var(--shadow-premium)", border: "1px solid var(--border-muted)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 10 }}>

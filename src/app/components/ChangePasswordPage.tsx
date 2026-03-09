@@ -30,8 +30,8 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-      <div style={{ width: 420, padding: 40, background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur))", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-ios-lg)", boxShadow: "var(--shadow-premium), var(--specular-top)" }}>
+    <div className="auth-shell">
+      <div className="auth-card" style={{ background: "var(--glass-bg)", backdropFilter: "blur(var(--glass-blur))", border: "1px solid var(--glass-border)", boxShadow: "var(--shadow-premium), var(--specular-top)" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🔑</div>
           <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.02em" }}>Đổi mật khẩu</h2>

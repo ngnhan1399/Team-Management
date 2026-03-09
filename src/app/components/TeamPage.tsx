@@ -124,7 +124,7 @@ export default function TeamPage() {
 
   return (
     <>
-      <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <header className="page-shell-header">
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Đội ngũ</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>Quản lý thông tin và hiệu suất cộng tác viên chuyên nghiệp.</p>
@@ -159,7 +159,7 @@ export default function TeamPage() {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>✍️ Cộng tác viên viết bài ({writers.length})</h3>
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+          <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
             <colgroup>
               {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
             </colgroup>
@@ -206,7 +206,7 @@ export default function TeamPage() {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>✅ Cộng tác viên duyệt ({reviewers.length})</h3>
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+          <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
             <colgroup>
               {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
             </colgroup>
@@ -255,7 +255,7 @@ export default function TeamPage() {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>📋 Biên tập viên ({editors.length})</h3>
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+          <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
             <colgroup>
               {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
             </colgroup>
