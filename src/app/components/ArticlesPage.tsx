@@ -1248,7 +1248,8 @@ export default function ArticlesPage() {
               <div style={{ padding: 16, borderRadius: 16, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.14)" }}>
                 <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.7 }}>
                   Hệ thống sẽ đọc Google Sheet công việc, tự tìm tab <strong>tháng/năm mới nhất</strong> nếu bạn để trống,
-                  hoặc khớp đúng tab theo tháng/năm bạn chọn rồi cập nhật trực tiếp vào danh sách bài viết.
+                  hoặc khớp đúng tab theo tháng/năm bạn chọn rồi nhập vào danh sách bài viết. Những bài đã có sẵn sẽ
+                  được bỏ qua để tránh trùng lặp dữ liệu khi đồng bộ nhiều lần.
                 </div>
                 <a
                   href="https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251"
@@ -1334,8 +1335,8 @@ export default function ArticlesPage() {
                     {[
                       { label: "Tổng dòng", value: googleSyncResult.total, color: "var(--text-main)", icon: "description" },
                       { label: "Thêm mới", value: googleSyncResult.inserted, color: "var(--accent-teal)", icon: "add_task" },
-                      { label: "Cập nhật", value: googleSyncResult.updated, color: "var(--accent-blue)", icon: "sync" },
-                      { label: "Bỏ qua", value: googleSyncResult.skipped, color: "var(--accent-orange)", icon: "skip_next" },
+                      { label: "Đã có sẵn", value: googleSyncResult.duplicates, color: "var(--accent-blue)", icon: "content_copy" },
+                      { label: "Lỗi dữ liệu", value: googleSyncResult.skipped, color: "var(--accent-orange)", icon: "warning" },
                     ].map((item) => (
                       <div key={item.label} style={{ padding: 14, borderRadius: 14, background: "rgba(255,255,255,0.75)", border: "1px solid var(--glass-border)" }}>
                         <span className="material-symbols-outlined" style={{ fontSize: 20, color: item.color }}>{item.icon}</span>
@@ -1358,7 +1359,7 @@ export default function ArticlesPage() {
 
                   {googleSyncResult.errors.length > 0 && (
                     <div style={{ marginTop: 16, padding: 14, borderRadius: 14, background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.15)" }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Các dòng bị bỏ qua</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Các dòng bị bỏ qua do lỗi dữ liệu</div>
                       {googleSyncResult.errors.map((error, index) => (
                         <div key={`google-sync-error-${index}`} style={{ fontSize: 12, color: "var(--text-main)", marginBottom: index === googleSyncResult.errors.length - 1 ? 0 : 4 }}>
                           • {error}

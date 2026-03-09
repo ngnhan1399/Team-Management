@@ -199,7 +199,7 @@ export interface ImportExecuteResult {
 export interface GoogleSheetSyncResult {
   total: number;
   inserted: number;
-  updated: number;
+  duplicates: number;
   skipped: number;
   errors: string[];
   warnings: string[];

@@ -7,7 +7,6 @@ import { normalizeImportedArticleRow, type ImportFieldId } from "@/lib/article-i
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
-import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type ExistingArticleRow = {
@@ -88,18 +87,6 @@ function setLookupMaps(
     articleIdMap.set(articleId, row);
   }
   compositeMap.set(normalizeCompositeKey(row.title, row.penName, row.date), row);
-}
-
-function removeLookupMaps(
-  articleIdMap: Map<string, ExistingArticleRow>,
-  compositeMap: Map<string, ExistingArticleRow>,
-  row: ExistingArticleRow
-) {
-  const articleId = row.articleId?.trim();
-  if (articleId) {
-    articleIdMap.delete(articleId);
-  }
-  compositeMap.delete(normalizeCompositeKey(row.title, row.penName, row.date));
 }
 
 export async function POST(request: NextRequest) {
@@ -187,7 +174,7 @@ export async function POST(request: NextRequest) {
     }
 
     let inserted = 0;
-    let updated = 0;
+    let duplicates = 0;
     let skipped = 0;
     const errors: string[] = [];
 
@@ -215,28 +202,7 @@ export async function POST(request: NextRequest) {
         const target = matchedByArticleId ?? matchedByComposite;
 
         if (target) {
-          const updateValues = {
-            ...buildArticlePayload({ ...normalized, articleId: articleId ?? undefined }, mappedFields),
-            updatedAt: new Date().toISOString(),
-          };
-
-          await db.update(articles)
-            .set(updateValues)
-            .where(eq(articles.id, target.id))
-            .run();
-
-          removeLookupMaps(articleIdMap, compositeMap, target);
-          const nextRow: ExistingArticleRow = {
-            id: target.id,
-            articleId: Object.prototype.hasOwnProperty.call(updateValues, "articleId")
-              ? (updateValues.articleId as string | null)
-              : target.articleId,
-            title: String(updateValues.title ?? target.title),
-            penName: String(updateValues.penName ?? target.penName),
-            date: String(updateValues.date ?? target.date),
-          };
-          setLookupMaps(articleIdMap, compositeMap, nextRow);
-          updated += 1;
+          duplicates += 1;
           continue;
         }
 
@@ -278,7 +244,7 @@ export async function POST(request: NextRequest) {
         requestedYear: year,
         total: prepared.rawRows.length,
         inserted,
-        updated,
+        duplicates,
         skipped,
       },
     });
@@ -286,7 +252,7 @@ export async function POST(request: NextRequest) {
     await publishRealtimeEvent({
       channels: ["articles", "dashboard", "royalty"],
       toastTitle: "Đồng bộ Google Sheet hoàn tất",
-      toastMessage: `${selectedSheet.name}: thêm ${inserted}, cập nhật ${updated}.`,
+      toastMessage: `${selectedSheet.name}: thêm ${inserted}, bỏ qua ${duplicates} bài đã có.`,
       toastVariant: "success",
     });
 
@@ -300,7 +266,7 @@ export async function POST(request: NextRequest) {
       sourceUrl: resolvedSourceUrl,
       total: prepared.rawRows.length,
       inserted,
-      updated,
+      duplicates,
       skipped,
       errors,
       warnings: prepared.analysis.warnings,
