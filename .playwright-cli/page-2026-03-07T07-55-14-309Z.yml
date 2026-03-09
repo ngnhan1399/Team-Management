@@ -1,0 +1,21 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e8] [cursor=pointer]:
+    - img [ref=e9]
+  - alert [ref=e12]
+  - generic [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e17]: article
+      - heading "CTV Manager" [level=1] [ref=e18]
+      - paragraph [ref=e19]: Quản lý đội ngũ cộng tác viên chuyên nghiệp
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - generic [ref=e22]: Địa chỉ Email
+        - textbox "admin@ctvmanager.com" [ref=e23]
+      - generic [ref=e24]:
+        - generic [ref=e25]: Mật khẩu
+        - textbox "••••••••" [ref=e26]: admin@ctvmanager.comadmin123
+      - generic [ref=e30]:
+        - generic [ref=e31]: error
+        - text: Email và mật khẩu là bắt buộc
+      - button "🔐 Đăng nhập hệ thống" [ref=e27] [cursor=pointer]
+    - paragraph [ref=e29]: Designed following Apple Principles

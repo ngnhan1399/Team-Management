@@ -1,0 +1,16 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e2]
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e7]: article
+      - heading "CTV Manager" [level=1] [ref=e8]
+      - paragraph [ref=e9]: Quản lý đội ngũ cộng tác viên chuyên nghiệp
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - generic [ref=e12]: Địa chỉ Email
+        - textbox "admin@ctvmanager.com" [ref=e13]
+      - generic [ref=e14]:
+        - generic [ref=e15]: Mật khẩu
+        - textbox "••••••••" [ref=e16]
+      - button "🔐 Đăng nhập hệ thống" [ref=e17] [cursor=pointer]
+    - paragraph [ref=e19]: Designed following Apple Principles

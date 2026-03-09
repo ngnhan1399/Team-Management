@@ -1,0 +1,249 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e7] [cursor=pointer]:
+    - img [ref=e8]
+  - alert [ref=e11]
+  - generic [ref=e29]:
+    - complementary [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e33]: article
+        - generic [ref=e34]:
+          - heading "CTV Manager" [level=1] [ref=e35]
+          - paragraph [ref=e36]: QUẢN TRỊ VIÊN
+      - navigation [ref=e37]:
+        - generic [ref=e38]: Tổng quan
+        - button "dashboard Tổng quan" [ref=e39]:
+          - generic [ref=e40]: dashboard
+          - generic [ref=e41]: Tổng quan
+        - button "notifications Thông báo" [ref=e42]:
+          - generic [ref=e43]: notifications
+          - generic [ref=e44]: Thông báo
+        - generic [ref=e45]: Quản lý
+        - button "description Bài viết" [ref=e46]:
+          - generic [ref=e47]: description
+          - generic [ref=e48]: Bài viết
+        - button "task_alt Lịch biên tập" [ref=e49]:
+          - generic [ref=e50]: task_alt
+          - generic [ref=e51]: Lịch biên tập
+        - button "group Đội ngũ" [ref=e52]:
+          - generic [ref=e53]: group
+          - generic [ref=e54]: Đội ngũ
+        - button "payments Nhuận bút" [ref=e55]:
+          - generic [ref=e56]: payments
+          - generic [ref=e57]: Nhuận bút
+        - button "history Audit Logs" [ref=e58]:
+          - generic [ref=e59]: history
+          - generic [ref=e60]: Audit Logs
+        - generic [ref=e61]: Công cụ
+        - button "smart_toy Trợ lý AI" [ref=e62]:
+          - generic [ref=e63]: smart_toy
+          - generic [ref=e64]: Trợ lý AI
+      - generic [ref=e66]:
+        - generic [ref=e68]: A
+        - generic [ref=e69]:
+          - paragraph [ref=e70]: Nhân BTV
+          - paragraph [ref=e71]: admin@ctvmanager.com
+        - button "logout" [ref=e72] [cursor=pointer]
+    - main [ref=e73]:
+      - generic [ref=e74]:
+        - generic [ref=e180]:
+          - generic [ref=e181]:
+            - heading "Đội ngũ" [level=2] [ref=e182]
+            - paragraph [ref=e183]: Quản lý thông tin và hiệu suất cộng tác viên chuyên nghiệp.
+          - button "person_add Thêm thành viên" [ref=e184] [cursor=pointer]:
+            - generic [ref=e185]: person_add
+            - text: Thêm thành viên
+        - generic [ref=e186]:
+          - generic [ref=e187]:
+            - generic [ref=e189]: groups
+            - generic [ref=e190]:
+              - paragraph [ref=e191]: Tổng thành viên
+              - paragraph [ref=e192]: "9"
+          - generic [ref=e193]:
+            - generic [ref=e195]: edit_note
+            - generic [ref=e196]:
+              - paragraph [ref=e197]: Cộng tác viên
+              - paragraph [ref=e198]: "8"
+          - generic [ref=e199]:
+            - generic [ref=e201]: verified
+            - generic [ref=e202]:
+              - paragraph [ref=e203]: Người duyệt
+              - paragraph [ref=e204]: "0"
+          - generic [ref=e205]:
+            - generic [ref=e207]: shield_person
+            - generic [ref=e208]:
+              - paragraph [ref=e209]: Biên tập viên
+              - paragraph [ref=e210]: "1"
+        - generic [ref=e211]:
+          - heading "✍️ Cộng tác viên viết bài (8)" [level=3] [ref=e213]
+          - table [ref=e215]:
+            - rowgroup [ref=e216]:
+              - row "STT Họ tên Bút danh Email KPI Trạng thái Thao tác" [ref=e217]:
+                - columnheader "STT" [ref=e218]
+                - columnheader "Họ tên" [ref=e219]
+                - columnheader "Bút danh" [ref=e220]
+                - columnheader "Email" [ref=e221]
+                - columnheader "KPI" [ref=e222]
+                - columnheader "Trạng thái" [ref=e223]
+                - columnheader "Thao tác" [ref=e224]
+            - rowgroup [ref=e225]:
+              - row "1 Chương Nhựt Liên Nhựt Liên chuongnhutlien2172000@gmail.com 25 Hoạt động edit" [ref=e226]:
+                - cell "1" [ref=e227]
+                - cell "Chương Nhựt Liên" [ref=e228]
+                - cell "Nhựt Liên" [ref=e229]
+                - cell "chuongnhutlien2172000@gmail.com" [ref=e230]
+                - cell "25" [ref=e231]
+                - cell "Hoạt động" [ref=e232]
+                - cell "edit" [ref=e233]:
+                  - button "edit" [ref=e234] [cursor=pointer]:
+                    - generic [ref=e235]: edit
+              - row "2 Nguyễn Đình Khải Khải Đình khaidinh.seo@gmail.com 25 Hoạt động edit" [ref=e236]:
+                - cell "2" [ref=e237]
+                - cell "Nguyễn Đình Khải" [ref=e238]
+                - cell "Khải Đình" [ref=e239]
+                - cell "khaidinh.seo@gmail.com" [ref=e240]
+                - cell "25" [ref=e241]
+                - cell "Hoạt động" [ref=e242]
+                - cell "edit" [ref=e243]:
+                  - button "edit" [ref=e244] [cursor=pointer]:
+                    - generic [ref=e245]: edit
+              - row "3 Nguyễn Đình Quốc Việt Quốc Việt vietnguyen20172002@gmail.com 25 Hoạt động edit" [ref=e246]:
+                - cell "3" [ref=e247]
+                - cell "Nguyễn Đình Quốc Việt" [ref=e248]
+                - cell "Quốc Việt" [ref=e249]
+                - cell "vietnguyen20172002@gmail.com" [ref=e250]
+                - cell "25" [ref=e251]
+                - cell "Hoạt động" [ref=e252]
+                - cell "edit" [ref=e253]:
+                  - button "edit" [ref=e254] [cursor=pointer]:
+                    - generic [ref=e255]: edit
+              - row "4 Huỳnh Phạm Ngọc Thì Ngọc Thì huynhphamngocthi12a3@gmail.com 25 Hoạt động edit" [ref=e256]:
+                - cell "4" [ref=e257]
+                - cell "Huỳnh Phạm Ngọc Thì" [ref=e258]
+                - cell "Ngọc Thì" [ref=e259]
+                - cell "huynhphamngocthi12a3@gmail.com" [ref=e260]
+                - cell "25" [ref=e261]
+                - cell "Hoạt động" [ref=e262]
+                - cell "edit" [ref=e263]:
+                  - button "edit" [ref=e264] [cursor=pointer]:
+                    - generic [ref=e265]: edit
+              - row "5 Trạng Bảo Trân Bảo Trân trangbaotran636@gmail.com 25 Hoạt động edit" [ref=e266]:
+                - cell "5" [ref=e267]
+                - cell "Trạng Bảo Trân" [ref=e268]
+                - cell "Bảo Trân" [ref=e269]
+                - cell "trangbaotran636@gmail.com" [ref=e270]
+                - cell "25" [ref=e271]
+                - cell "Hoạt động" [ref=e272]
+                - cell "edit" [ref=e273]:
+                  - button "edit" [ref=e274] [cursor=pointer]:
+                    - generic [ref=e275]: edit
+              - row "6 Đỗ Hiểu Bảo Hiểu Bảo dobao.dhb@gmail.com 25 Hoạt động edit" [ref=e276]:
+                - cell "6" [ref=e277]
+                - cell "Đỗ Hiểu Bảo" [ref=e278]
+                - cell "Hiểu Bảo" [ref=e279]
+                - cell "dobao.dhb@gmail.com" [ref=e280]
+                - cell "25" [ref=e281]
+                - cell "Hoạt động" [ref=e282]
+                - cell "edit" [ref=e283]:
+                  - button "edit" [ref=e284] [cursor=pointer]:
+                    - generic [ref=e285]: edit
+              - row "7 Trần Khánh Phương Khánh Phương trankhanhphuong2711@gmail.com 25 Hoạt động edit" [ref=e286]:
+                - cell "7" [ref=e287]
+                - cell "Trần Khánh Phương" [ref=e288]
+                - cell "Khánh Phương" [ref=e289]
+                - cell "trankhanhphuong2711@gmail.com" [ref=e290]
+                - cell "25" [ref=e291]
+                - cell "Hoạt động" [ref=e292]
+                - cell "edit" [ref=e293]:
+                  - button "edit" [ref=e294] [cursor=pointer]:
+                    - generic [ref=e295]: edit
+              - row "8 Dâu Thị Phương Thị Phương thuphuongcreator@gmail.com 25 Hoạt động edit" [ref=e296]:
+                - cell "8" [ref=e297]
+                - cell "Dâu Thị Phương" [ref=e298]
+                - cell "Thị Phương" [ref=e299]
+                - cell "thuphuongcreator@gmail.com" [ref=e300]
+                - cell "25" [ref=e301]
+                - cell "Hoạt động" [ref=e302]
+                - cell "edit" [ref=e303]:
+                  - button "edit" [ref=e304] [cursor=pointer]:
+                    - generic [ref=e305]: edit
+        - generic [ref=e306]:
+          - heading "✅ Cộng tác viên duyệt (0)" [level=3] [ref=e308]
+          - table [ref=e310]:
+            - rowgroup [ref=e311]:
+              - row "STT Họ tên Bút danh Email KPI" [ref=e312]:
+                - columnheader "STT" [ref=e313]
+                - columnheader "Họ tên" [ref=e314]
+                - columnheader "Bút danh" [ref=e315]
+                - columnheader "Email" [ref=e316]
+                - columnheader "KPI" [ref=e317]
+            - rowgroup [ref=e318]:
+              - row "Chưa có cộng tác viên duyệt" [ref=e319]:
+                - cell "Chưa có cộng tác viên duyệt" [ref=e320]
+        - generic [ref=e321]:
+          - heading "📋 Biên tập viên (1)" [level=3] [ref=e323]
+          - table [ref=e325]:
+            - rowgroup [ref=e326]:
+              - row "STT Họ tên Bút danh Email KPI" [ref=e327]:
+                - columnheader "STT" [ref=e328]
+                - columnheader "Họ tên" [ref=e329]
+                - columnheader "Bút danh" [ref=e330]
+                - columnheader "Email" [ref=e331]
+                - columnheader "KPI" [ref=e332]
+            - rowgroup [ref=e333]:
+              - row "1 Nguyễn Đình Nhân Nhân BTV admin@ctvmanager.com 100" [ref=e334]:
+                - cell "1" [ref=e335]
+                - cell "Nguyễn Đình Nhân" [ref=e336]
+                - cell "Nhân BTV" [ref=e337]
+                - cell "admin@ctvmanager.com" [ref=e338]
+                - cell "100" [ref=e339]
+        - generic [ref=e341]:
+          - generic [ref=e342]:
+            - heading "Thêm cộng tác viên" [level=3] [ref=e343]
+            - button "close" [ref=e344] [cursor=pointer]:
+              - generic [ref=e345]: close
+          - generic [ref=e346]:
+            - generic [ref=e347]:
+              - generic [ref=e348]:
+                - generic [ref=e349]: Họ và tên *
+                - textbox "Nguyễn Văn A" [ref=e350]
+              - generic [ref=e351]:
+                - generic [ref=e352]: Bút danh *
+                - textbox "Bút danh" [ref=e353]: CTV Test UI 833TestUI833
+            - generic [ref=e354]:
+              - generic [ref=e355]:
+                - generic [ref=e356]: Email tài khoản
+                - textbox "ctv@email.com" [ref=e357]: testui833@example.com
+              - generic [ref=e358]:
+                - generic [ref=e359]: Vai trò hệ thống
+                - combobox [ref=e360] [cursor=pointer]:
+                  - option "Người viết bài" [selected]
+                  - option "Người duyệt bài"
+                  - option "Biên tập viên"
+            - generic [ref=e361]:
+              - generic [ref=e362]:
+                - generic [ref=e363]: Chỉ tiêu KPI (Tháng)
+                - spinbutton [ref=e364]: "25"
+              - generic [ref=e365]:
+                - generic [ref=e366]: Số điện thoại
+                - textbox "090..." [ref=e367]
+            - generic [ref=e368]:
+              - generic [ref=e369]: Vị trí / Tiểu sử ngắn
+              - 'textbox "VD: Senior Writer | Tech Expert" [ref=e370]'
+            - generic [ref=e371]:
+              - generic [ref=e372]:
+                - generic [ref=e373]: Facebook
+                - textbox "Link" [ref=e374]
+              - generic [ref=e375]:
+                - generic [ref=e376]: Zalo
+                - textbox "SĐT" [ref=e377]
+              - generic [ref=e378]:
+                - generic [ref=e379]: TikTok
+                - textbox "@user" [ref=e380]
+            - generic [ref=e385]:
+              - generic [ref=e386]: info
+              - paragraph [ref=e387]: Hệ thống sẽ tự động tạo tài khoản với mật khẩu ngẫu nhiên. Vui lòng gửi thông tin đăng nhập cho CTV sau khi lưu.
+          - generic [ref=e381]:
+            - button "Hủy bỏ" [ref=e382] [cursor=pointer]
+            - button "save Lưu thành viên" [active] [ref=e383] [cursor=pointer]:
+              - generic [ref=e384]: save
+              - text: Lưu thành viên

@@ -1,0 +1,89 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e9] [cursor=pointer]:
+    - img [ref=e10]
+  - alert [ref=e3]
+  - generic [ref=e30]:
+    - complementary [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e34]: article
+        - generic [ref=e35]:
+          - heading "CTV Manager" [level=1] [ref=e36]
+          - paragraph [ref=e37]: QUẢN TRỊ VIÊN
+      - navigation [ref=e38]:
+        - generic [ref=e39]: Tổng quan
+        - button "dashboard Tổng quan" [ref=e40]:
+          - generic [ref=e41]: dashboard
+          - generic [ref=e42]: Tổng quan
+        - button "notifications Thông báo" [ref=e43]:
+          - generic [ref=e44]: notifications
+          - generic [ref=e45]: Thông báo
+        - generic [ref=e46]: Quản lý
+        - button "description Bài viết" [ref=e47]:
+          - generic [ref=e48]: description
+          - generic [ref=e49]: Bài viết
+        - button "task_alt Lịch biên tập" [active] [ref=e50]:
+          - generic [ref=e51]: task_alt
+          - generic [ref=e52]: Lịch biên tập
+        - button "group Đội ngũ" [ref=e53]:
+          - generic [ref=e54]: group
+          - generic [ref=e55]: Đội ngũ
+        - button "payments Nhuận bút" [ref=e56]:
+          - generic [ref=e57]: payments
+          - generic [ref=e58]: Nhuận bút
+        - button "history Audit Logs" [ref=e59]:
+          - generic [ref=e60]: history
+          - generic [ref=e61]: Audit Logs
+        - generic [ref=e62]: Công cụ
+        - button "smart_toy Trợ lý AI" [ref=e63]:
+          - generic [ref=e64]: smart_toy
+          - generic [ref=e65]: Trợ lý AI
+      - generic [ref=e67]:
+        - generic [ref=e69]: A
+        - generic [ref=e70]:
+          - paragraph [ref=e71]: Nhân BTV
+          - paragraph [ref=e72]: admin@ctvmanager.com
+        - button "logout" [ref=e73] [cursor=pointer]
+    - main [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e716]:
+          - generic [ref=e717]:
+            - heading "Lịch biên tập" [level=2] [ref=e718]
+            - paragraph [ref=e719]: Theo dõi deadline, phân công và SLA theo cộng tác viên.
+          - generic [ref=e720]:
+            - button "alarm Gửi nhắc việc" [ref=e721] [cursor=pointer]:
+              - generic [ref=e722]: alarm
+              - text: Gửi nhắc việc
+            - button "add_task Tạo task" [ref=e723] [cursor=pointer]:
+              - generic [ref=e724]: add_task
+              - text: Tạo task
+        - generic [ref=e725]:
+          - generic [ref=e726]:
+            - generic [ref=e727]: Tổng task
+            - generic [ref=e728]: "0"
+          - generic [ref=e729]:
+            - generic [ref=e730]: Đang mở
+            - generic [ref=e731]: "0"
+          - generic [ref=e732]:
+            - generic [ref=e733]: Hoàn thành
+            - generic [ref=e734]: "0"
+        - generic [ref=e736]:
+          - generic [ref=e737]:
+            - generic [ref=e738]: Lọc trạng thái
+            - generic [ref=e740] [cursor=pointer]:
+              - generic [ref=e741]: Tất cả
+              - generic [ref=e742]: expand_more
+          - button "refresh Tải lại" [ref=e743] [cursor=pointer]:
+            - generic [ref=e744]: refresh
+            - text: Tải lại
+        - table [ref=e747]:
+          - rowgroup [ref=e748]:
+            - row "Task Người nhận Deadline Ưu tiên Trạng thái Thao tác" [ref=e749]:
+              - columnheader "Task" [ref=e750]
+              - columnheader "Người nhận" [ref=e751]
+              - columnheader "Deadline" [ref=e752]
+              - columnheader "Ưu tiên" [ref=e753]
+              - columnheader "Trạng thái" [ref=e754]
+              - columnheader "Thao tác" [ref=e755]
+          - rowgroup [ref=e756]:
+            - row "Không có task phù hợp." [ref=e757]:
+              - cell "Không có task phù hợp." [ref=e758]

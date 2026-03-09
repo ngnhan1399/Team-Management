@@ -1,0 +1,94 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e9] [cursor=pointer]:
+    - img [ref=e10]
+  - alert [ref=e3]
+  - generic [ref=e30]:
+    - complementary [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e34]: article
+        - generic [ref=e35]:
+          - heading "CTV Manager" [level=1] [ref=e36]
+          - paragraph [ref=e37]: QUẢN TRỊ VIÊN
+      - navigation [ref=e38]:
+        - generic [ref=e39]: Tổng quan
+        - button "dashboard Tổng quan" [ref=e40]:
+          - generic [ref=e41]: dashboard
+          - generic [ref=e42]: Tổng quan
+        - button "notifications Thông báo" [ref=e43]:
+          - generic [ref=e44]: notifications
+          - generic [ref=e45]: Thông báo
+        - generic [ref=e46]: Quản lý
+        - button "description Bài viết" [ref=e47]:
+          - generic [ref=e48]: description
+          - generic [ref=e49]: Bài viết
+        - button "task_alt Lịch biên tập" [ref=e50]:
+          - generic [ref=e51]: task_alt
+          - generic [ref=e52]: Lịch biên tập
+        - button "group Đội ngũ" [ref=e53]:
+          - generic [ref=e54]: group
+          - generic [ref=e55]: Đội ngũ
+        - button "payments Nhuận bút" [ref=e56]:
+          - generic [ref=e57]: payments
+          - generic [ref=e58]: Nhuận bút
+        - button "history Audit Logs" [active] [ref=e59]:
+          - generic [ref=e60]: history
+          - generic [ref=e61]: Audit Logs
+        - generic [ref=e62]: Công cụ
+        - button "smart_toy Trợ lý AI" [ref=e63]:
+          - generic [ref=e64]: smart_toy
+          - generic [ref=e65]: Trợ lý AI
+      - generic [ref=e67]:
+        - generic [ref=e69]: A
+        - generic [ref=e70]:
+          - paragraph [ref=e71]: Nhân BTV
+          - paragraph [ref=e72]: admin@ctvmanager.com
+        - button "logout" [ref=e73] [cursor=pointer]
+    - main [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e1000]:
+          - generic [ref=e1001]:
+            - heading "Audit Logs" [level=2] [ref=e1002]
+            - paragraph [ref=e1003]: Theo dõi ai đã thao tác gì, trên thực thể nào và thời điểm nào.
+          - button "refresh Tải lại" [ref=e1004] [cursor=pointer]:
+            - generic [ref=e1005]: refresh
+            - text: Tải lại
+        - generic [ref=e1007]:
+          - generic [ref=e1008]:
+            - generic [ref=e1009]: Lọc theo action
+            - 'combobox "VD: payment_approved" [ref=e1010]'
+          - generic [ref=e1011]:
+            - generic [ref=e1012]: Lọc theo entity
+            - 'combobox "VD: payment" [ref=e1013]'
+          - generic [ref=e1014]:
+            - generic [ref=e1015]: Số dòng
+            - combobox [ref=e1016] [cursor=pointer]:
+              - option "50"
+              - option "100" [selected]
+              - option "200"
+              - option "500"
+          - button "Xóa lọc" [ref=e1017] [cursor=pointer]
+        - table [ref=e1020]:
+          - rowgroup [ref=e1021]:
+            - row "Thời gian User ID Action Entity Payload" [ref=e1022]:
+              - columnheader "Thời gian" [ref=e1023]
+              - columnheader "User ID" [ref=e1024]
+              - columnheader "Action" [ref=e1025]
+              - columnheader "Entity" [ref=e1026]
+              - columnheader "Payload" [ref=e1027]
+          - rowgroup [ref=e1028]:
+            - 'row "14:56:22 7/3/2026 1 login_success auth #1 { \"email\": \"admin@ctvmanager.com\", \"role\": \"admin\" }" [ref=e1029]':
+              - cell "14:56:22 7/3/2026" [ref=e1030]
+              - cell "1" [ref=e1031]
+              - cell "login_success" [ref=e1032]:
+                - code [ref=e1033]: login_success
+              - 'cell "auth #1" [ref=e1034]'
+              - 'cell "{ \"email\": \"admin@ctvmanager.com\", \"role\": \"admin\" }" [ref=e1035]':
+                - generic [ref=e1036]: "{ \"email\": \"admin@ctvmanager.com\", \"role\": \"admin\" }"
+            - 'row "14:53:53 7/3/2026 1 login_success auth #1 { \"email\": \"admin@ctvmanager.com\", \"role\": \"admin\" }" [ref=e1037]':
+              - cell "14:53:53 7/3/2026" [ref=e1038]
+              - cell "1" [ref=e1039]
+              - cell "login_success" [ref=e1040]:
+                - code [ref=e1041]: login_success
+              - 'cell "auth #1" [ref=e1042]'
+              - 'cell "{ \"email\": \"admin@ctvmanager.com\", \"role\": \"admin\" }" [ref=e1043]':
+                - generic [ref=e1044]: "{ \"email\": \"admin@ctvmanager.com\", \"role\": \"admin\" }"

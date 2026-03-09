@@ -1,0 +1,201 @@
+import { db, ensureDatabaseInitialized } from "@/db";
+import { articleReviews, articles, users, collaborators } from "@/db/schema";
+import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { createNotification } from "@/lib/notifications";
+import { publishRealtimeEvent } from "@/lib/realtime";
+import { writeAuditLog } from "@/lib/audit";
+import { enforceTrustedOrigin } from "@/lib/request-security";
+import { handleServerError } from "@/lib/server-error";
+import { eq, desc } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function GET(request: NextRequest) {
+    try {
+        await ensureDatabaseInitialized();
+        const context = await getCurrentUserContext();
+        if (!context) {
+            return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
+        }
+
+        const { searchParams } = new URL(request.url);
+        const articleId = searchParams.get("articleId");
+
+        if (!articleId) {
+            return NextResponse.json({ success: false, error: "articleId required" }, { status: 400 });
+        }
+
+        const articleNumericId = parseInt(articleId, 10);
+        const article = await db.select().from(articles).where(eq(articles.id, articleNumericId)).get();
+        if (!article) {
+            return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+        }
+
+        if (context.user.role !== "admin") {
+            const identityCandidates = getContextIdentityCandidates(context);
+            if (!matchesIdentityCandidate(identityCandidates, article.penName)) {
+                return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+            }
+        }
+
+        const reviews = await db
+            .select()
+            .from(articleReviews)
+            .where(eq(articleReviews.articleId, articleNumericId))
+            .orderBy(desc(articleReviews.id))
+            .all();
+
+        return NextResponse.json({ success: true, data: reviews });
+    } catch (error) {
+        return handleServerError("articles.review.get", error);
+    }
+}
+
+export async function POST(request: NextRequest) {
+    try {
+        await ensureDatabaseInitialized();
+        const originError = enforceTrustedOrigin(request);
+        if (originError) return originError;
+
+        const context = await getCurrentUserContext();
+        if (!context) {
+            return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
+        }
+        if (context.user.role !== "admin") {
+            return NextResponse.json({ success: false, error: "Admin required" }, { status: 403 });
+        }
+
+        const { articleId, errorNotes } = await request.json();
+
+        if (!articleId || !errorNotes) {
+            return NextResponse.json({ success: false, error: "articleId and errorNotes required" }, { status: 400 });
+        }
+
+        await db.insert(articleReviews)
+            .values({
+                articleId,
+                reviewerUserId: context.user.id,
+                errorNotes,
+                status: "pending",
+            })
+            .run();
+
+        await db.update(articles)
+            .set({ status: "NeedsFix", updatedAt: new Date().toISOString() })
+            .where(eq(articles.id, articleId))
+            .run();
+
+        const article = await db.select().from(articles).where(eq(articles.id, articleId)).get();
+        if (article) {
+            const targets = await db
+                .select({ id: users.id, penName: collaborators.penName, name: collaborators.name })
+                .from(users)
+                .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+                .all();
+
+            const targetUser = targets.find((item) => matchesIdentityCandidate([item.penName, item.name], article.penName));
+
+            if (targetUser?.id) {
+                await createNotification({
+                    fromUserId: context.user.id,
+                    toUserId: targetUser.id,
+                    toPenName: article.penName,
+                    type: "review",
+                    title: "📝 Bai viet can sua loi",
+                    message: `Bai "${article.title}" co loi can sua:\n${errorNotes}`,
+                    relatedArticleId: articleId,
+                });
+            }
+        }
+
+        await writeAuditLog({
+            userId: context.user.id,
+            action: "article_review_created",
+            entity: "article_review",
+            entityId: articleId,
+            payload: { errorNotes },
+        });
+
+        await publishRealtimeEvent(["articles", "dashboard"]);
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        return handleServerError("articles.review.post", error);
+    }
+}
+
+export async function PUT(request: NextRequest) {
+    try {
+        await ensureDatabaseInitialized();
+        const originError = enforceTrustedOrigin(request);
+        if (originError) return originError;
+
+        const context = await getCurrentUserContext();
+        if (!context) {
+            return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
+        }
+
+        const { reviewId, ctvResponse } = await request.json();
+
+        if (!reviewId || !ctvResponse) {
+            return NextResponse.json({ success: false, error: "reviewId and ctvResponse required" }, { status: 400 });
+        }
+
+        const review = await db.select().from(articleReviews).where(eq(articleReviews.id, reviewId)).get();
+        if (!review) {
+            return NextResponse.json({ success: false, error: "Review not found" }, { status: 404 });
+        }
+
+        const article = await db.select().from(articles).where(eq(articles.id, review.articleId)).get();
+        if (!article) {
+            return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+        }
+
+        if (context.user.role !== "admin") {
+            const identityCandidates = getContextIdentityCandidates(context);
+            if (!matchesIdentityCandidate(identityCandidates, article.penName)) {
+                return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+            }
+        }
+
+        await db.update(articleReviews)
+            .set({
+                ctvResponse,
+                status: "fixed",
+                updatedAt: new Date().toISOString(),
+            })
+            .where(eq(articleReviews.id, reviewId))
+            .run();
+
+        await db.update(articles)
+            .set({ status: "Submitted", updatedAt: new Date().toISOString() })
+            .where(eq(articles.id, review.articleId))
+            .run();
+
+        const adminUser = await db.select().from(users).where(eq(users.role, "admin")).get();
+
+        if (adminUser) {
+            await createNotification({
+                fromUserId: context.user.id,
+                toUserId: adminUser.id,
+                type: "error_fix",
+                title: "✅ CTV da sua loi bai viet",
+                message: `CTV da sua loi bai "${article.title}":\n${ctvResponse}`,
+                relatedArticleId: review.articleId,
+            });
+        }
+
+        await writeAuditLog({
+            userId: context.user.id,
+            action: "article_review_fixed",
+            entity: "article_review",
+            entityId: reviewId,
+            payload: { articleId: review.articleId },
+        });
+
+        await publishRealtimeEvent(["articles", "dashboard"]);
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        return handleServerError("articles.review.put", error);
+    }
+}

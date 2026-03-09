@@ -1,0 +1,14 @@
+[GET] http://localhost:3000/api/auth/me => [200] OK
+[POST] http://localhost:3000/api/auth/login => [200] OK
+[GET] http://localhost:3000/api/auth/me => [200] OK
+[GET] http://localhost:3000/api/statistics => [200] OK
+[GET] http://localhost:3000/api/notifications?unread=true => [200] OK
+[GET] http://localhost:3000/api/statistics => [200] OK
+[GET] http://localhost:3000/api/notifications?unread=true => [200] OK
+[GET] http://localhost:3000/api/notifications?unread=true => [200] OK
+[GET] http://localhost:3000/api/collaborators => [200] OK
+[GET] http://localhost:3000/api/collaborators => [200] OK
+[GET] http://localhost:3000/api/notifications?unread=true => [200] OK
+[GET] http://localhost:3000/api/notifications?unread=true => [200] OK
+[GET] http://localhost:3000/api/notifications?unread=true => [200] OK
+[GET] http://localhost:3000/api/notifications?unread=true => [200] OK

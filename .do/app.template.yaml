@@ -1,0 +1,64 @@
+name: ctv-management
+region: sgp
+
+ingress:
+  rules:
+    - component:
+        name: web
+      match:
+        path:
+          prefix: /
+
+domains:
+  - domain: app.example.com
+    type: PRIMARY
+    # Uncomment `zone` only if DigitalOcean will manage this domain's DNS.
+    # zone: example.com
+
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+
+services:
+  - name: web
+    github:
+      repo: your-org-or-user/ctv-management
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    dockerfile_path: Dockerfile
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 20
+      period_seconds: 15
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    envs:
+      - key: NODE_ENV
+        scope: RUN_TIME
+        value: production
+      - key: APP_ORIGIN
+        scope: RUN_TIME
+        value: https://app.example.com
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: replace-with-a-strong-random-secret-at-least-32-characters
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: postgresql://doadmin:replace-me@your-managed-postgres-host:25060/defaultdb?sslmode=require
+      - key: DATABASE_SSL
+        scope: RUN_TIME
+        value: require
+      - key: SEED_ADMIN_EMAIL
+        scope: RUN_TIME
+        value: admin@example.com
+      - key: SEED_ADMIN_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+        value: replace-with-a-temporary-admin-password

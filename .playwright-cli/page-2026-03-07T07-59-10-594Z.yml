@@ -1,0 +1,132 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e3]
+  - generic [ref=e21]:
+    - complementary [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e25]: article
+        - generic [ref=e26]:
+          - heading "CTV Manager" [level=1] [ref=e27]
+          - paragraph [ref=e28]: QUẢN TRỊ VIÊN
+      - navigation [ref=e29]:
+        - generic [ref=e30]: Tổng quan
+        - button "dashboard Tổng quan" [ref=e31]:
+          - generic [ref=e32]: dashboard
+          - generic [ref=e33]: Tổng quan
+        - button "notifications Thông báo" [ref=e34]:
+          - generic [ref=e35]: notifications
+          - generic [ref=e36]: Thông báo
+        - generic [ref=e37]: Quản lý
+        - button "description Bài viết" [ref=e38]:
+          - generic [ref=e39]: description
+          - generic [ref=e40]: Bài viết
+        - button "task_alt Lịch biên tập" [ref=e41]:
+          - generic [ref=e42]: task_alt
+          - generic [ref=e43]: Lịch biên tập
+        - button "group Đội ngũ" [ref=e44]:
+          - generic [ref=e45]: group
+          - generic [ref=e46]: Đội ngũ
+        - button "payments Nhuận bút" [ref=e47]:
+          - generic [ref=e48]: payments
+          - generic [ref=e49]: Nhuận bút
+        - button "history Audit Logs" [ref=e50]:
+          - generic [ref=e51]: history
+          - generic [ref=e52]: Audit Logs
+        - generic [ref=e53]: Công cụ
+        - button "smart_toy Trợ lý AI" [ref=e54]:
+          - generic [ref=e55]: smart_toy
+          - generic [ref=e56]: Trợ lý AI
+      - generic [ref=e58]:
+        - generic [ref=e60]: A
+        - generic [ref=e61]:
+          - paragraph [ref=e62]: Nhân BTV
+          - paragraph [ref=e63]: admin@ctvmanager.com
+        - button "logout" [ref=e64] [cursor=pointer]
+    - main [ref=e65]:
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - generic [ref=e68]:
+            - generic [ref=e69]:
+              - heading "Chào buổi chiều, Nhân 👋" [level=2] [ref=e70]
+              - generic [ref=e73]: Hệ thống ổn định
+            - paragraph [ref=e74]: Hôm nay có 0 bài viết đang chờ bạn phê duyệt.
+          - generic [ref=e75]:
+            - button "file_download Báo cáo" [ref=e76] [cursor=pointer]:
+              - generic [ref=e77]: file_download
+              - text: Báo cáo
+            - button "article Quản lý bài viết" [ref=e78] [cursor=pointer]:
+              - generic [ref=e79]: article
+              - text: Quản lý bài viết
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - generic [ref=e82]:
+              - generic [ref=e84]: article
+              - generic [ref=e85]: +12.5%
+            - generic [ref=e86]:
+              - generic [ref=e87]: Tổng bài viết
+              - generic [ref=e88]: "217"
+          - generic [ref=e89]:
+            - generic [ref=e90]:
+              - generic [ref=e92]: payments
+              - generic [ref=e93]: Tháng này
+            - generic [ref=e94]:
+              - generic [ref=e95]: Dự tính nhuận bút
+              - generic [ref=e96]: 10.700.000đ
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - generic [ref=e100]: hourglass_empty
+              - generic [ref=e101]: Yêu cầu ưu tiên
+            - generic [ref=e102]:
+              - generic [ref=e103]: Đang chờ duyệt
+              - generic [ref=e104]: "0"
+          - generic [ref=e105]:
+            - generic [ref=e106]:
+              - generic [ref=e108]: group
+              - generic [ref=e109]: 8 trực tuyến
+            - generic [ref=e110]:
+              - generic [ref=e111]: Cộng tác viên
+              - generic [ref=e112]: "9"
+        - generic [ref=e113]:
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - heading "analytics Hiệu suất Cộng tác viên bài viết" [level=3] [ref=e116]:
+                - generic [ref=e117]: analytics
+                - text: Hiệu suất Cộng tác viên bài viết
+              - generic [ref=e120]: Tháng này
+            - generic [ref=e121]:
+              - generic [ref=e122]:
+                - generic [ref=e123]: Khải Đình
+                - generic [ref=e126]: 2 bài
+              - generic [ref=e127]:
+                - generic [ref=e128]: 02 bí kíp nấu món bún Thái đậm đà, hấp dẫn, cực đơn giản dành cho bữa sáng hoặc tối của cả nhà
+                - generic [ref=e131]: 1 bài
+              - generic [ref=e132]:
+                - generic [ref=e133]: 11+ kiểu tóc mái bay mới, hiện đại, phù hợp mọi shape mặt mà chị em nên thử
+                - generic [ref=e136]: 1 bài
+              - generic [ref=e137]:
+                - generic [ref=e138]: 15 món gỏi xoài đơn giản, dễ làm tại nhà nhưng hương vị thơm ngon ai cũng xuýt xoa
+                - generic [ref=e141]: 1 bài
+              - generic [ref=e142]:
+                - generic [ref=e143]: 17 Kiểu tóc màu nâu lạnh chưa bao giờ hết hot dành cho hội chị em phụ nữ
+                - generic [ref=e146]: 1 bài
+          - generic [ref=e147]:
+            - generic [ref=e148]:
+              - heading "Danh mục" [level=3] [ref=e149]
+              - generic [ref=e150] [cursor=pointer]: more_horiz
+            - generic [ref=e152]:
+              - generic [ref=e154]: 100%
+              - generic [ref=e155]:
+                - paragraph [ref=e156]: ICT
+                - paragraph [ref=e157]: 217 bài viết hiện có
+        - generic [ref=e159]:
+          - generic [ref=e160]:
+            - heading "Hoạt động mới nhất" [level=3] [ref=e161]
+            - button "Xem tất cả" [ref=e162] [cursor=pointer]
+          - table [ref=e164]:
+            - rowgroup [ref=e165]:
+              - row "Bài viết Người viết Loại bài Trạng thái Ngày cập nhật" [ref=e166]:
+                - columnheader "Bài viết" [ref=e167]
+                - columnheader "Người viết" [ref=e168]
+                - columnheader "Loại bài" [ref=e169]
+                - columnheader "Trạng thái" [ref=e170]
+                - columnheader "Ngày cập nhật" [ref=e171]
+            - rowgroup

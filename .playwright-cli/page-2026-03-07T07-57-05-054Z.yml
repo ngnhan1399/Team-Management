@@ -1,0 +1,66 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e9] [cursor=pointer]:
+    - img [ref=e10]
+  - alert [ref=e3]
+  - generic [ref=e30]:
+    - complementary [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e34]: article
+        - generic [ref=e35]:
+          - heading "CTV Manager" [level=1] [ref=e36]
+          - paragraph [ref=e37]: QUẢN TRỊ VIÊN
+      - navigation [ref=e38]:
+        - generic [ref=e39]: Tổng quan
+        - button "dashboard Tổng quan" [ref=e40]:
+          - generic [ref=e41]: dashboard
+          - generic [ref=e42]: Tổng quan
+        - button "notifications Thông báo" [active] [ref=e43]:
+          - generic [ref=e44]: notifications
+          - generic [ref=e45]: Thông báo
+        - generic [ref=e46]: Quản lý
+        - button "description Bài viết" [ref=e47]:
+          - generic [ref=e48]: description
+          - generic [ref=e49]: Bài viết
+        - button "task_alt Lịch biên tập" [ref=e50]:
+          - generic [ref=e51]: task_alt
+          - generic [ref=e52]: Lịch biên tập
+        - button "group Đội ngũ" [ref=e53]:
+          - generic [ref=e54]: group
+          - generic [ref=e55]: Đội ngũ
+        - button "payments Nhuận bút" [ref=e56]:
+          - generic [ref=e57]: payments
+          - generic [ref=e58]: Nhuận bút
+        - button "history Audit Logs" [ref=e59]:
+          - generic [ref=e60]: history
+          - generic [ref=e61]: Audit Logs
+        - generic [ref=e62]: Công cụ
+        - button "smart_toy Trợ lý AI" [ref=e63]:
+          - generic [ref=e64]: smart_toy
+          - generic [ref=e65]: Trợ lý AI
+      - generic [ref=e67]:
+        - generic [ref=e69]: A
+        - generic [ref=e70]:
+          - paragraph [ref=e71]: Nhân BTV
+          - paragraph [ref=e72]: admin@ctvmanager.com
+        - button "logout" [ref=e73] [cursor=pointer]
+    - main [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e181]:
+          - generic [ref=e182]:
+            - heading "Thông báo" [level=2] [ref=e183]
+            - paragraph [ref=e184]: Luôn cập nhật thông tin mới nhất từ đội ngũ.
+          - generic [ref=e185]:
+            - button "done_all Đọc tất cả" [ref=e186] [cursor=pointer]:
+              - generic [ref=e187]: done_all
+              - text: Đọc tất cả
+            - button "forward_to_inbox Gửi thông báo" [ref=e188] [cursor=pointer]:
+              - generic [ref=e189]: forward_to_inbox
+              - text: Gửi thông báo
+        - generic [ref=e191]:
+          - generic [ref=e193]: rate_review
+          - generic [ref=e194]:
+            - heading "📝 Bài viết cần sửa lỗi" [level=4] [ref=e196]
+            - paragraph [ref=e197]: "Bài \"Điện thoại gập camera trước có góc rộng không? Tìm hiểu về thông số camera trước chi tiết\" có lỗi cần sửa: Sửa lại hình ảnh"
+            - generic [ref=e198]:
+              - generic [ref=e199]: schedule
+              - text: 14:29:53 4/3/2026
