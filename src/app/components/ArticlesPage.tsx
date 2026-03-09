@@ -141,9 +141,12 @@ export default function ArticlesPage() {
   }, [fetchArticles]);
 
   useEffect(() => {
-    const published = articles.filter(a => a.status === "Published" && a.link && a.link.startsWith("http"));
-    if (published.length === 0) return;
-    const urls = published.map(a => a.link).filter(Boolean);
+    const published = articles.filter(a => ["Published", "Approved"].includes(a.status) && a.link && a.link.startsWith("http"));
+    if (published.length === 0) {
+      setBrokenLinks({});
+      return;
+    }
+    const urls = Array.from(new Set(published.map(a => a.link).filter(Boolean)));
     fetch("/api/check-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls }) })
       .then(r => r.json())
       .then(d => { if (d.success) setBrokenLinks(d.results); })
@@ -747,7 +750,7 @@ export default function ArticlesPage() {
       return <span style={{ color: "rgba(0,0,0,0.2)" }}>—</span>;
     }
 
-    if (article.status === "Published" && brokenLinks[article.link] === false) {
+    if (["Published", "Approved"].includes(article.status) && brokenLinks[article.link] === false) {
       return (
         <span title="Link lỗi" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link_off</span>
@@ -755,7 +758,7 @@ export default function ArticlesPage() {
       );
     }
 
-    if (article.status === "Published" && brokenLinks[article.link] === true) {
+    if (["Published", "Approved"].includes(article.status) && brokenLinks[article.link] === true) {
       return (
         <span title="Link hoạt động" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--success)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link</span>

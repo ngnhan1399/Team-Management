@@ -18,6 +18,25 @@ function isPrivateHostname(hostname: string) {
     );
 }
 
+function isLikelyReachableStatus(status: number) {
+    return (status >= 200 && status < 400) || [401, 403, 405, 416, 429].includes(status);
+}
+
+async function requestUrl(url: URL, method: "HEAD" | "GET", signal: AbortSignal) {
+    return fetch(url, {
+        method,
+        signal,
+        redirect: "follow",
+        headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; CTV-Manager-LinkChecker/1.0; +https://www.workdocker.com)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "vi,en;q=0.8",
+            ...(method === "GET" ? { Range: "bytes=0-0" } : {}),
+        },
+        cache: "no-store",
+    });
+}
+
 export async function POST(request: NextRequest) {
     try {
         const context = await getCurrentUserContext();
@@ -49,15 +68,22 @@ export async function POST(request: NextRequest) {
                     }
 
                     const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 8000);
-                    const res = await fetch(parsedUrl, {
-                        method: "HEAD",
-                        signal: controller.signal,
-                        redirect: "follow",
-                        headers: { "User-Agent": "CTV-Manager-LinkChecker/1.0" },
-                    });
-                    clearTimeout(timeout);
-                    results[url] = res.ok;
+                    const timeout = setTimeout(() => controller.abort(), 10000);
+
+                    let reachable = false;
+                    try {
+                        const headResponse = await requestUrl(parsedUrl, "HEAD", controller.signal);
+                        reachable = isLikelyReachableStatus(headResponse.status);
+
+                        if (!reachable) {
+                            const getResponse = await requestUrl(parsedUrl, "GET", controller.signal);
+                            reachable = isLikelyReachableStatus(getResponse.status);
+                        }
+                    } finally {
+                        clearTimeout(timeout);
+                    }
+
+                    results[url] = reachable;
                 } catch {
                     results[url] = false;
                 }

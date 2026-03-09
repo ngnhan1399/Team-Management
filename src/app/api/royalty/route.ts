@@ -2,7 +2,7 @@ import { db, ensureDatabaseInitialized } from "@/db";
 import { royaltyRates, articles, monthlyBudgets } from "@/db/schema";
 import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { publishRealtimeEvent } from "@/lib/realtime";
-import { isRoyaltyEligibleArticleStatus } from "@/lib/royalty";
+import { isRoyaltyEligibleArticleStatus, matchesRoyaltyMonthYear, parseRoyaltyDateParts } from "@/lib/royalty";
 import { requiredInt, optionalString, ValidationError } from "@/lib/validation";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -69,11 +69,10 @@ export async function GET(request: NextRequest) {
             const writerAmounts: Record<string, number> = {};
 
             for (const article of scopedArticles) {
-                if (!article.date) continue;
-                const dateParts = article.date.split("-");
-                const articleYear = parseInt(dateParts[0] || "", 10);
-                const articleMonth = parseInt(dateParts[1] || "", 10);
-                if (!Number.isInteger(articleYear) || !Number.isInteger(articleMonth)) continue;
+                const dateParts = parseRoyaltyDateParts(article.date);
+                if (!dateParts) continue;
+                const articleYear = dateParts.year;
+                const articleMonth = dateParts.month;
 
                 const key = `${articleYear}-${articleMonth}`;
                 const price = rateMap.get(`${article.articleType}|${article.contentType}`) || 0;
@@ -167,9 +166,7 @@ export async function GET(request: NextRequest) {
 
             const filtered = scopedArticles.filter((article) => {
                 if (!month || !year) return true;
-                if (!article.date) return false;
-                const parts = article.date.split("-");
-                return parseInt(parts[0] || "", 10) === year && parseInt(parts[1] || "", 10) === month;
+                return matchesRoyaltyMonthYear(article.date, month, year);
             });
 
             const paymentByWriter: Record<string, {

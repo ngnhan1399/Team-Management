@@ -4,11 +4,11 @@ import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCan
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications";
-import { isRoyaltyEligibleArticleStatus } from "@/lib/royalty";
+import { isRoyaltyEligibleArticleStatus, matchesRoyaltyMonthYear } from "@/lib/royalty";
 import { requiredInt, optionalString, ValidationError, enumValue } from "@/lib/validation";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
-import { and, eq, like, desc, type SQL } from "drizzle-orm";
+import { and, eq, desc, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type PaymentDetails = Record<string, { count: number; unitPrice: number; total: number }>;
@@ -36,9 +36,9 @@ async function buildCalculation(month: number, year: number, onlyPenName?: strin
     rateMap.set(`${rate.articleType}|${rate.contentType}`, rate.price);
   }
 
-  let condition: SQL | undefined = like(articles.date, `${year}-${String(month).padStart(2, "0")}%`);
+  let condition: SQL | undefined;
   if (onlyPenName) {
-    condition = and(condition, eq(articles.penName, onlyPenName)) ?? condition;
+    condition = eq(articles.penName, onlyPenName);
   }
 
   const sourceArticles = (await db
@@ -46,7 +46,7 @@ async function buildCalculation(month: number, year: number, onlyPenName?: strin
     .from(articles)
     .where(condition)
     .all())
-    .filter((article) => isRoyaltyEligibleArticleStatus(article.status));
+    .filter((article) => isRoyaltyEligibleArticleStatus(article.status) && matchesRoyaltyMonthYear(article.date, month, year));
 
   const byWriter: Record<string, CalcRow> = {};
 
@@ -204,6 +204,7 @@ export async function POST(request: NextRequest) {
       const calculation = await buildCalculation(month, year, penName);
       let generated = 0;
       let skipped = 0;
+      const targetPenNames = new Set(calculation.map((row) => row.penName));
 
       for (const row of calculation) {
         const existing = await db
@@ -248,6 +249,26 @@ export async function POST(request: NextRequest) {
         }
 
         generated += 1;
+      }
+
+      const stalePaymentWhere = penName
+        ? and(eq(payments.month, month), eq(payments.year, year), eq(payments.penName, penName))
+        : and(eq(payments.month, month), eq(payments.year, year));
+
+      const stalePayments = await db
+        .select()
+        .from(payments)
+        .where(stalePaymentWhere)
+        .all();
+
+      for (const stalePayment of stalePayments) {
+        if (targetPenNames.has(stalePayment.penName)) continue;
+        if (stalePayment.status !== "pending" && !force) {
+          skipped += 1;
+          continue;
+        }
+
+        await db.delete(payments).where(eq(payments.id, stalePayment.id)).run();
       }
 
       await writeAuditLog({
