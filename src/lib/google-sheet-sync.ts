@@ -93,8 +93,11 @@ export function buildSpreadsheetExportUrl(url: string): string {
 export function parseSheetTabInfo(name: string): GoogleSheetTabInfo | null {
   const folded = foldText(name);
   const isCopy = folded.startsWith("ban sao cua ");
-  const simplified = folded.replace(/^ban sao cua\s+/, "").replace(/\s+/g, "");
-  const match = simplified.match(/^thang(\d{1,2})(\d{4})$/);
+  const simplified = folded.replace(/^ban sao cua\s+/, "").trim();
+  const match =
+    simplified.match(/^thang\s*(\d{1,2})(\d{4})$/)
+    || simplified.match(/^thang\s*(\d{1,2})[\s/.\-_]+(\d{4})$/)
+    || simplified.match(/^thang[\s/.\-_]+(\d{1,2})[\s/.\-_]+(\d{4})$/);
 
   if (!match) return null;
 
