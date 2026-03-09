@@ -1,1 +1,0 @@
-[    1005ms] [WARNING] Something has shimmed the React DevTools global hook (__REACT_DEVTOOLS_GLOBAL_HOOK__). Fast Refresh is not compatible with this shim and will be disabled. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_a0e4c7b4._.js:534
