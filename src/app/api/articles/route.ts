@@ -2,6 +2,7 @@ import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, notifications, payments } from "@/db/schema";
 import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { publishRealtimeEvent } from "@/lib/realtime";
+import { parseRoyaltyDateParts } from "@/lib/royalty";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -152,6 +153,28 @@ function buildAffectedPaymentWhere(rows: Array<Pick<ArticleDeleteRow, "penName" 
   }
 
   return conditions.length > 0 ? or(...conditions) : undefined;
+}
+
+function getArticleDateSortValue(value: string) {
+  const parsed = parseRoyaltyDateParts(value);
+  if (parsed) {
+    return Number(`${parsed.year}${String(parsed.month).padStart(2, "0")}${String(parsed.day).padStart(2, "0")}`);
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortArticlesByLatestDate<T extends { id: number; date: string; updatedAt?: string | null; createdAt?: string | null }>(rows: T[]) {
+  return [...rows].sort((left, right) => {
+    const dateDiff = getArticleDateSortValue(right.date) - getArticleDateSortValue(left.date);
+    if (dateDiff !== 0) return dateDiff;
+
+    const updatedDiff = new Date(right.updatedAt || right.createdAt || 0).getTime() - new Date(left.updatedAt || left.createdAt || 0).getTime();
+    if (Number.isFinite(updatedDiff) && updatedDiff !== 0) return updatedDiff;
+
+    return right.id - left.id;
+  });
 }
 
 async function getDeletePreview(whereClause?: SQL) {
@@ -328,7 +351,9 @@ export async function GET(request: NextRequest) {
       ? filteredRows
       : filteredRows.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
 
-    const data = scopedRows
+    const sortedRows = sortArticlesByLatestDate(scopedRows);
+
+    const data = sortedRows
       .slice((page - 1) * limit, page * limit)
       .map((article) => ({
         ...article,
@@ -341,8 +366,8 @@ export async function GET(request: NextRequest) {
       pagination: {
         page,
         limit,
-        total: scopedRows.length,
-        totalPages: Math.ceil(scopedRows.length / limit),
+        total: sortedRows.length,
+        totalPages: Math.ceil(sortedRows.length / limit),
       },
     });
   } catch (error) {
