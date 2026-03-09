@@ -54,6 +54,17 @@ const bootstrapStatements = [
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
+  `CREATE TABLE IF NOT EXISTS article_sync_links (
+    id SERIAL PRIMARY KEY,
+    source_url TEXT NOT NULL,
+    sheet_name TEXT NOT NULL,
+    sheet_month INTEGER NOT NULL,
+    sheet_year INTEGER NOT NULL,
+    source_row_key TEXT NOT NULL,
+    article_id_ref INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
   `CREATE TABLE IF NOT EXISTS article_comments (
     id SERIAL PRIMARY KEY,
     article_id INTEGER NOT NULL,
@@ -163,6 +174,9 @@ const bootstrapStatements = [
   "CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(date)",
   "CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status)",
   "CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category)",
+  "CREATE INDEX IF NOT EXISTS idx_article_sync_links_source ON article_sync_links(source_url, sheet_name)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_article_sync_links_row_key ON article_sync_links(source_url, sheet_name, source_row_key)",
+  "CREATE INDEX IF NOT EXISTS idx_article_sync_links_article_ref ON article_sync_links(article_id_ref)",
   "CREATE INDEX IF NOT EXISTS idx_article_comments_article_id ON article_comments(article_id)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_assignee ON editorial_tasks(assignee_pen_name)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_due_date ON editorial_tasks(due_date)",

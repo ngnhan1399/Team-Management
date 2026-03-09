@@ -69,6 +69,18 @@ export const articles = pgTable("articles", {
   updatedAt: text("updated_at").notNull().default(timestampTextDefault),
 });
 
+export const articleSyncLinks = pgTable("article_sync_links", {
+  id: serial("id").primaryKey(),
+  sourceUrl: text("source_url").notNull(),
+  sheetName: text("sheet_name").notNull(),
+  sheetMonth: integer("sheet_month").notNull(),
+  sheetYear: integer("sheet_year").notNull(),
+  sourceRowKey: text("source_row_key").notNull(),
+  articleIdRef: integer("article_id_ref"),
+  createdAt: text("created_at").notNull().default(timestampTextDefault),
+  updatedAt: text("updated_at").notNull().default(timestampTextDefault),
+});
+
 export const articleComments = pgTable("article_comments", {
   id: serial("id").primaryKey(),
   articleId: integer("article_id").notNull(),
@@ -189,6 +201,7 @@ export type Collaborator = typeof collaborators.$inferSelect;
 export type NewCollaborator = typeof collaborators.$inferInsert;
 export type Article = typeof articles.$inferSelect;
 export type NewArticle = typeof articles.$inferInsert;
+export type ArticleSyncLink = typeof articleSyncLinks.$inferSelect;
 export type ArticleComment = typeof articleComments.$inferSelect;
 export type EditorialTask = typeof editorialTasks.$inferSelect;
 export type KpiRecord = typeof kpiRecords.$inferSelect;

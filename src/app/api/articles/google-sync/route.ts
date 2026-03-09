@@ -76,9 +76,6 @@ export async function POST(request: NextRequest) {
 
     await publishRealtimeEvent({
       channels: ["articles", "dashboard", "royalty"],
-      toastTitle: "Đồng bộ Google Sheet hoàn tất",
-      toastMessage: `${result.sheetName}: thêm ${result.inserted}, bỏ qua ${result.duplicates} bài đã có.`,
-      toastVariant: "success",
     });
 
     return NextResponse.json({

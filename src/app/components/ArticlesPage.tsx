@@ -1353,6 +1353,7 @@ export default function ArticlesPage() {
                       { label: "Tổng dòng", value: googleSyncResult.total, color: "var(--text-main)", icon: "description" },
                       { label: "Thêm mới", value: googleSyncResult.inserted, color: "var(--accent-teal)", icon: "add_task" },
                       { label: "Đã có sẵn", value: googleSyncResult.duplicates, color: "var(--accent-blue)", icon: "content_copy" },
+                      { label: "Đã xóa", value: googleSyncResult.deleted, color: "var(--danger)", icon: "delete" },
                       { label: "Lỗi dữ liệu", value: googleSyncResult.skipped, color: "var(--accent-orange)", icon: "warning" },
                     ].map((item) => (
                       <div key={item.label} style={{ padding: 14, borderRadius: 14, background: "rgba(255,255,255,0.75)", border: "1px solid var(--glass-border)" }}>

@@ -1,7 +1,8 @@
 import * as XLSX from "xlsx";
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articles, collaborators } from "@/db/schema";
+import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments } from "@/db/schema";
 import { normalizeImportedArticleRow, prepareArticleImport, type ImportFieldId } from "./article-import";
+import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 
 export const DEFAULT_GOOGLE_SHEET_SOURCE_URL =
   "https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251";
@@ -20,6 +21,12 @@ type ExistingArticleRow = {
   penName: string;
   date: string;
   link: string | null;
+};
+
+type SyncLinkRow = {
+  id: number;
+  sourceRowKey: string;
+  articleIdRef: number | null;
 };
 
 type NormalizedArticle = ReturnType<typeof normalizeImportedArticleRow>["normalized"];
@@ -43,6 +50,7 @@ export interface GoogleSheetSyncExecutionResult {
   total: number;
   inserted: number;
   duplicates: number;
+  deleted: number;
   skipped: number;
   errors: string[];
   warnings: string[];
@@ -181,6 +189,94 @@ function normalizeTitlePenNameKey(title: string, penName: string) {
 
 function normalizeLinkKey(link: string) {
   return link.toLowerCase().trim();
+}
+
+function buildSourceRowKey(normalized: NormalizedArticle) {
+  const articleId = normalized.articleId?.trim();
+  if (articleId) return `articleId:${articleId}`;
+
+  const link = normalized.link?.trim();
+  if (link) return `link:${normalizeLinkKey(link)}`;
+
+  return `composite:${normalizeCompositeKey(normalized.title, normalized.penName, normalized.date as string)}`;
+}
+
+function getYearMonthFromDate(dateValue: string) {
+  const match = dateValue.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (!match) return null;
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+  };
+}
+
+function buildAffectedPaymentMatchers(rows: Array<Pick<ExistingArticleRow, "penName" | "date">>) {
+  const clauses = rows
+    .map((row) => {
+      const yearMonth = getYearMonthFromDate(row.date);
+      if (!yearMonth) return null;
+
+      return and(
+        eq(payments.penName, row.penName),
+        eq(payments.year, yearMonth.year),
+        eq(payments.month, yearMonth.month)
+      );
+    })
+    .filter((clause): clause is SQL => Boolean(clause));
+
+  return clauses.length > 0 ? or(...clauses) : null;
+}
+
+async function deleteArticlesForSync(articleIds: number[]) {
+  if (articleIds.length === 0) {
+    return { deletedArticles: 0 };
+  }
+
+  const targetRows = await db
+    .select({
+      id: articles.id,
+      penName: articles.penName,
+      date: articles.date,
+    })
+    .from(articles)
+    .where(inArray(articles.id, articleIds))
+    .all();
+
+  const affectedPaymentWhere = buildAffectedPaymentMatchers(targetRows);
+
+  return db.transaction(async (tx) => {
+    await tx
+      .delete(articleComments)
+      .where(inArray(articleComments.articleId, articleIds))
+      .run();
+
+    await tx
+      .delete(articleReviews)
+      .where(inArray(articleReviews.articleId, articleIds))
+      .run();
+
+    await tx
+      .delete(notifications)
+      .where(inArray(notifications.relatedArticleId, articleIds))
+      .run();
+
+    await tx
+      .delete(articleSyncLinks)
+      .where(inArray(articleSyncLinks.articleIdRef, articleIds))
+      .run();
+
+    const deletedArticles = Number((await tx
+      .delete(articles)
+      .where(inArray(articles.id, articleIds))
+      .run()).rowsAffected || 0);
+
+    if (affectedPaymentWhere) {
+      await tx.delete(payments).where(affectedPaymentWhere).run();
+    }
+
+    return { deletedArticles };
+  }) as Promise<{ deletedArticles: number }>;
 }
 
 function resolveMapping(mapping: Record<string, ImportFieldId | null>) {
@@ -332,8 +428,27 @@ export async function executeGoogleSheetSync(
     setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, row);
   }
 
+  const existingSyncLinks = await db
+    .select({
+      id: articleSyncLinks.id,
+      sourceRowKey: articleSyncLinks.sourceRowKey,
+      articleIdRef: articleSyncLinks.articleIdRef,
+    })
+    .from(articleSyncLinks)
+    .where(
+      and(
+        eq(articleSyncLinks.sourceUrl, sourceUrl),
+        eq(articleSyncLinks.sheetName, selectedSheet.name)
+      )
+    )
+    .all() as SyncLinkRow[];
+
+  const existingSyncLinkMap = new Map(existingSyncLinks.map((link) => [link.sourceRowKey, link]));
+  const seenSourceRowKeys = new Set<string>();
+
   let inserted = 0;
   let duplicates = 0;
+  let deleted = 0;
   let skipped = 0;
   const errors: string[] = [];
 
@@ -356,6 +471,8 @@ export async function executeGoogleSheetSync(
 
       const articleId = normalized.articleId?.trim() || null;
       const link = normalized.link?.trim() || null;
+      const sourceRowKey = buildSourceRowKey({ ...normalized, articleId: articleId ?? undefined, link: link ?? undefined });
+      seenSourceRowKeys.add(sourceRowKey);
       const compositeKey = normalizeCompositeKey(normalized.title, normalized.penName, normalized.date as string);
       const titlePenNameKey = normalizeTitlePenNameKey(normalized.title, normalized.penName);
       const matchedByArticleId = articleId ? articleIdMap.get(articleId) : undefined;
@@ -364,36 +481,85 @@ export async function executeGoogleSheetSync(
       const matchedByTitlePenName = titlePenNameMap.get(titlePenNameKey);
       const target = matchedByArticleId ?? matchedByLink ?? matchedByComposite ?? matchedByTitlePenName;
 
+      let resolvedArticleId = target?.id ?? null;
+
       if (target) {
         duplicates += 1;
-        continue;
+      } else {
+        const insertValues = {
+          ...buildArticlePayload({ ...normalized, articleId: articleId ?? undefined }, mappedFields),
+          createdByUserId: options.createdByUserId ?? null,
+        } as typeof articles.$inferInsert;
+
+        const insertedRow = await db.insert(articles)
+          .values(insertValues)
+          .returning({ id: articles.id })
+          .get();
+
+        resolvedArticleId = Number(insertedRow?.id);
+        setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, {
+          id: resolvedArticleId,
+          articleId,
+          title: normalized.title,
+          penName: normalized.penName,
+          date: normalized.date as string,
+          link,
+        });
+        inserted += 1;
       }
 
-      const insertValues = {
-        ...buildArticlePayload({ ...normalized, articleId: articleId ?? undefined }, mappedFields),
-        createdByUserId: options.createdByUserId ?? null,
-      } as typeof articles.$inferInsert;
-
-      const insertedRow = await db.insert(articles)
-        .values(insertValues)
-        .returning({ id: articles.id })
-        .get();
-
-      setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, {
-        id: Number(insertedRow?.id),
-        articleId,
-        title: normalized.title,
-        penName: normalized.penName,
-        date: normalized.date as string,
-        link,
-      });
-      inserted += 1;
+      const existingLink = existingSyncLinkMap.get(sourceRowKey);
+      if (existingLink) {
+        await db
+          .update(articleSyncLinks)
+          .set({
+            articleIdRef: resolvedArticleId,
+            sheetMonth: selectedSheet.month,
+            sheetYear: selectedSheet.year,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(articleSyncLinks.id, existingLink.id))
+          .run();
+      } else {
+        await db
+          .insert(articleSyncLinks)
+          .values({
+            sourceUrl,
+            sheetName: selectedSheet.name,
+            sheetMonth: selectedSheet.month,
+            sheetYear: selectedSheet.year,
+            sourceRowKey,
+            articleIdRef: resolvedArticleId,
+          })
+          .run();
+      }
     } catch (rowError) {
       skipped += 1;
       if (errors.length < 20) {
         errors.push(`Dòng ${row.rowNumber}: ${String(rowError)}`);
       }
     }
+  }
+
+  const staleLinks = existingSyncLinks.filter((link) => !seenSourceRowKeys.has(link.sourceRowKey));
+  const staleArticleIds = Array.from(
+    new Set(
+      staleLinks
+        .map((link) => Number(link.articleIdRef || 0))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  );
+
+  if (staleLinks.length > 0) {
+    await db
+      .delete(articleSyncLinks)
+      .where(inArray(articleSyncLinks.id, staleLinks.map((link) => link.id)))
+      .run();
+  }
+
+  if (staleArticleIds.length > 0) {
+    const deletedResult = await deleteArticlesForSync(staleArticleIds);
+    deleted = deletedResult.deletedArticles;
   }
 
   return {
@@ -407,6 +573,7 @@ export async function executeGoogleSheetSync(
     total: prepared.rawRows.length,
     inserted,
     duplicates,
+    deleted,
     skipped,
     errors,
     warnings: prepared.analysis.warnings,

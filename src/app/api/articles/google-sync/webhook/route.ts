@@ -130,9 +130,6 @@ export async function POST(request: NextRequest) {
 
     await publishRealtimeEvent({
       channels: ["articles", "dashboard", "royalty"],
-      toastTitle: "Google Sheet vừa được đồng bộ",
-      toastMessage: `${result.sheetName}: thêm ${result.inserted}, bỏ qua ${result.duplicates} bài đã có.`,
-      toastVariant: "success",
     });
 
     return buildWebhookResponse(result);

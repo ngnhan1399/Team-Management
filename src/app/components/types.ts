@@ -200,6 +200,7 @@ export interface GoogleSheetSyncResult {
   total: number;
   inserted: number;
   duplicates: number;
+  deleted: number;
   skipped: number;
   errors: string[];
   warnings: string[];

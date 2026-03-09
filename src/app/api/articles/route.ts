@@ -1,5 +1,5 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articleComments, articleReviews, articles, notifications, payments } from "@/db/schema";
+import { articleComments, articleReviews, articles, articleSyncLinks, notifications, payments } from "@/db/schema";
 import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
@@ -258,6 +258,11 @@ async function deleteArticlesByIds(articleIds: number[]): Promise<DeleteResult> 
       .delete(notifications)
       .where(inArray(notifications.relatedArticleId, articleIds))
       .run()).rowsAffected || 0);
+
+    await tx
+      .delete(articleSyncLinks)
+      .where(inArray(articleSyncLinks.articleIdRef, articleIds))
+      .run();
 
     const deletedArticles = Number((await tx
       .delete(articles)
