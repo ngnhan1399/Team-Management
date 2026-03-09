@@ -597,6 +597,22 @@ export default function ArticlesPage() {
     setShowGoogleSyncModal(false);
   };
 
+  const getQuickSyncSelection = () => {
+    if (filters.month && filters.year) {
+      return {
+        month: filters.month,
+        year: filters.year,
+        description: `Tháng ${filters.month}/${filters.year}`,
+      };
+    }
+
+    return {
+      month: "",
+      year: "",
+      description: "tab tháng mới nhất",
+    };
+  };
+
   const focusSyncedArticles = (month: number, year: number) => {
     const nextFilters = {
       penName: "",
@@ -614,9 +630,10 @@ export default function ArticlesPage() {
     fetchArticles(1, "", nextFilters);
   };
 
-  const executeGoogleSheetSync = async (options?: { month?: string; year?: string; closeModalOnSuccess?: boolean }) => {
-    const selectedMonth = options?.month ?? googleSyncMonth;
-    const selectedYear = options?.year ?? googleSyncYear;
+  const executeGoogleSheetSync = async (options?: { month?: string; year?: string; closeModalOnSuccess?: boolean; useCurrentFilters?: boolean }) => {
+    const derivedSelection = options?.useCurrentFilters ? getQuickSyncSelection() : null;
+    const selectedMonth = derivedSelection ? derivedSelection.month : (options?.month ?? googleSyncMonth);
+    const selectedYear = derivedSelection ? derivedSelection.year : (options?.year ?? googleSyncYear);
 
     if ((selectedMonth && !selectedYear) || (!selectedMonth && selectedYear)) {
       setGoogleSyncError("Hãy chọn đủ cả tháng và năm, hoặc để trống để dùng tab mới nhất.");
@@ -821,13 +838,19 @@ export default function ArticlesPage() {
           {isAdmin && (
             <button
               className="btn-ios-pill btn-ios-primary"
-              onClick={() => executeGoogleSheetSync({ month: "", year: "", closeModalOnSuccess: true })}
+              onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true, useCurrentFilters: true })}
               disabled={googleSyncLoading}
-              title="Đồng bộ tab tháng mới nhất ngay lập tức"
+              title={filters.month && filters.year
+                ? `Đồng bộ ngay theo bộ lọc Tháng ${filters.month}/${filters.year}`
+                : "Đồng bộ tab tháng mới nhất ngay lập tức"}
               style={{ minWidth: 170, justifyContent: "center" }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
-              {googleSyncLoading ? "Đang đồng bộ..." : "Đồng bộ ngay"}
+              {googleSyncLoading
+                ? "Đang đồng bộ..."
+                : filters.month && filters.year
+                  ? `Đồng bộ ${filters.month}/${filters.year}`
+                  : "Đồng bộ ngay"}
             </button>
           )}
           {isAdmin && (
@@ -1294,7 +1317,8 @@ export default function ArticlesPage() {
               <div style={{ padding: 16, borderRadius: 16, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.14)" }}>
                 <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.7 }}>
                   Hệ thống dùng chung một engine đồng bộ cho cả <strong>Đồng bộ ngay</strong> và <strong>Đồng bộ theo tháng</strong>.
-                  Nếu để trống, hệ thống lấy tab tháng mới nhất. Nếu chọn tháng/năm, hệ thống sync đúng tab đó. Dữ liệu sẽ
+                  Nếu bộ lọc bài viết đang chọn đủ <strong>tháng/năm</strong>, nút <strong>Đồng bộ ngay</strong> sẽ ưu tiên sync đúng kỳ đó.
+                  Nếu để trống, hệ thống lấy tab tháng mới nhất. Nếu chọn tháng/năm trong modal, hệ thống sync đúng tab đó. Dữ liệu sẽ
                   được <strong>mirror theo sheet gốc</strong>: bài có trong sheet thì giữ, bài trùng thì bỏ qua, bài không còn
                   trong sheet sẽ bị xóa khỏi danh sách đã đồng bộ của tab đó. Sau khi đồng bộ xong, danh sách bài viết sẽ tự
                   chuyển sang đúng tháng vừa sync để bạn thấy ngay dữ liệu đã được lưu.
