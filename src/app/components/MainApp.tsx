@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import ArticlesPage from "./ArticlesPage";
 import AuditLogsPage from "./AuditLogsPage";
@@ -20,6 +20,7 @@ export default function MainApp() {
   const [page, setPage] = useState<Page>("dashboard");
   const [unreadCount, setUnreadCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const seenRealtimeIdsRef = useRef<number[]>([]);
   const displayName = (typeof user?.collaborator?.name === "string" && user.collaborator.name.trim())
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
@@ -41,6 +42,13 @@ export default function MainApp() {
     eventSource.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
+        const payloadId = Number(payload?.id || 0);
+        if (payloadId > 0) {
+          if (seenRealtimeIdsRef.current.includes(payloadId)) {
+            return;
+          }
+          seenRealtimeIdsRef.current = [...seenRealtimeIdsRef.current.slice(-99), payloadId];
+        }
         emitRealtimePayload(payload);
         if (Array.isArray(payload.channels) && payload.channels.includes("notifications")) {
           refreshUnreadCount();

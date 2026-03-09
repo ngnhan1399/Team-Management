@@ -13,7 +13,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
   }
 
-  let lastEventId = Number(request.headers.get("last-event-id") || "0");
+  const initialLastEventIdHeader = request.headers.get("last-event-id");
+  let lastEventId = Number(initialLastEventIdHeader || "0");
   let unsubscribe = () => { };
   let keepAlive: ReturnType<typeof setInterval> | null = null;
   let poller: ReturnType<typeof setInterval> | null = null;
@@ -39,13 +40,22 @@ export async function GET(request: Request) {
       const flushPendingEvents = async () => {
         const pendingEvents = await getRealtimeEventsSince(context.user.id, lastEventId);
         for (const event of pendingEvents) {
+          if (event.id <= lastEventId) {
+            continue;
+          }
           send(event);
         }
       };
 
       unsubscribe = subscribeRealtime(context.user.id, send);
       send({ channels: ["connected"], at: new Date().toISOString() });
-      await flushPendingEvents();
+
+      // On a brand new page load we only want future realtime events.
+      // Backlog replay is reserved for the browser's own SSE reconnects,
+      // which provide Last-Event-ID automatically.
+      if (initialLastEventIdHeader) {
+        await flushPendingEvents();
+      }
 
       keepAlive = setInterval(() => {
         controller.enqueue(encoder.encode(": keep-alive\n\n"));

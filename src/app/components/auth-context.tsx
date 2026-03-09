@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export interface AuthCollaborator {
   id?: number;
@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me", { cache: "no-store" });
       const data = await res.json();
@@ -55,11 +55,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { refreshUser(); }, []);
+  useEffect(() => { refreshUser(); }, [refreshUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       cache: "no-store",
@@ -71,15 +71,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await refreshUser();
     }
     return data as AuthLoginResult;
-  };
+  }, [refreshUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await fetch("/api/auth/me", { method: "DELETE", cache: "no-store" });
     setUser(null);
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    user,
+    loading,
+    login,
+    logout,
+    refreshUser,
+  }), [user, loading, login, logout, refreshUser]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
