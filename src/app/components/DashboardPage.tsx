@@ -4,6 +4,36 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
 import type { DashboardStats, Page } from "./types";
+
+function formatActivityTime(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Vừa cập nhật";
+  return parsed.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getStatusPresentation(status: string) {
+  switch (status) {
+    case "Published":
+    case "Approved":
+      return { label: "Hoàn thành", background: "#dcfce7", color: "#15803d" };
+    case "NeedsFix":
+      return { label: "Cần sửa", background: "#fee2e2", color: "#b91c1c" };
+    case "Reviewing":
+      return { label: "Đang duyệt", background: "#fff7ed", color: "#c2410c" };
+    case "Submitted":
+      return { label: "Đã gửi duyệt", background: "#dbeafe", color: "#1d4ed8" };
+    case "Rejected":
+      return { label: "Từ chối", background: "#f3e8ff", color: "#7e22ce" };
+    default:
+      return { label: "Bản nháp", background: "#e2e8f0", color: "#475569" };
+  }
+}
+
 export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page) => void }) {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -17,10 +47,16 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
   }, []);
 
   useEffect(() => {
-    fetch("/api/statistics", { cache: "no-store" }).then(r => r.json()).then(d => { setStats(d.data); setLoading(false); }).catch(() => setLoading(false));
+    fetch("/api/statistics", { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => {
+        setStats(d.data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
-  useRealtimeRefresh(["dashboard", "articles", "royalty"], () => refreshStats(false));
+  useRealtimeRefresh(["dashboard", "articles", "royalty", "team", "notifications"], () => refreshStats(false));
 
   if (loading) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16 }}>
@@ -117,7 +153,12 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
               const percentage = stats.totalArticles ? Math.min((w.count / stats.totalArticles) * 100 * 2.5, 100) : 0;
               return (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ width: 100, fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>{w.penName}</div>
+                  <div style={{ width: 140, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", lineHeight: 1.3 }}>{w.displayName}</div>
+                    {w.penName && w.penName !== w.displayName && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{w.penName}</div>
+                    )}
+                  </div>
                   <div style={{ flex: 1, height: 10, background: "#f1f5f9", borderRadius: 5, overflow: "hidden", position: "relative" }}>
                     <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${percentage}%`, background: `linear-gradient(90deg, ${colors[i % colors.length]}, ${colors[i % colors.length]}dd)`, borderRadius: 5, transition: "width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)" }} />
                   </div>
@@ -158,7 +199,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
       <div style={{ background: "white", borderRadius: 32, padding: 0, overflow: "hidden", boxShadow: "var(--shadow-premium)", border: "1px solid var(--border-muted)" }}>
         <div style={{ padding: "24px 32px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)" }}>Hoạt động mới nhất</h3>
-          <button style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-blue)", background: "transparent", border: "none", cursor: "pointer" }}>Xem tất cả</button>
+          <button onClick={() => onNavigate("articles")} style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-blue)", background: "transparent", border: "none", cursor: "pointer" }}>Xem tất cả</button>
         </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
@@ -173,28 +214,33 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
             </thead>
             <tbody>
               {(stats?.latestArticles || []).map((a, i: number) => (
-                <tr key={i} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.2s" }} className="hover:bg-slate-50">
+                <tr key={a.id || i} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.2s" }} className="hover:bg-slate-50">
                   <td style={{ padding: "20px 32px", maxWidth: 350 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.articleId || "No ID"}</div>
                   </td>
                   <td style={{ padding: "20px 32px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent-blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{a.penName[0]}</div>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{a.penName}</span>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent-blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{(a.writerDisplayName || a.penName || "?")[0]}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{a.writerDisplayName || a.penName}</div>
+                        {a.penName && a.writerDisplayName && a.penName !== a.writerDisplayName && (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.penName}</div>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td style={{ padding: "20px 32px", textAlign: "center" }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: "var(--accent-blue)", background: "rgba(59, 130, 246, 0.1)", padding: "4px 10px", borderRadius: 8, textTransform: "uppercase", whiteSpace: "nowrap" }}>{a.articleType || "SEO"}</span>
                   </td>
                   <td style={{ padding: "20px 32px", textAlign: "center" }}>
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 12, background: a.status === 'Published' ? "#dcfce7" : "#fff7ed", color: a.status === 'Published' ? "#15803d" : "#9a3412", fontSize: 12, fontWeight: 700 }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 12, background: getStatusPresentation(a.status).background, color: getStatusPresentation(a.status).color, fontSize: 12, fontWeight: 700 }}>
                       <div style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
-                      {a.status === 'Published' ? 'Hoàn thành' : 'Đang duyệt'}
+                      {getStatusPresentation(a.status).label}
                     </div>
                   </td>
                   <td style={{ padding: "20px 32px", textAlign: "right", fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
-                    {new Date(a.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                    {formatActivityTime(a.updatedAt)}
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRealtimeRefresh } from "./realtime";
 import type { Collaborator, UserAccount } from "./types";
 export default function TeamPage() {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -23,6 +24,7 @@ export default function TeamPage() {
   };
 
   useEffect(() => { fetchCTVs(); }, []);
+  useRealtimeRefresh(["team"], fetchCTVs);
 
   const closeModal = () => {
     setShowModal(false);

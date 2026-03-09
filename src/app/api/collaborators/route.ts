@@ -1,7 +1,8 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { collaborators, users } from "@/db/schema";
+import { articleComments, articles, collaborators, editorialTasks, kpiRecords, notifications, payments, users } from "@/db/schema";
 import { getCurrentUserContext, hashPassword, generatePassword } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { eq } from "drizzle-orm";
@@ -191,6 +192,13 @@ export async function POST(request: NextRequest) {
             payload: { name, penName, email: email ?? null },
         });
 
+        await publishRealtimeEvent({
+            channels: ["team", "dashboard"],
+            toastTitle: "Đội ngũ đã cập nhật",
+            toastMessage: `Đã thêm cộng tác viên ${name}.`,
+            toastVariant: "success",
+        });
+
         return NextResponse.json({
             success: true,
             id: collaboratorId,
@@ -264,9 +272,54 @@ export async function PUT(request: NextRequest) {
 
         const collaboratorUpdates = buildCollaboratorValues(body, email);
         let linkedUserEmailForAudit: string | null = null;
+        const previousPenName = existingCollaborator.penName;
+        const nextPenName = collaboratorUpdates.penName || existingCollaborator.penName;
+        const previousName = existingCollaborator.name;
+        const nextName = collaboratorUpdates.name || existingCollaborator.name;
+        const nameChanged = previousName !== nextName;
+        const penNameChanged = previousPenName !== nextPenName;
 
         await db.transaction(async (tx) => {
             await tx.update(collaborators).set(collaboratorUpdates).where(eq(collaborators.id, id)).run();
+
+            if (penNameChanged) {
+                const articleTimestamp = new Date().toISOString();
+
+                await tx.update(articles)
+                    .set({ penName: nextPenName, updatedAt: articleTimestamp })
+                    .where(eq(articles.penName, previousPenName))
+                    .run();
+
+                await tx.update(articles)
+                    .set({ reviewerName: nextPenName, updatedAt: articleTimestamp })
+                    .where(eq(articles.reviewerName, previousPenName))
+                    .run();
+
+                await tx.update(articleComments)
+                    .set({ penName: nextPenName })
+                    .where(eq(articleComments.penName, previousPenName))
+                    .run();
+
+                await tx.update(editorialTasks)
+                    .set({ assigneePenName: nextPenName, updatedAt: articleTimestamp })
+                    .where(eq(editorialTasks.assigneePenName, previousPenName))
+                    .run();
+
+                await tx.update(kpiRecords)
+                    .set({ penName: nextPenName })
+                    .where(eq(kpiRecords.penName, previousPenName))
+                    .run();
+
+                await tx.update(payments)
+                    .set({ penName: nextPenName, updatedAt: articleTimestamp })
+                    .where(eq(payments.penName, previousPenName))
+                    .run();
+
+                await tx.update(notifications)
+                    .set({ toPenName: nextPenName })
+                    .where(eq(notifications.toPenName, previousPenName))
+                    .run();
+            }
 
             const currentlyLinkedUsers = await tx
                 .select({
@@ -330,7 +383,20 @@ export async function PUT(request: NextRequest) {
                 ...collaboratorUpdates,
                 linkedUserId: normalizedLinkedUserId,
                 linkedUserEmail: linkedUserEmailForAudit ?? null,
+                nameChanged,
+                penNameChanged,
+                previousName,
+                previousPenName,
             },
+        });
+
+        await publishRealtimeEvent({
+            channels: ["team", "dashboard", "articles", "tasks", "royalty", "notifications"],
+            toastTitle: "Đội ngũ đã cập nhật",
+            toastMessage: penNameChanged || nameChanged
+                ? `Đã đồng bộ thay đổi cho ${nextName}.`
+                : `Đã cập nhật thông tin ${nextName}.`,
+            toastVariant: "success",
         });
 
         return NextResponse.json({ success: true });

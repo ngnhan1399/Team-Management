@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
 
     const actorPenName = ownPenName || context.user.email.split("@")[0];
     const mentions = extractMentions(content);
+    const activityTimestamp = new Date().toISOString();
 
     const insertedComment = await db
       .insert(articleComments)
@@ -106,6 +107,11 @@ export async function POST(request: NextRequest) {
       })
       .returning({ id: articleComments.id })
       .get();
+
+    await db.update(articles)
+      .set({ updatedAt: activityTimestamp })
+      .where(eq(articles.id, articleId))
+      .run();
 
     for (const mention of mentions) {
       const mentionedUser = await db
@@ -136,7 +142,7 @@ export async function POST(request: NextRequest) {
       payload: { articleId, mentionsCount: mentions.length },
     });
 
-    await publishRealtimeEvent(["articles"]);
+    await publishRealtimeEvent(["articles", "dashboard"]);
 
     return NextResponse.json({ success: true, id: Number(insertedComment?.id) });
   } catch (error) {

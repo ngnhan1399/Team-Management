@@ -5,6 +5,31 @@ import { handleServerError } from "@/lib/server-error";
 import { desc, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+type CollaboratorDirectoryItem = {
+    id: number;
+    name: string;
+    penName: string;
+    email: string | null;
+};
+
+function resolveCollaborator(articlePenName: string, directory: CollaboratorDirectoryItem[]) {
+    const exact = directory.find((item) => item.penName === articlePenName);
+    if (exact) return exact;
+
+    return directory.find((item) =>
+        matchesIdentityCandidate(
+            [item.penName, item.name, item.email || ""],
+            articlePenName
+        )
+    ) || null;
+}
+
+function getActivityTimestamp(article: { id: number; date: string; createdAt?: string | null; updatedAt?: string | null }) {
+    const value = article.updatedAt || article.createdAt || article.date;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 export async function GET() {
     try {
         await ensureDatabaseInitialized();
@@ -14,6 +39,15 @@ export async function GET() {
         }
 
         const identityCandidates = getContextIdentityCandidates(context);
+        const allCollaborators = await db
+            .select({
+                id: collaborators.id,
+                name: collaborators.name,
+                penName: collaborators.penName,
+                email: collaborators.email,
+            })
+            .from(collaborators)
+            .all();
         const allArticles = await db.select().from(articles).orderBy(desc(articles.id)).all();
         const scopedArticles = context.user.role === "admin"
             ? allArticles
@@ -36,9 +70,22 @@ export async function GET() {
         const articlesByCategory = groupCount(scopedArticles.map((article) => article.category))
             .map(({ key, count }) => ({ category: key, count }));
 
-        const articlesByWriter = groupCount(scopedArticles.map((article) => article.penName))
-            .map(({ key, count }) => ({ penName: key, count }))
-            .sort((left, right) => right.count - left.count);
+        const writerBuckets = scopedArticles.reduce<Record<string, { penName: string; displayName: string; count: number }>>((acc, article) => {
+            const resolvedCollaborator = resolveCollaborator(article.penName, allCollaborators);
+            const key = resolvedCollaborator ? `collab:${resolvedCollaborator.id}` : `pen:${article.penName}`;
+            const displayName = resolvedCollaborator?.name || resolvedCollaborator?.penName || article.penName;
+            const penName = resolvedCollaborator?.penName || article.penName;
+
+            if (!acc[key]) {
+                acc[key] = { penName, displayName, count: 0 };
+            }
+
+            acc[key].count += 1;
+            return acc;
+        }, {});
+
+        const articlesByWriter = Object.values(writerBuckets)
+            .sort((left, right) => right.count - left.count || left.displayName.localeCompare(right.displayName, "vi"));
 
         const articlesByType = groupCount(scopedArticles.map((article) => `${article.articleType}|||${article.contentType}`))
             .map(({ key, count }) => {
@@ -49,15 +96,19 @@ export async function GET() {
         const articlesByMonth = groupCount(scopedArticles.map((article) => article.date))
             .map(({ key, count }) => ({ date: key, count }));
 
-        const latestArticles = scopedArticles
+        const latestArticles = [...scopedArticles]
+            .sort((left, right) => getActivityTimestamp(right) - getActivityTimestamp(left) || right.id - left.id)
             .slice(0, 8)
             .map((article) => ({
+                id: article.id,
                 articleId: article.articleId,
                 title: article.title,
-                penName: article.penName,
+                penName: resolveCollaborator(article.penName, allCollaborators)?.penName || article.penName,
+                writerDisplayName: resolveCollaborator(article.penName, allCollaborators)?.name || article.penName,
                 articleType: article.articleType,
                 status: article.status,
                 date: article.date,
+                updatedAt: article.updatedAt || article.createdAt || article.date,
             }));
 
         return NextResponse.json({

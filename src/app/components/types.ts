@@ -113,16 +113,20 @@ export interface DashboardCategoryRow {
 
 export interface DashboardWriterRow {
   penName: string;
+  displayName: string;
   count: number;
 }
 
 export interface DashboardLatestArticle {
+  id: number;
   articleId: string;
   title: string;
   penName: string;
+  writerDisplayName: string;
   articleType: string;
   status: string;
   date: string;
+  updatedAt: string;
 }
 
 export interface DashboardStats {

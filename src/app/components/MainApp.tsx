@@ -16,7 +16,7 @@ import { emitRealtimePayload } from "./realtime";
 import type { Page } from "./types";
 
 export default function MainApp() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [page, setPage] = useState<Page>("dashboard");
   const [unreadCount, setUnreadCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -45,6 +45,9 @@ export default function MainApp() {
         if (Array.isArray(payload.channels) && payload.channels.includes("notifications")) {
           refreshUnreadCount();
         }
+        if (Array.isArray(payload.channels) && payload.channels.includes("team")) {
+          refreshUser().catch(() => { });
+        }
       } catch {
         // Ignore malformed realtime packets.
       }
@@ -53,7 +56,7 @@ export default function MainApp() {
     return () => {
       eventSource.close();
     };
-  }, [refreshUnreadCount, user?.id]);
+  }, [refreshUnreadCount, refreshUser, user?.id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
