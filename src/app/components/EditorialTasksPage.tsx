@@ -299,12 +299,20 @@ export default function EditorialTasksPage() {
                     </td>
                     <td style={{ padding: "14px 20px", textAlign: "right" }}>
                       <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-                        <select data-testid={`task-status-${t.id}`} className="form-select" value={t.status} onChange={(e) => updateTaskStatus(t.id, e.target.value as EditorialTask["status"])} style={{ height: 34, fontSize: 12, minWidth: 140 }}>
-                          <option value="todo">Cần làm</option>
-                          <option value="in_progress">Đang làm</option>
-                          <option value="done">Hoàn thành</option>
-                          <option value="overdue">Quá hạn</option>
-                        </select>
+                        <div style={{ minWidth: 140 }}>
+                          <CustomSelect
+                            dataTestId={`task-status-${t.id}`}
+                            size="compact"
+                            value={t.status}
+                            onChange={(value) => updateTaskStatus(t.id, value as EditorialTask["status"])}
+                            options={[
+                              { value: "todo", label: "Cần làm" },
+                              { value: "in_progress", label: "Đang làm" },
+                              { value: "done", label: "Hoàn thành" },
+                              { value: "overdue", label: "Quá hạn" },
+                            ]}
+                          />
+                        </div>
                         {isAdmin && (
                           <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 10px" }} onClick={() => openEditModal(t)}>
                             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>

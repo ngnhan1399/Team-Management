@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type SelectOption = { value: string; label: string };
 type MenuPlacement = "top" | "bottom";
 type MenuMode = "portal-auto" | "portal-bottom";
+type SelectSize = "default" | "compact";
 
 type MenuPosition = {
   top: number;
@@ -26,20 +27,44 @@ export default function CustomSelect({
   options,
   placeholder = "Chọn",
   menuMode = "portal-auto",
+  size = "default",
+  disabled = false,
+  dataTestId,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: SelectOption[];
   placeholder?: string;
   menuMode?: MenuMode;
+  size?: SelectSize;
+  disabled?: boolean;
+  dataTestId?: string;
 }) {
+  // This is the shared dropdown pattern for the app. New selects should reuse it
+  // so admin/CTV flows stay visually consistent without page-level restyling.
   const [isOpen, setIsOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
+  const sizeConfig = size === "compact"
+    ? {
+        height: 34,
+        fontSize: 12,
+        iconSize: 18,
+        borderRadius: 12,
+        paddingInline: 12,
+      }
+    : {
+        height: 44,
+        fontSize: 14,
+        iconSize: 20,
+        borderRadius: 16,
+        paddingInline: 16,
+      };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || disabled) return;
 
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -54,10 +79,10 @@ export default function CustomSelect({
 
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [isOpen]);
+  }, [disabled, isOpen]);
 
   useLayoutEffect(() => {
-    if (!isOpen || typeof window === "undefined" || !ref.current) {
+    if (!isOpen || disabled || typeof window === "undefined" || !ref.current) {
       return;
     }
 
@@ -101,11 +126,30 @@ export default function CustomSelect({
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [isOpen, menuMode]);
+  }, [disabled, isOpen, menuMode]);
 
   const selected = options.find((o) => o.value === value);
+  const toggleMenu = () => {
+    if (disabled) return;
+    setIsOpen((current) => !current);
+  };
+  const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsOpen(true);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsOpen(false);
+    }
+  };
   const menuList = (
     <ul
+      id={listboxId}
+      role="listbox"
       style={{
         listStyle: "none",
         padding: 8,
@@ -118,6 +162,8 @@ export default function CustomSelect({
       {options.map((o) => (
         <li
           key={o.value}
+          role="option"
+          aria-selected={o.value === value}
           onClick={() => {
             onChange(o.value);
             setIsOpen(false);
@@ -130,10 +176,10 @@ export default function CustomSelect({
             color: o.value === value ? "white" : "var(--text-main)",
             fontWeight: o.value === value ? 700 : 500,
             transition: "all 0.15s ease",
-            fontSize: 14,
+            fontSize: sizeConfig.fontSize,
             lineHeight: 1.4,
           }}
-          className={o.value !== value ? "hover:bg-slate-50" : ""}
+          className={`custom-select-option${o.value === value ? " is-selected" : ""}`}
         >
           {o.label}
         </li>
@@ -166,33 +212,47 @@ export default function CustomSelect({
 
   return (
     <div ref={ref} style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column" }}>
-      <div
-        onClick={() => setIsOpen(!isOpen)}
+      <button
+        type="button"
+        data-testid={dataTestId}
+        onClick={toggleMenu}
+        onKeyDown={handleTriggerKeyDown}
         className="form-select"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls={listboxId}
+        disabled={disabled}
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          width: "100%",
+          textAlign: "left",
+          fontFamily: "inherit",
           cursor: "pointer",
+          backgroundImage: "none",
           background: isOpen ? "rgba(255, 255, 255, 0.95)" : "rgba(255, 255, 255, 0.7)",
           border: isOpen ? "1px solid rgba(37, 99, 235, 0.32)" : "1px solid var(--glass-border)",
-          height: 44,
-          padding: "0 16px",
-          borderRadius: 12,
+          height: sizeConfig.height,
+          padding: `0 ${sizeConfig.paddingInline}px`,
+          paddingRight: sizeConfig.paddingInline,
+          borderRadius: sizeConfig.borderRadius,
           boxShadow: isOpen ? "0 0 0 4px rgba(37, 99, 235, 0.08)" : "none",
           transition: "background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
+          opacity: disabled ? 0.6 : 1,
+          pointerEvents: disabled ? "none" : "auto",
         }}
       >
-        <span style={{ color: selected ? "var(--text-main)" : "var(--text-muted)", fontSize: 14 }}>
+        <span style={{ color: selected ? "var(--text-main)" : "var(--text-muted)", fontSize: sizeConfig.fontSize }}>
           {selected ? selected.label : placeholder}
         </span>
         <span
           className="material-symbols-outlined"
-          style={{ fontSize: 20, transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "none", color: "var(--text-muted)" }}
+          style={{ fontSize: sizeConfig.iconSize, transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "none", color: "var(--text-muted)" }}
         >
           expand_more
         </span>
-      </div>
+      </button>
       {portalMenu ? createPortal(portalMenu, document.body) : null}
     </div>
   );

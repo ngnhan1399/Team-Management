@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import CustomSelect from "./CustomSelect";
 import { useRealtimeRefresh } from "./realtime";
 
 interface AuditLogItem {
@@ -19,6 +20,7 @@ export default function AuditLogsPage() {
   const [actionFilter, setActionFilter] = useState("");
   const [entityFilter, setEntityFilter] = useState("");
   const [limit, setLimit] = useState(100);
+  const limitOptions = [50, 100, 200, 500].map((value) => ({ value: String(value), label: String(value) }));
   const [error, setError] = useState("");
 
   const formatPayload = (payload: unknown) => {
@@ -98,9 +100,7 @@ export default function AuditLogsPage() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Số dòng</label>
-            <select className="form-select" value={limit} onChange={(e) => setLimit(parseInt(e.target.value))}>
-              {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
+            <CustomSelect value={String(limit)} onChange={(value) => setLimit(parseInt(value, 10))} options={limitOptions} />
           </div>
           <button className="btn-ios-pill btn-ios-secondary" style={{ height: 44 }} onClick={() => { setActionFilter(""); setEntityFilter(""); setLimit(100); }}>
             Xóa lọc

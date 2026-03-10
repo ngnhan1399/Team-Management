@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import CustomSelect from "./CustomSelect";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
 import type {
@@ -50,6 +51,18 @@ export default function RoyaltyPage() {
   const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
+  const monthSelectOptions = monthNames.map((label, index) => ({ value: String(index + 1), label }));
+  const yearSelectOptions = yearOptions.map((year) => ({ value: String(year), label: String(year) }));
+  const collaboratorSelectOptions = [
+    { value: "", label: "Tất cả" },
+    ...collaborators.filter((c) => c.role === "writer").map((c) => ({ value: c.penName, label: c.penName })),
+  ];
+  const paymentStatusOptions = [
+    { value: "", label: "Tất cả" },
+    { value: "pending", label: "Chờ duyệt" },
+    { value: "approved", label: "Đã duyệt" },
+    { value: "paid", label: "Đã thanh toán" },
+  ];
 
   const fetchDashboard = useCallback(() => {
     setLoading(true);
@@ -403,13 +416,19 @@ export default function RoyaltyPage() {
         return (
           <>
             <div className="obsidian-glass" style={{ padding: 24, borderRadius: 24, marginBottom: 32, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <div className="form-group" style={{ marginBottom: 0, width: 140 }}><label className="form-label">Tháng</label><select className="form-select" value={calcMonth} onChange={e => setCalcMonth(parseInt(e.target.value))}>
-                {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{monthNames[i]}</option>)}</select></div>
-              <div className="form-group" style={{ marginBottom: 0, width: 120 }}><label className="form-label">Năm</label><select className="form-select" value={calcYear} onChange={e => setCalcYear(parseInt(e.target.value))}>
-                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}</select></div>
+              <div className="form-group" style={{ marginBottom: 0, width: 140 }}>
+                <label className="form-label">Tháng</label>
+                <CustomSelect value={String(calcMonth)} onChange={(value) => setCalcMonth(parseInt(value, 10))} options={monthSelectOptions} />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0, width: 120 }}>
+                <label className="form-label">Năm</label>
+                <CustomSelect value={String(calcYear)} onChange={(value) => setCalcYear(parseInt(value, 10))} options={yearSelectOptions} />
+              </div>
               {isAdmin && (
-                <div className="form-group" style={{ marginBottom: 0, minWidth: 200 }}><label className="form-label">Cộng tác viên</label><select className="form-select" value={calcPenName} onChange={e => setCalcPenName(e.target.value)}>
-                  <option value="">Tất cả</option>{collaborators.filter((c) => c.role === "writer").map((c) => <option key={c.id} value={c.penName}>{c.penName}</option>)}</select></div>
+                <div className="form-group" style={{ marginBottom: 0, minWidth: 200 }}>
+                  <label className="form-label">Cộng tác viên</label>
+                  <CustomSelect value={calcPenName} onChange={setCalcPenName} options={collaboratorSelectOptions} />
+                </div>
               )}
               <button className="btn-ios-pill btn-ios-primary" onClick={fetchCalculation} style={{ height: 44 }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 20 }}>refresh</span>
@@ -509,34 +528,20 @@ export default function RoyaltyPage() {
           <div className="obsidian-glass" style={{ padding: 24, borderRadius: 24, marginBottom: 24, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
             <div className="form-group" style={{ marginBottom: 0, width: 140 }}>
               <label className="form-label">Tháng</label>
-              <select data-testid="payment-month-select" className="form-select" value={paymentMonth} onChange={(e) => setPaymentMonth(parseInt(e.target.value))}>
-                {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{monthNames[i]}</option>)}
-              </select>
+              <CustomSelect dataTestId="payment-month-select" value={String(paymentMonth)} onChange={(value) => setPaymentMonth(parseInt(value, 10))} options={monthSelectOptions} />
             </div>
             <div className="form-group" style={{ marginBottom: 0, width: 120 }}>
               <label className="form-label">Năm</label>
-              <select data-testid="payment-year-select" className="form-select" value={paymentYear} onChange={(e) => setPaymentYear(parseInt(e.target.value))}>
-                {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
+              <CustomSelect dataTestId="payment-year-select" value={String(paymentYear)} onChange={(value) => setPaymentYear(parseInt(value, 10))} options={yearSelectOptions} />
+            </div>
             <div className="form-group" style={{ marginBottom: 0, width: 180 }}>
               <label className="form-label">Trạng thái</label>
-              <select data-testid="payment-status-select" className="form-select" value={paymentStatusFilter} onChange={(e) => setPaymentStatusFilter(e.target.value)}>
-                <option value="">Tất cả</option>
-                <option value="pending">Chờ duyệt</option>
-                <option value="approved">Đã duyệt</option>
-                <option value="paid">Đã thanh toán</option>
-              </select>
+              <CustomSelect dataTestId="payment-status-select" value={paymentStatusFilter} onChange={setPaymentStatusFilter} options={paymentStatusOptions} />
             </div>
             {isAdmin && (
               <div className="form-group" style={{ marginBottom: 0, minWidth: 220 }}>
                 <label className="form-label">Cộng tác viên</label>
-                <select data-testid="payment-penname-select" className="form-select" value={paymentPenName} onChange={(e) => setPaymentPenName(e.target.value)}>
-                  <option value="">Tất cả</option>
-                  {collaborators.filter((c) => c.role === "writer").map((c) => (
-                    <option key={c.id} value={c.penName}>{c.penName}</option>
-                  ))}
-                </select>
+                <CustomSelect dataTestId="payment-penname-select" value={paymentPenName} onChange={setPaymentPenName} options={collaboratorSelectOptions} />
               </div>
             )}
             <button data-testid="payment-refresh-button" className="btn-ios-pill btn-ios-primary" onClick={fetchPayments} style={{ height: 44 }}>

@@ -393,8 +393,8 @@ body {
 select.form-select,
 select {
   color-scheme: light;
-  border-radius: var(--radius-ios-sm);
-  background-color: rgba(0, 0, 0, 0.03) !important;
+  border-radius: 16px;
+  background-color: rgba(255, 255, 255, 0.72) !important;
 }
 
 select option {
@@ -796,19 +796,20 @@ tr:last-child td {
 .form-select {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(0, 0, 0, 0.035);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: var(--radius-ios-sm);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
   color: var(--text-main);
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s var(--ease-apple);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
 }
 
 .form-input:focus,
 .form-select:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.94);
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
@@ -825,6 +826,10 @@ tr:last-child td {
   background-position: right 12px center;
   background-size: 14px;
   padding-right: 40px;
+}
+
+.custom-select-option:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
 }
 
 /* Hide number input spinners */

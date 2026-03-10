@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import CustomSelect from "./CustomSelect";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
 import type { Collaborator, NotifItem } from "./types";
@@ -13,6 +14,15 @@ export default function NotificationsPage() {
   const [sendToUserId, setSendToUserId] = useState("");
   const [sendTitle, setSendTitle] = useState("");
   const [sendMsg, setSendMsg] = useState("");
+  const recipientOptions = [
+    { value: "", label: "Toàn bộ đội ngũ" },
+    ...recipients
+      .filter((collaborator) => collaborator.role === "writer" && collaborator.linkedUserId)
+      .map((collaborator) => ({
+        value: String(collaborator.linkedUserId),
+        label: `${collaborator.name} (${collaborator.penName})`,
+      })),
+  ];
 
   const refreshNotifications = useCallback(() => {
     fetch("/api/notifications", { cache: "no-store" }).then(r => r.json()).then(d => { setNotifs(d.data || []); setLoading(false); }).catch(() => setLoading(false));
@@ -149,14 +159,7 @@ export default function NotificationsPage() {
             <div className="modal-body">
               <div className="form-group">
                 <label className="form-label">Người nhận</label>
-                <select className="form-select" value={sendToUserId} onChange={e => setSendToUserId(e.target.value)}>
-                  <option value="">Toàn bộ đội ngũ</option>
-                  {recipients.filter((collaborator) => collaborator.role === "writer" && collaborator.linkedUserId).map((collaborator) => (
-                    <option key={collaborator.id} value={String(collaborator.linkedUserId)}>
-                      {collaborator.name} ({collaborator.penName})
-                    </option>
-                  ))}
-                </select>
+                <CustomSelect value={sendToUserId} onChange={setSendToUserId} options={recipientOptions} />
               </div>
               <div className="form-group">
                 <label className="form-label">Tiêu đề thông báo</label>

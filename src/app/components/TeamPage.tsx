@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import CustomSelect from "./CustomSelect";
 import { useRealtimeRefresh } from "./realtime";
 import type { Collaborator, UserAccount } from "./types";
 export default function TeamPage() {
@@ -110,6 +111,15 @@ export default function TeamPage() {
   const assignableUsers = userAccounts.filter((user) =>
     user.role === "ctv" && (!user.collaboratorId || user.collaboratorId === formData.id)
   );
+  const roleOptions = [
+    { value: "writer", label: "Người viết bài" },
+    { value: "reviewer", label: "Người duyệt bài" },
+    { value: "editor", label: "Biên tập viên" },
+  ];
+  const assignableUserOptions = [
+    { value: "", label: "Không gán tài khoản" },
+    ...assignableUsers.map((user) => ({ value: String(user.id), label: user.email })),
+  ];
   const tableColumnWidths = ["8%", "23%", "16%", "25%", "8%", "12%", "8%"];
   const statusBadgeStyle = (status: string) => ({
     padding: "4px 10px",
@@ -346,11 +356,7 @@ export default function TeamPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Vai trò hệ thống</label>
-                  <select className="form-select" value={formData.role || "writer"} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-                    <option value="writer">Người viết bài</option>
-                    <option value="reviewer">Người duyệt bài</option>
-                    <option value="editor">Biên tập viên</option>
-                  </select>
+                  <CustomSelect value={formData.role || "writer"} onChange={(value) => setFormData({ ...formData, role: value })} options={roleOptions} />
                 </div>
               </div>
               {formData.id && (
@@ -368,18 +374,11 @@ export default function TeamPage() {
                   ) : (
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label">Gán tài khoản CTV</label>
-                      <select
-                        className="form-select"
-                        value={formData.linkedUserId ?? ""}
-                        onChange={(e) => setFormData({ ...formData, linkedUserId: e.target.value ? Number(e.target.value) : null })}
-                      >
-                        <option value="">Không gán tài khoản</option>
-                        {assignableUsers.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.email}
-                          </option>
-                        ))}
-                      </select>
+                      <CustomSelect
+                        value={String(formData.linkedUserId ?? "")}
+                        onChange={(value) => setFormData({ ...formData, linkedUserId: value ? Number(value) : null })}
+                        options={assignableUserOptions}
+                      />
                     </div>
                   )}
                 </div>
