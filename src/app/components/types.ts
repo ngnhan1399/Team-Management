@@ -213,6 +213,8 @@ export interface GoogleSheetSyncResult {
   sheetName: string;
   month: number;
   year: number;
+  scope?: "sheet" | "workbook";
+  processedSheets?: string[];
   requestedMonth?: number | null;
   requestedYear?: number | null;
   sourceUrl: string;

@@ -90,6 +90,8 @@ export interface GoogleSheetSyncExecutionResult {
   skipped: number;
   errors: string[];
   warnings: string[];
+  scope?: "sheet" | "workbook";
+  processedSheets?: string[];
 }
 
 const REQUIRED_FIELDS: ImportFieldId[] = ["date", "title", "penName"];
@@ -144,6 +146,35 @@ export function parseSheetTabInfo(name: string): GoogleSheetTabInfo | null {
   };
 }
 
+function sortGoogleSheetTabs(tabs: GoogleSheetTabInfo[]) {
+  return [...tabs].sort((left, right) => {
+    const leftValue = left.year * 100 + left.month;
+    const rightValue = right.year * 100 + right.month;
+    if (leftValue !== rightValue) return rightValue - leftValue;
+    if (left.isCopy !== right.isCopy) return Number(left.isCopy) - Number(right.isCopy);
+    return right.name.localeCompare(left.name);
+  });
+}
+
+export function listPreferredSheetTabs(sheetNames: string[]) {
+  const parsed = sortGoogleSheetTabs(
+    sheetNames
+      .map(parseSheetTabInfo)
+      .filter((item): item is GoogleSheetTabInfo => Boolean(item))
+  );
+  const seen = new Set<string>();
+  const preferred: GoogleSheetTabInfo[] = [];
+
+  for (const tab of parsed) {
+    const key = `${tab.year}-${String(tab.month).padStart(2, "0")}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    preferred.push(tab);
+  }
+
+  return preferred;
+}
+
 export function pickSheetTab(
   sheetNames: string[],
   requestedSheetName?: string | null,
@@ -165,22 +196,13 @@ export function pickSheetTab(
     }
   }
 
-  const sortTabs = (tabs: GoogleSheetTabInfo[]) =>
-    [...tabs].sort((left, right) => {
-      const leftValue = left.year * 100 + left.month;
-      const rightValue = right.year * 100 + right.month;
-      if (leftValue !== rightValue) return rightValue - leftValue;
-      if (left.isCopy !== right.isCopy) return Number(left.isCopy) - Number(right.isCopy);
-      return right.name.localeCompare(left.name);
-    });
-
   if (requestedMonth && requestedYear) {
-    return sortTabs(
+    return sortGoogleSheetTabs(
       parsed.filter((item) => item.month === requestedMonth && item.year === requestedYear)
     )[0] ?? null;
   }
 
-  return sortTabs(parsed)[0] ?? null;
+  return sortGoogleSheetTabs(parsed)[0] ?? null;
 }
 
 export async function loadGoogleSheetImport(options: {
@@ -1207,6 +1229,82 @@ export async function executeGoogleSheetSync(
     skipped,
     errors,
     warnings: [...prepared.analysis.warnings, ...runtimeWarnings],
+    scope: "sheet",
+    processedSheets: [selectedSheet.name],
   };
 }
+
+export async function executeGoogleSheetWorkbookSync(
+  options: ExecuteGoogleSheetSyncOptions = {}
+): Promise<GoogleSheetSyncExecutionResult> {
+  const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+  const exportUrl = buildSpreadsheetExportUrl(sourceUrl);
+  const response = await fetch(exportUrl, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error("Không tải được dữ liệu từ Google Sheets.");
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
+  const tabs = listPreferredSheetTabs(workbook.SheetNames);
+
+  if (tabs.length === 0) {
+    throw new Error("Không tìm thấy tab tháng/năm hợp lệ trong Google Sheets.");
+  }
+
+  const aggregate: GoogleSheetSyncExecutionResult = {
+    sourceUrl,
+    sheetName: "Toàn workbook",
+    month: tabs[0]?.month || 0,
+    year: tabs[0]?.year || 0,
+    requestedMonth: null,
+    requestedYear: null,
+    total: 0,
+    inserted: 0,
+    updated: 0,
+    duplicates: 0,
+    deleted: 0,
+    skipped: 0,
+    errors: [],
+    warnings: [],
+    scope: "workbook",
+    processedSheets: [],
+  };
+
+  for (const tab of tabs) {
+    const result = await executeGoogleSheetSync({
+      ...options,
+      sourceUrl,
+      sheetName: tab.name,
+      month: tab.month,
+      year: tab.year,
+    });
+
+    aggregate.total += result.total;
+    aggregate.inserted += result.inserted;
+    aggregate.updated += result.updated;
+    aggregate.duplicates += result.duplicates;
+    aggregate.deleted += result.deleted;
+    aggregate.skipped += result.skipped;
+    aggregate.processedSheets?.push(tab.name);
+
+    for (const warning of result.warnings) {
+      if (aggregate.warnings.length >= 20 || aggregate.warnings.includes(warning)) continue;
+      aggregate.warnings.push(warning);
+    }
+
+    for (const error of result.errors) {
+      if (aggregate.errors.length >= 20 || aggregate.errors.includes(error)) continue;
+      aggregate.errors.push(error);
+    }
+  }
+
+  if ((aggregate.processedSheets?.length || 0) > 0 && aggregate.warnings.length < 20) {
+    aggregate.warnings.unshift(`Đã reconcile toàn workbook qua ${aggregate.processedSheets?.length} tab tháng hợp lệ.`);
+  }
+
+  return aggregate;
+}
+
 

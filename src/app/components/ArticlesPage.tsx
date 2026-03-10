@@ -886,6 +886,7 @@ export default function ArticlesPage() {
           month: selectedMonth ? Number(selectedMonth) : undefined,
           year: selectedYear ? Number(selectedYear) : undefined,
           articleIds: scopedArticleIds.length > 0 ? scopedArticleIds : undefined,
+          reconcileAllSheets: !preserveView && !selectedMonth && !selectedYear && scopedArticleIds.length === 0,
         }),
       });
       const data = await res.json();
@@ -897,7 +898,7 @@ export default function ArticlesPage() {
       setGoogleSyncResult(syncResult);
       setGoogleSyncMonth(String(syncResult.month));
       setGoogleSyncYear(String(syncResult.year));
-      if (preserveView) {
+      if (preserveView || syncResult.scope === "workbook") {
         fetchArticles(pagination.page || 1, search, filters);
       } else {
         focusSyncedArticles(syncResult.month, syncResult.year);

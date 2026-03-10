@@ -3,7 +3,7 @@ import { articles } from "@/db/schema";
 import { db } from "@/db";
 import { getCurrentUserContext, getContextIdentityCandidates, matchesIdentityCandidate } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { executeGoogleSheetSync, refreshScopedArticlesFromGoogleSheet } from "@/lib/google-sheet-sync";
+import { executeGoogleSheetSync, executeGoogleSheetWorkbookSync, refreshScopedArticlesFromGoogleSheet } from "@/lib/google-sheet-sync";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
     const year = parseOptionalNumber(body.year, "Năm");
     const sourceUrl = normalizeText(body.sourceUrl);
     const articleIds = parseArticleIds(body.articleIds);
+    const reconcileAllSheets = body.reconcileAllSheets === true || normalizeText(body.reconcileAllSheets) === "true";
 
     if ((month === null) !== (year === null)) {
       return NextResponse.json(
@@ -112,13 +113,19 @@ export async function POST(request: NextRequest) {
         createdByUserId: context.user.id,
         articleIds: authorizedArticleIds,
       })
-      : await executeGoogleSheetSync({
-        sourceUrl: sourceUrl || undefined,
-        month,
-        year,
-        createdByUserId: context.user.id,
-        identityCandidates: isAdmin ? undefined : identityCandidates,
-      });
+      : reconcileAllSheets && month === null && year === null
+        ? await executeGoogleSheetWorkbookSync({
+          sourceUrl: sourceUrl || undefined,
+          createdByUserId: context.user.id,
+          identityCandidates: isAdmin ? undefined : identityCandidates,
+        })
+        : await executeGoogleSheetSync({
+          sourceUrl: sourceUrl || undefined,
+          month,
+          year,
+          createdByUserId: context.user.id,
+          identityCandidates: isAdmin ? undefined : identityCandidates,
+        });
 
     await writeAuditLog({
       userId: context.user.id,
@@ -126,7 +133,7 @@ export async function POST(request: NextRequest) {
       entity: "article",
       payload: {
         ...result,
-        scope: authorizedArticleIds.length > 0 ? "filtered" : "full",
+        scope: authorizedArticleIds.length > 0 ? "filtered" : (result.scope === "workbook" ? "workbook" : "full"),
         articleIds: authorizedArticleIds,
         triggeredBy: "manual",
         actorRole: context.user.role,
@@ -145,3 +152,4 @@ export async function POST(request: NextRequest) {
     return handleServerError("articles.google-sync.post", error);
   }
 }
+
