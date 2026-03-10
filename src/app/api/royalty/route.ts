@@ -1,15 +1,52 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { royaltyRates, articles, monthlyBudgets } from "@/db/schema";
-import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextArticleOwnerCandidates, getCurrentUserContext } from "@/lib/auth";
 import { publishRealtimeEvent } from "@/lib/realtime";
-import { isRoyaltyEligibleArticleStatus, matchesRoyaltyMonthYear, parseRoyaltyDateParts } from "@/lib/royalty";
+import { matchesRoyaltyMonthYear, parseRoyaltyDateParts } from "@/lib/royalty";
 import { requiredInt, optionalString, ValidationError } from "@/lib/validation";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
-import { eq, and } from "drizzle-orm";
+import { and, eq, inArray, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type RoyaltyBreakdown = Record<string, { count: number; unitPrice: number; total: number }>;
+
+type RoyaltySourceArticle = {
+    penName: string;
+    articleType: string;
+    contentType: string;
+    date: string;
+};
+
+const ROYALTY_ELIGIBLE_STATUS_VALUES = ["Published", "Approved"] as const;
+
+function buildArticleOwnerWhere(ownerCandidates: string[]): SQL | undefined {
+    const normalizedCandidates = Array.from(new Set(ownerCandidates.map((value) => String(value || "").trim()).filter(Boolean)));
+    if (normalizedCandidates.length === 0) return undefined;
+    if (normalizedCandidates.length === 1) return eq(articles.penName, normalizedCandidates[0] as never);
+    return inArray(articles.penName, normalizedCandidates as never[]);
+}
+
+async function selectRoyaltyArticles(options?: { ownerCandidates?: string[]; exactPenName?: string }) {
+    const conditions: SQL[] = [inArray(articles.status, [...ROYALTY_ELIGIBLE_STATUS_VALUES])];
+
+    if (options?.exactPenName) {
+        conditions.push(eq(articles.penName, options.exactPenName));
+    } else if (options?.ownerCandidates?.length) {
+        const ownerWhere = buildArticleOwnerWhere(options.ownerCandidates);
+        if (ownerWhere) conditions.push(ownerWhere);
+    }
+
+    return db.select({
+        penName: articles.penName,
+        articleType: articles.articleType,
+        contentType: articles.contentType,
+        date: articles.date,
+    })
+        .from(articles)
+        .where(and(...conditions))
+        .all() as Promise<RoyaltySourceArticle[]>;
+}
 
 export async function GET(request: NextRequest) {
     try {
@@ -58,12 +95,10 @@ export async function GET(request: NextRequest) {
                 rateMap.set(`${rate.articleType}|${rate.contentType}`, rate.price);
             }
 
-            const identityCandidates = getContextIdentityCandidates(context);
-            const allArticles = await db.select().from(articles).all();
-            const scopedArticles = allArticles.filter((article) =>
-                isRoyaltyEligibleArticleStatus(article.status)
-                && (context.user.role === "admin" || matchesIdentityCandidate(identityCandidates, article.penName))
-            );
+            const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
+            const scopedArticles = await selectRoyaltyArticles({
+                ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
+            });
 
             const monthlyMap: Record<string, { month: number; year: number; totalAmount: number; totalArticles: number }> = {};
             const writerAmounts: Record<string, number> = {};
@@ -109,14 +144,10 @@ export async function GET(request: NextRequest) {
             const budgetAmount = budget?.budgetAmount || 0;
             const budgetPercentage = budgetAmount > 0 ? Math.round((currentSpent / budgetAmount) * 100) : 0;
 
-            let topWriters = Object.entries(writerAmounts)
+            const topWriters = Object.entries(writerAmounts)
                 .map(([penName, amount]) => ({ penName, amount }))
                 .sort((left, right) => right.amount - left.amount)
                 .slice(0, 10);
-
-            if (context.user.role !== "admin") {
-                topWriters = topWriters.filter((writer) => matchesIdentityCandidate(identityCandidates, writer.penName));
-            }
 
             return NextResponse.json({
                 success: true,
@@ -150,18 +181,10 @@ export async function GET(request: NextRequest) {
                 rateMap.set(`${rate.articleType}|${rate.contentType}`, rate.price);
             }
 
-            const identityCandidates = getContextIdentityCandidates(context);
-            const allArticles = await db.select().from(articles).all();
-            const scopedArticles = allArticles.filter((article) => {
-                if (!isRoyaltyEligibleArticleStatus(article.status)) {
-                    return false;
-                }
-
-                if (context.user.role === "admin") {
-                    return requestPenName ? article.penName === requestPenName : true;
-                }
-
-                return matchesIdentityCandidate(identityCandidates, article.penName);
+            const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
+            const scopedArticles = await selectRoyaltyArticles({
+                exactPenName: context.user.role === "admin" ? requestPenName || undefined : undefined,
+                ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
             });
 
             const filtered = scopedArticles.filter((article) => {

@@ -1,14 +1,14 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articles, payments, royaltyRates, users, collaborators } from "@/db/schema";
-import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextArticleOwnerCandidates, getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications";
-import { isRoyaltyEligibleArticleStatus, matchesRoyaltyMonthYear } from "@/lib/royalty";
+import { matchesRoyaltyMonthYear } from "@/lib/royalty";
 import { requiredInt, optionalString, ValidationError, enumValue } from "@/lib/validation";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
-import { and, eq, desc, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type PaymentDetails = Record<string, { count: number; unitPrice: number; total: number }>;
@@ -18,6 +18,43 @@ type CalcRow = {
   totalAmount: number;
   details: PaymentDetails;
 };
+
+type PaymentSourceArticle = {
+  penName: string;
+  articleType: string;
+  contentType: string;
+  date: string;
+};
+
+const ROYALTY_ELIGIBLE_STATUS_VALUES = ["Published", "Approved"] as const;
+
+function buildArticleOwnerWhere(ownerCandidates: string[]): SQL | undefined {
+  const normalizedCandidates = Array.from(new Set(ownerCandidates.map((value) => String(value || "").trim()).filter(Boolean)));
+  if (normalizedCandidates.length === 0) return undefined;
+  if (normalizedCandidates.length === 1) return eq(articles.penName, normalizedCandidates[0] as never);
+  return inArray(articles.penName, normalizedCandidates as never[]);
+}
+
+async function selectPaymentSourceArticles(options?: { exactPenName?: string; ownerCandidates?: string[] }) {
+  const conditions: SQL[] = [inArray(articles.status, [...ROYALTY_ELIGIBLE_STATUS_VALUES])];
+
+  if (options?.exactPenName) {
+    conditions.push(eq(articles.penName, options.exactPenName));
+  } else if (options?.ownerCandidates?.length) {
+    const ownerWhere = buildArticleOwnerWhere(options.ownerCandidates);
+    if (ownerWhere) conditions.push(ownerWhere);
+  }
+
+  return db.select({
+    penName: articles.penName,
+    articleType: articles.articleType,
+    contentType: articles.contentType,
+    date: articles.date,
+  })
+    .from(articles)
+    .where(and(...conditions))
+    .all() as Promise<PaymentSourceArticle[]>;
+}
 
 function parsePaymentDetails(raw: string | null): PaymentDetails | null {
   if (!raw) return null;
@@ -29,24 +66,15 @@ function parsePaymentDetails(raw: string | null): PaymentDetails | null {
   }
 }
 
-async function buildCalculation(month: number, year: number, onlyPenName?: string): Promise<CalcRow[]> {
+async function buildCalculation(month: number, year: number, options?: { exactPenName?: string; ownerCandidates?: string[] }): Promise<CalcRow[]> {
   const rates = await db.select().from(royaltyRates).where(eq(royaltyRates.isActive, true)).all();
   const rateMap = new Map<string, number>();
   for (const rate of rates) {
     rateMap.set(`${rate.articleType}|${rate.contentType}`, rate.price);
   }
 
-  let condition: SQL | undefined;
-  if (onlyPenName) {
-    condition = eq(articles.penName, onlyPenName);
-  }
-
-  const sourceArticles = (await db
-    .select()
-    .from(articles)
-    .where(condition)
-    .all())
-    .filter((article) => isRoyaltyEligibleArticleStatus(article.status) && matchesRoyaltyMonthYear(article.date, month, year));
+  const sourceArticles = (await selectPaymentSourceArticles(options))
+    .filter((article) => matchesRoyaltyMonthYear(article.date, month, year));
 
   const byWriter: Record<string, CalcRow> = {};
 
@@ -115,6 +143,7 @@ export async function GET(request: NextRequest) {
     const status = optionalString(searchParams.get("status"));
     const penNameFilter = optionalString(searchParams.get("penName"));
     const identityCandidates = getContextIdentityCandidates(context);
+    const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
 
     const conditions: SQL[] = [];
     if (month) conditions.push(eq(payments.month, month));
@@ -123,7 +152,7 @@ export async function GET(request: NextRequest) {
 
     if (context.user.role === "admin") {
       if (penNameFilter) conditions.push(eq(payments.penName, penNameFilter));
-    } else if (identityCandidates.length === 0) {
+    } else if (identityCandidates.length === 0 && ownerCandidates.length === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
 
@@ -143,7 +172,7 @@ export async function GET(request: NextRequest) {
       data = data.filter((payment) => matchesIdentityCandidate(identityCandidates, payment.penName));
 
       if (data.length === 0 && month && year) {
-        const [estimated] = (await buildCalculation(month, year)).filter((row) =>
+        const [estimated] = (await buildCalculation(month, year, { ownerCandidates })).filter((row) =>
           matchesIdentityCandidate(identityCandidates, row.penName)
         );
 
@@ -201,7 +230,7 @@ export async function POST(request: NextRequest) {
       const penName = optionalString(body.penName);
       const force = Boolean(body.force);
 
-      const calculation = await buildCalculation(month, year, penName);
+      const calculation = await buildCalculation(month, year, { exactPenName: penName || undefined });
       let generated = 0;
       let skipped = 0;
       const targetPenNames = new Set(calculation.map((row) => row.penName));
