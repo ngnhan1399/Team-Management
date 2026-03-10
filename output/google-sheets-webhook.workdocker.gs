@@ -39,6 +39,7 @@ function parseMonthlySheetName_(sheetName) {
     originalName: sheetName,
     month,
     year,
+    isCopy: /^Ban sao cua\s+/i.test(normalized),
   };
 }
 
@@ -179,7 +180,6 @@ function findArticleRowNumber_(sheet, headerInfo, article, sourceRowKey) {
   const articleId = String(article.articleId || '').trim();
   const link = String(article.link || '').trim();
   const compositeKey = normalizeCompositeKey_(article.title, article.penName, article.date);
-  const titlePenNameKey = normalizeTitlePenNameKey_(article.title, article.penName);
   const normalizedSourceRowKey = String(sourceRowKey || buildSourceRowKeyFromArticle_(article)).trim();
 
   function getCell(row, field) {
@@ -236,14 +236,6 @@ function findArticleRowNumber_(sheet, headerInfo, article, sourceRowKey) {
     const row = values[index];
     const rowComposite = normalizeCompositeKey_(getCell(row, 'title'), getCell(row, 'penName'), getCell(row, 'date'));
     if (rowComposite && rowComposite === compositeKey) {
-      return firstDataRow + index;
-    }
-  }
-
-  for (let index = 0; index < values.length; index += 1) {
-    const row = values[index];
-    const rowTitlePenName = normalizeTitlePenNameKey_(getCell(row, 'title'), getCell(row, 'penName'));
-    if (rowTitlePenName && rowTitlePenName === titlePenNameKey) {
       return firstDataRow + index;
     }
   }
@@ -383,20 +375,25 @@ function findMonthlySheet_(spreadsheet, month, year, preferredSheetName) {
     if (direct) return direct;
   }
 
+  const candidates = [];
   const sheets = spreadsheet.getSheets();
-  let best = null;
 
   for (let index = 0; index < sheets.length; index += 1) {
     const sheet = sheets[index];
     const parsed = parseMonthlySheetName_(sheet.getName());
     if (!parsed) continue;
     if (month && year && (parsed.month !== Number(month) || parsed.year !== Number(year))) continue;
-    if (!best || parsed.originalName.localeCompare(best.getName()) > 0) {
-      best = sheet;
-    }
+    candidates.push({ sheet, parsed });
   }
 
-  return best;
+  candidates.sort(function(left, right) {
+    if (left.parsed.year !== right.parsed.year) return right.parsed.year - left.parsed.year;
+    if (left.parsed.month !== right.parsed.month) return right.parsed.month - left.parsed.month;
+    if (left.parsed.isCopy !== right.parsed.isCopy) return Number(left.parsed.isCopy) - Number(right.parsed.isCopy);
+    return right.sheet.getName().localeCompare(left.sheet.getName());
+  });
+
+  return candidates.length ? candidates[0].sheet : null;
 }
 
 function resolveSourceRowKey_(article) {

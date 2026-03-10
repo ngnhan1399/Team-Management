@@ -175,6 +175,14 @@ export function listPreferredSheetTabs(sheetNames: string[]) {
   return preferred;
 }
 
+export function listMonthlySheetTabs(sheetNames: string[]) {
+  return sortGoogleSheetTabs(
+    sheetNames
+      .map(parseSheetTabInfo)
+      .filter((item): item is GoogleSheetTabInfo => Boolean(item))
+  );
+}
+
 export function pickSheetTab(
   sheetNames: string[],
   requestedSheetName?: string | null,
@@ -1245,7 +1253,7 @@ export async function executeGoogleSheetWorkbookSync(
 
   const buffer = Buffer.from(await response.arrayBuffer());
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
-  const tabs = listPreferredSheetTabs(workbook.SheetNames);
+  const tabs = listMonthlySheetTabs(workbook.SheetNames);
 
   if (tabs.length === 0) {
     throw new Error("Không tìm thấy tab tháng/năm hợp lệ trong Google Sheets.");
