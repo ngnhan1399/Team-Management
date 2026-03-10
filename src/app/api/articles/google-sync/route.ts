@@ -1,10 +1,13 @@
 import { ensureDatabaseInitialized } from "@/db";
-import { getCurrentUserContext } from "@/lib/auth";
+import { articles } from "@/db/schema";
+import { db } from "@/db";
+import { getCurrentUserContext, getContextIdentityCandidates, matchesIdentityCandidate } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { executeGoogleSheetSync, refreshScopedArticlesFromGoogleSheet } from "@/lib/google-sheet-sync";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 function normalizeText(value: unknown) {
@@ -45,9 +48,6 @@ export async function POST(request: NextRequest) {
     if (!context) {
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
     }
-    if (context.user.role !== "admin") {
-      return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
-    }
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const month = parseOptionalNumber(body.month, "Tháng");
@@ -70,19 +70,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Năm không hợp lệ." }, { status: 400 });
     }
 
-    const result = articleIds.length > 0
+    const isAdmin = context.user.role === "admin";
+    const identityCandidates = isAdmin ? [] : getContextIdentityCandidates(context);
+
+    let authorizedArticleIds = articleIds;
+    if (!isAdmin && articleIds.length > 0) {
+      const targetArticles = await db
+        .select({
+          id: articles.id,
+          penName: articles.penName,
+        })
+        .from(articles)
+        .where(inArray(articles.id, articleIds))
+        .all();
+
+      if (targetArticles.length !== articleIds.length) {
+        return NextResponse.json(
+          { success: false, error: "Có bài viết trong danh sách đồng bộ không tồn tại hoặc không còn khả dụng." },
+          { status: 404 }
+        );
+      }
+
+      const unauthorizedArticle = targetArticles.find(
+        (article) => !matchesIdentityCandidate(identityCandidates, article.penName)
+      );
+      if (unauthorizedArticle) {
+        return NextResponse.json(
+          { success: false, error: "Bạn chỉ có thể đồng bộ các bài viết thuộc về tài khoản của mình." },
+          { status: 403 }
+        );
+      }
+
+      authorizedArticleIds = targetArticles.map((article) => article.id);
+    }
+
+    const result = authorizedArticleIds.length > 0
       ? await refreshScopedArticlesFromGoogleSheet({
         sourceUrl: sourceUrl || undefined,
         month,
         year,
         createdByUserId: context.user.id,
-        articleIds,
+        articleIds: authorizedArticleIds,
       })
       : await executeGoogleSheetSync({
         sourceUrl: sourceUrl || undefined,
         month,
         year,
         createdByUserId: context.user.id,
+        identityCandidates: isAdmin ? undefined : identityCandidates,
       });
 
     await writeAuditLog({
@@ -91,9 +126,10 @@ export async function POST(request: NextRequest) {
       entity: "article",
       payload: {
         ...result,
-        scope: articleIds.length > 0 ? "filtered" : "full",
-        articleIds,
+        scope: authorizedArticleIds.length > 0 ? "filtered" : "full",
+        articleIds: authorizedArticleIds,
         triggeredBy: "manual",
+        actorRole: context.user.role,
       },
     });
 

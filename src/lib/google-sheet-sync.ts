@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments } from "@/db/schema";
 import { normalizeImportedArticleRow, prepareArticleImport, type ImportFieldId } from "./article-import";
+import { matchesIdentityCandidate } from "./auth";
 import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 
 export const DEFAULT_GOOGLE_SHEET_SOURCE_URL =
@@ -66,6 +67,7 @@ export interface ExecuteGoogleSheetSyncOptions {
   year?: number | null;
   sheetName?: string;
   createdByUserId?: number | null;
+  identityCandidates?: string[];
 }
 
 export interface RefreshScopedGoogleSheetSyncOptions extends ExecuteGoogleSheetSyncOptions {
@@ -887,6 +889,10 @@ export async function executeGoogleSheetSync(
   await ensureDatabaseInitialized();
 
   const collaboratorPenNames = await getCollaboratorPenNames();
+  const identityCandidates = Array.from(
+    new Set((options.identityCandidates || []).map((value) => String(value || "").trim()).filter(Boolean))
+  );
+  const restrictToIdentityScope = identityCandidates.length > 0;
 
   const { prepared, selectedSheet, sourceUrl } = await loadGoogleSheetImport({
     sourceUrl: options.sourceUrl,
@@ -901,7 +907,7 @@ export async function executeGoogleSheetSync(
   }
 
   const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
-  const existingArticles = await db
+  const allExistingArticles = await db
     .select({
       id: articles.id,
       articleId: articles.articleId,
@@ -919,6 +925,10 @@ export async function executeGoogleSheetSync(
     })
     .from(articles)
     .all();
+  const existingArticles = restrictToIdentityScope
+    ? allExistingArticles.filter((row) => matchesIdentityCandidate(identityCandidates, row.penName))
+    : allExistingArticles;
+  const existingArticleIds = new Set(existingArticles.map((row) => row.id));
 
   const articleIdMap = new Map<string, ExistingArticleRow>();
   const compositeMap = new Map<string, ExistingArticleRow>();
@@ -928,7 +938,7 @@ export async function executeGoogleSheetSync(
     setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, row);
   }
 
-  const existingSyncLinks = await db
+  const sheetSyncLinks = await db
     .select({
       id: articleSyncLinks.id,
       sourceRowKey: articleSyncLinks.sourceRowKey,
@@ -942,6 +952,9 @@ export async function executeGoogleSheetSync(
       )
     )
     .all() as SyncLinkRow[];
+  const existingSyncLinks = restrictToIdentityScope
+    ? sheetSyncLinks.filter((link) => Number.isInteger(Number(link.articleIdRef || 0)) && existingArticleIds.has(Number(link.articleIdRef)))
+    : sheetSyncLinks;
 
   const existingSyncLinkMap = new Map(existingSyncLinks.map((link) => [link.sourceRowKey, link]));
   const seenSourceRowKeys = new Set<string>();
@@ -955,6 +968,7 @@ export async function executeGoogleSheetSync(
   const errors: string[] = [];
   const runtimeWarnings: string[] = [];
   let rowsUsingFallbackDate = 0;
+  let ignoredOutsideScope = 0;
   const fallbackDate = buildSheetFallbackDate(selectedSheet.month, selectedSheet.year);
 
   for (const row of prepared.rawRows) {
@@ -984,6 +998,11 @@ export async function executeGoogleSheetSync(
         if (errors.length < 20) {
           errors.push(`Dòng ${row.rowNumber}: ${rowIssues.join("; ")}`);
         }
+        continue;
+      }
+
+      if (restrictToIdentityScope && !matchesIdentityCandidate(identityCandidates, normalized.penName)) {
+        ignoredOutsideScope += 1;
         continue;
       }
 
@@ -1098,6 +1117,11 @@ export async function executeGoogleSheetSync(
       `${rowsUsingFallbackDate} dòng không có "Ngày viết" trong sheet gốc đã được gán tạm ngày ${fallbackDate} theo tab ${selectedSheet.name}.`
     );
   }
+  if (ignoredOutsideScope > 0) {
+    runtimeWarnings.push(
+      `Đã bỏ qua ${ignoredOutsideScope} dòng ngoài phạm vi tài khoản hiện tại để đảm bảo chỉ đồng bộ dữ liệu của chính người dùng.`
+    );
+  }
 
   const staleLinks = existingSyncLinks.filter((link) => !seenSourceRowKeys.has(link.sourceRowKey));
   const staleArticleIds = Array.from(
@@ -1128,7 +1152,7 @@ export async function executeGoogleSheetSync(
     requestedMonth: options.month ?? null,
     requestedYear: options.year ?? null,
     requestedSheetName: options.sheetName,
-    total: prepared.rawRows.length,
+    total: Math.max(prepared.rawRows.length - ignoredOutsideScope, 0),
     inserted,
     updated,
     duplicates,

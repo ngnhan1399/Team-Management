@@ -916,39 +916,37 @@ export default function ArticlesPage() {
               </label>
             </>
           )}
-          {isAdmin && (
-            <button
-              className="btn-ios-pill btn-ios-primary"
-              onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true, useCurrentFilters: true })}
-              disabled={googleSyncLoading}
-              title={quickSyncSelection.preserveView
-                ? `Đồng bộ nhanh đúng ${quickSyncSelection.description}`
+          <button
+            className="btn-ios-pill btn-ios-primary"
+            onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true, useCurrentFilters: true })}
+            disabled={googleSyncLoading}
+            title={quickSyncSelection.preserveView
+              ? `Đồng bộ nhanh đúng ${quickSyncSelection.description}`
+              : filters.month && filters.year
+                ? `Đồng bộ ngay theo bộ lọc Tháng ${filters.month}/${filters.year}`
+                : isAdmin
+                  ? "Đồng bộ tab tháng mới nhất ngay lập tức"
+                  : `Đồng bộ tab tháng mới nhất nhưng chỉ lấy dữ liệu của ${collaboratorLabel}`}
+            style={{ minWidth: 170, justifyContent: "center" }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
+            {googleSyncLoading
+              ? "Đang đồng bộ..."
+              : quickSyncSelection.preserveView
+                ? "Đồng bộ kết quả lọc"
                 : filters.month && filters.year
-                  ? `Đồng bộ ngay theo bộ lọc Tháng ${filters.month}/${filters.year}`
-                  : "Đồng bộ tab tháng mới nhất ngay lập tức"}
-              style={{ minWidth: 170, justifyContent: "center" }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
-              {googleSyncLoading
-                ? "Đang đồng bộ..."
-                : quickSyncSelection.preserveView
-                  ? "Đồng bộ kết quả lọc"
-                  : filters.month && filters.year
-                  ? `Đồng bộ ${filters.month}/${filters.year}`
-                  : "Đồng bộ ngay"}
-            </button>
-          )}
-          {isAdmin && (
-            <button
-              className="btn-ios-pill btn-ios-secondary"
-              onClick={openGoogleSyncModal}
-              disabled={googleSyncLoading}
-              style={{ minWidth: 210, justifyContent: "center" }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
-              Chọn tháng để đồng bộ
-            </button>
-          )}
+                ? `Đồng bộ ${filters.month}/${filters.year}`
+                : "Đồng bộ ngay"}
+          </button>
+          <button
+            className="btn-ios-pill btn-ios-secondary"
+            onClick={openGoogleSyncModal}
+            disabled={googleSyncLoading}
+            style={{ minWidth: 210, justifyContent: "center" }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
+            Chọn tháng để đồng bộ
+          </button>
           {isAdmin && (
             <button data-testid="articles-open-delete-tool" className="btn-ios-pill" onClick={openDeleteTool} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_sweep</span>
@@ -1405,7 +1403,7 @@ export default function ArticlesPage() {
         </div>
       )}
 
-      {showGoogleSyncModal && isAdmin && (
+      {showGoogleSyncModal && (
         <div className="modal-overlay" onClick={closeGoogleSyncModal}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 760, width: "92vw" }}>
             <div className="modal-header">
@@ -1423,10 +1421,19 @@ export default function ArticlesPage() {
                 <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.7 }}>
                   Hệ thống dùng chung một engine đồng bộ cho cả <strong>Đồng bộ ngay</strong> và <strong>Đồng bộ theo tháng</strong>.
                   Nếu bộ lọc bài viết đang chọn đủ <strong>tháng/năm</strong>, nút <strong>Đồng bộ ngay</strong> sẽ ưu tiên sync đúng kỳ đó.
-                  Nếu để trống, hệ thống lấy tab tháng mới nhất. Nếu chọn tháng/năm trong modal, hệ thống sync đúng tab đó. Dữ liệu sẽ
-                  được <strong>mirror theo sheet gốc</strong>: bài có trong sheet thì giữ, bài trùng thì bỏ qua, bài không còn
-                  trong sheet sẽ bị xóa khỏi danh sách đã đồng bộ của tab đó. Sau khi đồng bộ xong, danh sách bài viết sẽ tự
-                  chuyển sang đúng tháng vừa sync để bạn thấy ngay dữ liệu đã được lưu.
+                  Nếu để trống, hệ thống lấy tab tháng mới nhất. Nếu chọn tháng/năm trong modal, hệ thống sync đúng tab đó.
+                  {isAdmin ? (
+                    <>
+                      {" "}Dữ liệu sẽ được <strong>mirror theo sheet gốc</strong>: bài có trong sheet thì giữ, bài trùng thì bỏ qua,
+                      bài không còn trong sheet sẽ bị xóa khỏi danh sách đã đồng bộ của tab đó.
+                    </>
+                  ) : (
+                    <>
+                      {" "}Với tài khoản CTV, hệ thống chỉ đồng bộ <strong>các dòng thuộc về {collaboratorLabel}</strong>, nên bạn có thể dùng
+                      cùng bộ công cụ của admin mà không chạm vào dữ liệu của người khác.
+                    </>
+                  )}{" "}
+                  Sau khi đồng bộ xong, danh sách bài viết sẽ tự chuyển sang đúng tháng vừa sync để bạn thấy ngay dữ liệu đã được lưu.
                 </div>
                 <a
                   href="https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251"
