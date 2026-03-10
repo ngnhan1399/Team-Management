@@ -4,35 +4,52 @@ function normalizeOrigin(value: string) {
   return value.trim().replace(/\/$/, "");
 }
 
-function getExpectedOrigin(request: Request) {
-  const configuredOrigin = process.env.APP_ORIGIN?.trim();
-  if (configuredOrigin) {
-    return normalizeOrigin(configuredOrigin);
+function getConfiguredOrigins() {
+  const configuredOrigins = [
+    ...(process.env.APP_ORIGINS || "")
+      .split(/[\n,]/)
+      .map((value) => normalizeOrigin(value))
+      .filter(Boolean),
+  ];
+
+  const legacyOrigin = process.env.APP_ORIGIN?.trim();
+  if (legacyOrigin) {
+    configuredOrigins.push(normalizeOrigin(legacyOrigin));
   }
+
+  return Array.from(new Set(configuredOrigins));
+}
+
+function getAllowedOrigins(request: Request) {
+  const configuredOrigins = getConfiguredOrigins();
 
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const forwardedHost = request.headers.get("x-forwarded-host");
   const host = forwardedHost || request.headers.get("host");
 
   if (host) {
-    return normalizeOrigin(`${forwardedProto || new URL(request.url).protocol.replace(":", "")}://${host}`);
+    configuredOrigins.push(
+      normalizeOrigin(`${forwardedProto || new URL(request.url).protocol.replace(":", "")}://${host}`)
+    );
+    return Array.from(new Set(configuredOrigins));
   }
 
-  return normalizeOrigin(new URL(request.url).origin);
+  configuredOrigins.push(normalizeOrigin(new URL(request.url).origin));
+  return Array.from(new Set(configuredOrigins));
 }
 
 export function enforceTrustedOrigin(request: Request) {
-  const expectedOrigin = getExpectedOrigin(request);
+  const allowedOrigins = getAllowedOrigins(request);
   const origin = request.headers.get("origin");
 
-  if (origin && normalizeOrigin(origin) === expectedOrigin) {
+  if (origin && allowedOrigins.includes(normalizeOrigin(origin))) {
     return null;
   }
 
   const referer = request.headers.get("referer");
   if (!origin && referer) {
     try {
-      if (normalizeOrigin(new URL(referer).origin) === expectedOrigin) {
+      if (allowedOrigins.includes(normalizeOrigin(new URL(referer).origin))) {
         return null;
       }
     } catch {

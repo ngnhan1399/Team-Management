@@ -65,6 +65,7 @@ Tạo file `.env.local` từ `.env.example`, sau đó cấu hình tối thiểu:
 
 Biến bổ sung khi cần:
 
+- `APP_ORIGINS`
 - `DATABASE_SSL`
 - `SEED_ADMIN_EMAIL`
 - `SEED_ADMIN_PASSWORD`
