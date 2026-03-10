@@ -1,5 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articles, collaborators } from "@/db/schema";
+import { resolveArticleCategory } from "@/lib/article-category";
 import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { handleServerError } from "@/lib/server-error";
 import { desc, sql } from "drizzle-orm";
@@ -42,7 +43,7 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[])
     totalArticlesRow,
     totalCTVRow,
     statusRows,
-    categoryRows,
+    categorySourceRows,
     typeRows,
     monthRows,
     writerRows,
@@ -56,8 +57,8 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[])
     }).from(articles).groupBy(articles.status).all(),
     db.select({
       category: articles.category,
-      count: sql<number>`count(*)`,
-    }).from(articles).groupBy(articles.category).all(),
+      articleType: articles.articleType,
+    }).from(articles).all(),
     db.select({
       articleType: articles.articleType,
       contentType: articles.contentType,
@@ -111,7 +112,9 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[])
     totalArticles: Number(totalArticlesRow?.count || 0),
     totalCTVs: Number(totalCTVRow?.count || 0),
     articlesByStatus: statusRows.map((row) => ({ status: row.status, count: Number(row.count || 0) })),
-    articlesByCategory: categoryRows.map((row) => ({ category: row.category, count: Number(row.count || 0) })),
+    articlesByCategory: groupCount(
+      categorySourceRows.map((row) => resolveArticleCategory(row.category, row.articleType))
+    ).map(({ key, count }) => ({ category: key, count })),
     articlesByWriter,
     articlesByType: typeRows.map((row) => ({
       articleType: row.articleType,
@@ -157,7 +160,9 @@ export async function GET() {
         const articlesByStatus = groupCount(scopedArticles.map((article) => article.status))
             .map(({ key, count }) => ({ status: key, count }));
 
-        const articlesByCategory = groupCount(scopedArticles.map((article) => article.category))
+        const articlesByCategory = groupCount(
+            scopedArticles.map((article) => resolveArticleCategory(article.category, article.articleType))
+        )
             .map(({ key, count }) => ({ category: key, count }));
 
         const writerBuckets = scopedArticles.reduce<Record<string, { penName: string; displayName: string; count: number }>>((acc, article) => {

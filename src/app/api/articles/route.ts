@@ -2,6 +2,7 @@ import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, notifications, payments } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { createArticleInGoogleSheet, mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
+import { resolveArticleCategory } from "@/lib/article-category";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
@@ -493,6 +494,8 @@ export async function POST(request: NextRequest) {
     const finalPenName = context.user.role === "admin" ? normalizeString(body.penName) : ownPenName || "";
     const title = normalizeString(body.title);
     const date = normalizeString(body.date);
+    const normalizedArticleType = normalizeString(body.articleType) || "Bài SEO ICT";
+    const normalizedCategory = resolveArticleCategory(normalizeString(body.category), normalizedArticleType);
 
     if (!title || !finalPenName || !date) {
       return NextResponse.json(
@@ -509,8 +512,8 @@ export async function POST(request: NextRequest) {
         title,
         penName: finalPenName,
         createdByUserId: context.user.id,
-        category: (normalizeString(body.category) || "ICT") as never,
-        articleType: (normalizeString(body.articleType) || "Bài SEO ICT") as never,
+        category: normalizedCategory as never,
+        articleType: normalizedArticleType as never,
         contentType: (normalizeString(body.contentType) || "Viết mới") as never,
         wordCountRange: (normalizeString(body.wordCountRange) || undefined) as never,
         status: (normalizeString(body.status) || "Submitted") as never,
@@ -631,6 +634,9 @@ export async function PUT(request: NextRequest) {
     if (typeof updateData.reviewerName === "string") updateData.reviewerName = updateData.reviewerName.trim() || undefined;
     if (typeof updateData.penName === "string") updateData.penName = updateData.penName.trim();
     if (typeof updateData.date === "string") updateData.date = updateData.date.trim();
+    if (Object.prototype.hasOwnProperty.call(body, "category") || Object.prototype.hasOwnProperty.call(body, "articleType")) {
+      updateData.category = resolveArticleCategory(updateData.category, updateData.articleType ?? existing.articleType) as never;
+    }
     updateData.updatedAt = new Date().toISOString();
     const shouldMirrorToGoogleSheet = [
       "status",

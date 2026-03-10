@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { resolveArticleCategory } from "@/lib/article-category";
 
 export type ImportFieldId =
   | "articleId"
@@ -691,17 +692,6 @@ function normalizeArticleText(value: unknown): string {
   return normalizeWhitespace(String(value || ""));
 }
 
-function mapCategory(value: string): "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đánh giá" | "Khác" {
-  const folded = foldText(value);
-  if (folded.includes("ict")) return "ICT";
-  if (folded.includes("gia dung")) return "Gia dụng";
-  if (folded.includes("thu thuat")) return "Thủ thuật";
-  if (folded.includes("giai tri")) return "Giải trí";
-  if (folded.includes("danh gia")) return "Đánh giá";
-  if (folded.includes("khac")) return "Khác";
-  return "ICT";
-}
-
 function mapContentType(value: string): "Viết mới" | "Viết lại" {
   const folded = foldText(value);
   if (folded.includes("viet lai") || folded.includes("rewrite") || folded.includes("rework")) {
@@ -833,10 +823,9 @@ export function normalizeImportedArticleRow(
   }
 
   const penName = fuzzyMatchPenName(rawPenName, collaboratorPenNames);
-  const categorySource = rawCategory || rawArticleType;
   const contentTypeSource = rawContentType || rawArticleType;
 
-  const category = mapCategory(categorySource);
+  const category = resolveArticleCategory(rawCategory, rawArticleType);
   const wordCountRange = mapWordCountRange(rawWordCountRange);
   const contentType = mapContentType(contentTypeSource);
   const articleType = mapArticleType(rawArticleType, category, wordCountRange);
