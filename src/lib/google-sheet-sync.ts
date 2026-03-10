@@ -795,13 +795,24 @@ export async function refreshScopedArticlesFromGoogleSheet(
     for (const article of groupArticles) {
       const syncLink = syncLinkByArticleId.get(article.id) ?? null;
       const matchedRow = findPreparedRowForArticle(article, lookup, syncLink);
+      const articleYearMonth = getYearMonthFromDate(article.date);
+      const matchesSelectedSheetByDate =
+        articleYearMonth?.month === selectedSheet.month
+        && articleYearMonth?.year === selectedSheet.year;
+      const matchesRequestedPeriod =
+        options.month === selectedSheet.month
+        && options.year === selectedSheet.year;
 
       if (!matchedRow) {
-        const shouldMirrorDelete = syncLink != null
-          && syncLink.sourceUrl === sourceUrl
-          && syncLink.sheetName === selectedSheet.name
+        const shouldMirrorDelete = (
+          syncLink != null
           && syncLink.sheetMonth === selectedSheet.month
-          && syncLink.sheetYear === selectedSheet.year;
+          && syncLink.sheetYear === selectedSheet.year
+          && (!syncLink.sheetName || syncLink.sheetName === selectedSheet.name)
+        ) || (
+          syncLink == null
+          && (matchesSelectedSheetByDate || matchesRequestedPeriod)
+        );
 
         if (shouldMirrorDelete) {
           articleIdsToDelete.add(article.id);
@@ -833,6 +844,18 @@ export async function refreshScopedArticlesFromGoogleSheet(
               updatedAt: new Date().toISOString(),
             })
             .where(eq(articleSyncLinks.id, syncLink.id))
+            .run();
+        } else if (!syncLink) {
+          await db
+            .insert(articleSyncLinks)
+            .values({
+              sourceUrl,
+              sheetName: selectedSheet.name,
+              sheetMonth: selectedSheet.month,
+              sheetYear: selectedSheet.year,
+              sourceRowKey: matchedRow.sourceRowKey,
+              articleIdRef: article.id,
+            })
             .run();
         }
         continue;
@@ -1186,3 +1209,4 @@ export async function executeGoogleSheetSync(
     warnings: [...prepared.analysis.warnings, ...runtimeWarnings],
   };
 }
+
