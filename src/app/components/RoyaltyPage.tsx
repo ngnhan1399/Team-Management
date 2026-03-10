@@ -104,6 +104,18 @@ export default function RoyaltyPage() {
     }
   }, [fetchDashboard, fetchRates, isAdmin]);
 
+  useEffect(() => {
+    if (tab === "calculate") {
+      fetchCalculation();
+    }
+  }, [fetchCalculation, tab]);
+
+  useEffect(() => {
+    if (tab === "workflow") {
+      fetchPayments();
+    }
+  }, [fetchPayments, tab]);
+
   const refreshRoyaltyView = useCallback(() => {
     fetchDashboard();
     if (tab === "calculate") fetchCalculation();
@@ -210,8 +222,6 @@ export default function RoyaltyPage() {
             data-testid={`royalty-tab-${t.id}`}
             onClick={() => {
               if (t.id === "overview") fetchDashboard();
-              if (t.id === "calculate") fetchCalculation();
-              if (t.id === "workflow") fetchPayments();
               setTab(t.id);
             }}
             style={{
@@ -403,7 +413,7 @@ export default function RoyaltyPage() {
               )}
               <button className="btn-ios-pill btn-ios-primary" onClick={fetchCalculation} style={{ height: 44 }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 20 }}>refresh</span>
-                Tạo báo cáo
+                Cập nhật báo cáo
               </button>
             </div>
 
@@ -531,7 +541,7 @@ export default function RoyaltyPage() {
             )}
             <button data-testid="payment-refresh-button" className="btn-ios-pill btn-ios-primary" onClick={fetchPayments} style={{ height: 44 }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
-              Tải danh sách
+              Cập nhật danh sách
             </button>
             {isAdmin && (
               <>
@@ -564,7 +574,7 @@ export default function RoyaltyPage() {
 
           {!isAdmin && payments.some((payment) => payment.isEstimated) && (
             <div style={{ marginBottom: 16, padding: "14px 16px", borderRadius: 14, background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.14)", color: "var(--text-main)", fontSize: 13 }}>
-              Dữ liệu dưới đây đang hiển thị ở chế độ tạm tính theo các bài đã duyệt của bạn trong kỳ đã chọn. Bài nháp, chờ duyệt hoặc chưa có trạng thái hợp lệ sẽ không được cộng nhuận.
+              Dữ liệu dưới đây đang hiển thị ở chế độ tạm tính theo các bài đã duyệt mới nhất của bạn. Khi admin tạo hoặc cập nhật bảng thanh toán, danh sách này sẽ tự đồng bộ sang dữ liệu chính thức.
             </div>
           )}
 

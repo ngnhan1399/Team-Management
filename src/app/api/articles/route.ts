@@ -423,7 +423,7 @@ export async function POST(request: NextRequest) {
         articleType: (normalizeString(body.articleType) || "Bài SEO ICT") as never,
         contentType: (normalizeString(body.contentType) || "Viết mới") as never,
         wordCountRange: (normalizeString(body.wordCountRange) || undefined) as never,
-        status: (normalizeString(body.status) || "Draft") as never,
+        status: (normalizeString(body.status) || "Submitted") as never,
         link: normalizeString(body.link) || undefined,
         reviewerName: normalizeString(body.reviewerName) || undefined,
         notes: normalizeString(body.notes) || undefined,

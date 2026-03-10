@@ -36,8 +36,10 @@ const IMPORT_FIELD_OPTIONS = [
 
 const REQUIRED_IMPORT_FIELDS = ["date", "title", "penName"];
 const IMPORTANT_IMPORT_FIELDS = ["articleId", "date", "title", "penName", "status", "link"];
+const CATEGORY_OPTIONS = ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "Khác"];
 const ARTICLE_TYPE_OPTIONS = ["Mô tả SP ngắn", "Mô tả SP dài", "Bài dịch Review SP", "Bài SEO ICT", "Bài SEO Gia dụng", "Bài SEO ICT 1K5", "Bài SEO Gia dụng 1K5", "Bài SEO ICT 2K", "Bài SEO Gia dụng 2K", "Thủ thuật"];
 const CONTENT_TYPE_OPTIONS = ["Viết mới", "Viết lại"];
+const DEFAULT_ARTICLE_STATUS = "Submitted";
 const ARTICLE_STATUS_OPTIONS = [
   { value: "", label: "Tất cả" },
   { value: "Draft", label: "📋 Nháp" },
@@ -946,7 +948,7 @@ export default function ArticlesPage() {
               Xuất
             </a>
           )}
-          <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: isAdmin ? "" : user?.collaborator?.penName }); setShowModal(true); }}>
+          <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: isAdmin ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS }); setShowModal(true); }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
             Thêm bài viết
           </button>
@@ -1010,11 +1012,31 @@ export default function ArticlesPage() {
               />
             </div>
             <div className="form-group">
+              <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Danh mục</label>
+              <CustomSelect
+                value={filters.category || ""}
+                onChange={(v) => applyFilter("category", v)}
+                options={[{ value: "", label: "Tất cả" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: category }))]}
+                placeholder="Tất cả"
+                menuMode="portal-bottom"
+              />
+            </div>
+            <div className="form-group">
               <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Loại bài</label>
               <CustomSelect
                 value={filters.articleType || ""}
                 onChange={(v) => applyFilter("articleType", v)}
                 options={[{ value: "", label: "Tất cả" }, ...ARTICLE_TYPE_OPTIONS.map(t => ({ value: t, label: t }))]}
+                placeholder="Tất cả"
+                menuMode="portal-bottom"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Loại nội dung</label>
+              <CustomSelect
+                value={filters.contentType || ""}
+                onChange={(v) => applyFilter("contentType", v)}
+                options={[{ value: "", label: "Tất cả" }, ...CONTENT_TYPE_OPTIONS.map((contentType) => ({ value: contentType, label: contentType }))]}
                 placeholder="Tất cả"
                 menuMode="portal-bottom"
               />
@@ -1216,11 +1238,11 @@ export default function ArticlesPage() {
                 <div className="form-group">
                   <label className="form-label">Trạng thái hiện tại</label>
                   <CustomSelect
-                    value={formData.status === "Approved" ? "Published" : formData.status || "Draft"}
+                    value={formData.status === "Approved" ? "Published" : formData.status || DEFAULT_ARTICLE_STATUS}
                     onChange={v => setFormData({ ...formData, status: v })}
                     options={[
-                      { value: "Draft", label: "Bản nháp" },
                       { value: "Submitted", label: "Chờ duyệt" },
+                      { value: "Draft", label: "Bản nháp" },
                       ...(isAdmin ? [
                         { value: "Reviewing", label: "Đang duyệt" },
                         { value: "Published", label: "Đã duyệt" },

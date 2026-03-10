@@ -61,7 +61,7 @@ export const articles = pgTable("articles", {
   }),
   status: text("status", {
     enum: ["Draft", "Submitted", "Reviewing", "NeedsFix", "Approved", "Published", "Rejected"],
-  }).notNull().default("Draft"),
+  }).notNull().default("Submitted"),
   link: text("link"),
   reviewerName: text("reviewer_name"),
   notes: text("notes"),

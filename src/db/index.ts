@@ -164,7 +164,7 @@ const bootstrapStatements = [
     article_type TEXT NOT NULL DEFAULT 'Bài SEO ICT',
     content_type TEXT NOT NULL DEFAULT 'Viết mới',
     word_count_range TEXT,
-    status TEXT NOT NULL DEFAULT 'Draft',
+    status TEXT NOT NULL DEFAULT 'Submitted',
     link TEXT,
     reviewer_name TEXT,
     notes TEXT,
@@ -320,6 +320,7 @@ export async function initializeDatabase() {
   await ensureColumnExists("payments", "paid_at", "TEXT");
   await ensureColumnExists("payments", "updated_at", "TEXT DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists("articles", "created_by_user_id", "INTEGER");
+  await pool.query(`ALTER TABLE articles ALTER COLUMN status SET DEFAULT 'Submitted'`);
 
   await pool.query(`
     UPDATE articles
