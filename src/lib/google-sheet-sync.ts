@@ -71,6 +71,7 @@ export interface ExecuteGoogleSheetSyncOptions {
   _workbook?: XLSX.WorkBook;
   _collaboratorPenNames?: string[];
   _skipEnsureInitialized?: boolean;
+  _sharedState?: GoogleSheetSyncSharedState;
 }
 
 export interface RefreshScopedGoogleSheetSyncOptions extends ExecuteGoogleSheetSyncOptions {
@@ -96,6 +97,17 @@ export interface GoogleSheetSyncExecutionResult {
   scope?: "sheet" | "workbook";
   processedSheets?: string[];
 }
+
+type GoogleSheetSyncSharedState = {
+  sourceUrl: string;
+  existingArticleIds: Set<number>;
+  articleRowsById: Map<number, ExistingArticleRow>;
+  articleIdMap: Map<string, ExistingArticleRow>;
+  compositeMap: Map<string, ExistingArticleRow>;
+  titlePenNameMap: Map<string, ExistingArticleRow>;
+  linkMap: Map<string, ExistingArticleRow>;
+  syncLinksBySheet: Map<string, Map<string, SyncLinkRow>>;
+};
 
 const REQUIRED_FIELDS: ImportFieldId[] = ["date", "title", "penName"];
 
@@ -493,6 +505,184 @@ async function getCollaboratorPenNames() {
     .from(collaborators)
     .all())
     .map((item) => item.penName);
+}
+
+async function getAllExistingArticles() {
+  return db
+    .select({
+      id: articles.id,
+      articleId: articles.articleId,
+      title: articles.title,
+      penName: articles.penName,
+      date: articles.date,
+      link: articles.link,
+      category: articles.category,
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      wordCountRange: articles.wordCountRange,
+      status: articles.status,
+      reviewerName: articles.reviewerName,
+      notes: articles.notes,
+    })
+    .from(articles)
+    .all();
+}
+
+function getSharedSheetSyncLinkMap(sharedState: GoogleSheetSyncSharedState, sheetName: string) {
+  const existingMap = sharedState.syncLinksBySheet.get(sheetName);
+  if (existingMap) {
+    return existingMap;
+  }
+
+  const nextMap = new Map<string, SyncLinkRow>();
+  sharedState.syncLinksBySheet.set(sheetName, nextMap);
+  return nextMap;
+}
+
+function upsertSharedArticleRow(sharedState: GoogleSheetSyncSharedState, row: ExistingArticleRow) {
+  const previousRow = sharedState.articleRowsById.get(row.id);
+  if (previousRow) {
+    removeLookupMaps(
+      sharedState.articleIdMap,
+      sharedState.compositeMap,
+      sharedState.titlePenNameMap,
+      sharedState.linkMap,
+      previousRow
+    );
+  }
+
+  sharedState.articleRowsById.set(row.id, row);
+  sharedState.existingArticleIds.add(row.id);
+  setLookupMaps(
+    sharedState.articleIdMap,
+    sharedState.compositeMap,
+    sharedState.titlePenNameMap,
+    sharedState.linkMap,
+    row
+  );
+}
+
+function upsertSharedSyncLink(sharedState: GoogleSheetSyncSharedState, syncLink: SyncLinkRow) {
+  for (const sheetMap of sharedState.syncLinksBySheet.values()) {
+    for (const [sourceRowKey, existingLink] of sheetMap.entries()) {
+      if (existingLink.id === syncLink.id && sourceRowKey !== syncLink.sourceRowKey) {
+        sheetMap.delete(sourceRowKey);
+      }
+    }
+  }
+
+  const sheetMap = getSharedSheetSyncLinkMap(sharedState, syncLink.sheetName || '');
+  sheetMap.set(syncLink.sourceRowKey, syncLink);
+}
+
+function removeSharedSyncLinksByIds(sharedState: GoogleSheetSyncSharedState, linkIds: number[]) {
+  if (linkIds.length === 0) return;
+  const idSet = new Set(linkIds);
+
+  for (const sheetMap of sharedState.syncLinksBySheet.values()) {
+    for (const [sourceRowKey, existingLink] of sheetMap.entries()) {
+      if (idSet.has(existingLink.id)) {
+        sheetMap.delete(sourceRowKey);
+      }
+    }
+  }
+}
+
+function removeSharedSyncLinksByArticleIds(sharedState: GoogleSheetSyncSharedState, articleIds: number[]) {
+  if (articleIds.length === 0) return;
+  const articleIdSet = new Set(articleIds);
+
+  for (const sheetMap of sharedState.syncLinksBySheet.values()) {
+    for (const [sourceRowKey, existingLink] of sheetMap.entries()) {
+      if (articleIdSet.has(Number(existingLink.articleIdRef || 0))) {
+        sheetMap.delete(sourceRowKey);
+      }
+    }
+  }
+}
+
+function removeSharedArticles(sharedState: GoogleSheetSyncSharedState, articleIds: number[]) {
+  if (articleIds.length === 0) return;
+
+  removeSharedSyncLinksByArticleIds(sharedState, articleIds);
+  for (const articleId of articleIds) {
+    const existingRow = sharedState.articleRowsById.get(articleId);
+    if (!existingRow) continue;
+
+    removeLookupMaps(
+      sharedState.articleIdMap,
+      sharedState.compositeMap,
+      sharedState.titlePenNameMap,
+      sharedState.linkMap,
+      existingRow
+    );
+    sharedState.articleRowsById.delete(articleId);
+    sharedState.existingArticleIds.delete(articleId);
+  }
+}
+
+async function createGoogleSheetSyncSharedState(sourceUrl: string, identityCandidates: string[]) {
+  const restrictToIdentityScope = identityCandidates.length > 0;
+  const allExistingArticles = await getAllExistingArticles();
+  const existingArticles = restrictToIdentityScope
+    ? allExistingArticles.filter((row) => matchesIdentityCandidate(identityCandidates, row.penName))
+    : allExistingArticles;
+
+  const articleRowsById = new Map<number, ExistingArticleRow>();
+  const articleIdMap = new Map<string, ExistingArticleRow>();
+  const compositeMap = new Map<string, ExistingArticleRow>();
+  const titlePenNameMap = new Map<string, ExistingArticleRow>();
+  const linkMap = new Map<string, ExistingArticleRow>();
+
+  for (const row of existingArticles) {
+    articleRowsById.set(row.id, row);
+    setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, row);
+  }
+
+  const existingArticleIds = new Set(articleRowsById.keys());
+  const allSyncLinks = await db
+    .select({
+      id: articleSyncLinks.id,
+      sourceRowKey: articleSyncLinks.sourceRowKey,
+      articleIdRef: articleSyncLinks.articleIdRef,
+      sourceUrl: articleSyncLinks.sourceUrl,
+      sheetName: articleSyncLinks.sheetName,
+      sheetMonth: articleSyncLinks.sheetMonth,
+      sheetYear: articleSyncLinks.sheetYear,
+    })
+    .from(articleSyncLinks)
+    .where(eq(articleSyncLinks.sourceUrl, sourceUrl))
+    .all() as SyncLinkRow[];
+
+  const filteredSyncLinks = restrictToIdentityScope
+    ? allSyncLinks.filter((link) => Number.isInteger(Number(link.articleIdRef || 0)) && existingArticleIds.has(Number(link.articleIdRef)))
+    : allSyncLinks;
+
+  const syncLinksBySheet = new Map<string, Map<string, SyncLinkRow>>();
+  for (const syncLink of filteredSyncLinks) {
+    const sheetMap = getSharedSheetSyncLinkMap({
+      sourceUrl,
+      existingArticleIds,
+      articleRowsById,
+      articleIdMap,
+      compositeMap,
+      titlePenNameMap,
+      linkMap,
+      syncLinksBySheet,
+    }, syncLink.sheetName || '');
+    sheetMap.set(syncLink.sourceRowKey, syncLink);
+  }
+
+  return {
+    sourceUrl,
+    existingArticleIds,
+    articleRowsById,
+    articleIdMap,
+    compositeMap,
+    titlePenNameMap,
+    linkMap,
+    syncLinksBySheet,
+  } satisfies GoogleSheetSyncSharedState;
 }
 
 function resolvePreparedGoogleSheetMapping(
@@ -1027,56 +1217,12 @@ export async function executeGoogleSheetSync(
   }
 
   const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
-  const allExistingArticles = await db
-    .select({
-      id: articles.id,
-      articleId: articles.articleId,
-      title: articles.title,
-      penName: articles.penName,
-      date: articles.date,
-      link: articles.link,
-      category: articles.category,
-      articleType: articles.articleType,
-      contentType: articles.contentType,
-      wordCountRange: articles.wordCountRange,
-      status: articles.status,
-      reviewerName: articles.reviewerName,
-      notes: articles.notes,
-    })
-    .from(articles)
-    .all();
-  const existingArticles = restrictToIdentityScope
-    ? allExistingArticles.filter((row) => matchesIdentityCandidate(identityCandidates, row.penName))
-    : allExistingArticles;
-  const existingArticleIds = new Set(existingArticles.map((row) => row.id));
-
-  const articleIdMap = new Map<string, ExistingArticleRow>();
-  const compositeMap = new Map<string, ExistingArticleRow>();
-  const titlePenNameMap = new Map<string, ExistingArticleRow>();
-  const linkMap = new Map<string, ExistingArticleRow>();
-  for (const row of existingArticles) {
-    setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, row);
-  }
-
-  const sheetSyncLinks = await db
-    .select({
-      id: articleSyncLinks.id,
-      sourceRowKey: articleSyncLinks.sourceRowKey,
-      articleIdRef: articleSyncLinks.articleIdRef,
-    })
-    .from(articleSyncLinks)
-    .where(
-      and(
-        eq(articleSyncLinks.sourceUrl, sourceUrl),
-        eq(articleSyncLinks.sheetName, selectedSheet.name)
-      )
-    )
-    .all() as SyncLinkRow[];
-  const existingSyncLinks = restrictToIdentityScope
-    ? sheetSyncLinks.filter((link) => Number.isInteger(Number(link.articleIdRef || 0)) && existingArticleIds.has(Number(link.articleIdRef)))
-    : sheetSyncLinks;
-
-  const existingSyncLinkMap = new Map(existingSyncLinks.map((link) => [link.sourceRowKey, link]));
+  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(sourceUrl, identityCandidates);
+  const articleIdMap = sharedState.articleIdMap;
+  const compositeMap = sharedState.compositeMap;
+  const linkMap = sharedState.linkMap;
+  const existingSyncLinkMap = getSharedSheetSyncLinkMap(sharedState, selectedSheet.name);
+  const existingSyncLinks = [...existingSyncLinkMap.values()];
   const seenSourceRowKeys = new Set<string>();
   const seenArticleIds = new Set<number>();
 
@@ -1167,8 +1313,7 @@ export async function executeGoogleSheetSync(
             notes: Object.prototype.hasOwnProperty.call(nextPayload, "notes") ? (nextPayload.notes ?? null) : (target.notes ?? null),
           };
 
-          removeLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, target);
-          setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, finalArticleRow);
+          upsertSharedArticleRow(sharedState, finalArticleRow);
           updated += 1;
         }
       } else {
@@ -1183,13 +1328,20 @@ export async function executeGoogleSheetSync(
           .get();
 
         resolvedArticleId = Number(insertedRow?.id);
-        setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, {
+        upsertSharedArticleRow(sharedState, {
           id: resolvedArticleId,
           articleId,
           title: normalized.title,
           penName: normalized.penName,
           date: normalized.date as string,
           link,
+          category: nextPayload.category ?? null,
+          articleType: nextPayload.articleType ?? null,
+          contentType: nextPayload.contentType ?? null,
+          wordCountRange: nextPayload.wordCountRange ?? null,
+          status: nextPayload.status ?? null,
+          reviewerName: Object.prototype.hasOwnProperty.call(nextPayload, "reviewerName") ? (nextPayload.reviewerName ?? null) : null,
+          notes: Object.prototype.hasOwnProperty.call(nextPayload, "notes") ? (nextPayload.notes ?? null) : null,
         });
         inserted += 1;
       }
@@ -1199,6 +1351,14 @@ export async function executeGoogleSheetSync(
         seenArticleIds.add(Number(resolvedArticleId));
       }
       if (existingLink) {
+        const nextSyncLink: SyncLinkRow = {
+          ...existingLink,
+          articleIdRef: resolvedArticleId,
+          sheetMonth: selectedSheet.month,
+          sheetYear: selectedSheet.year,
+          sheetName: selectedSheet.name,
+        };
+
         await db
           .update(articleSyncLinks)
           .set({
@@ -1209,8 +1369,10 @@ export async function executeGoogleSheetSync(
           })
           .where(eq(articleSyncLinks.id, existingLink.id))
           .run();
+
+        upsertSharedSyncLink(sharedState, nextSyncLink);
       } else {
-        await db
+        const insertedSyncLink = await db
           .insert(articleSyncLinks)
           .values({
             sourceUrl,
@@ -1220,7 +1382,18 @@ export async function executeGoogleSheetSync(
             sourceRowKey,
             articleIdRef: resolvedArticleId,
           })
-          .run();
+          .returning({ id: articleSyncLinks.id })
+          .get();
+
+        upsertSharedSyncLink(sharedState, {
+          id: Number(insertedSyncLink?.id),
+          sourceRowKey,
+          articleIdRef: resolvedArticleId,
+          sourceUrl,
+          sheetName: selectedSheet.name,
+          sheetMonth: selectedSheet.month,
+          sheetYear: selectedSheet.year,
+        });
       }
     } catch (rowError) {
       skipped += 1;
@@ -1255,11 +1428,13 @@ export async function executeGoogleSheetSync(
       .delete(articleSyncLinks)
       .where(inArray(articleSyncLinks.id, staleLinks.map((link) => link.id)))
       .run();
+    removeSharedSyncLinksByIds(sharedState, staleLinks.map((link) => link.id));
   }
 
   if (staleArticleIds.length > 0) {
     const deletedResult = await deleteArticlesForSync(staleArticleIds);
     deleted = deletedResult.deletedArticles;
+    removeSharedArticles(sharedState, staleArticleIds);
   }
 
   return {
@@ -1289,7 +1464,11 @@ export async function executeGoogleSheetWorkbookSync(
   await ensureDatabaseInitialized();
 
   const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames();
+  const identityCandidates = Array.from(
+    new Set((options.identityCandidates || []).map((value) => String(value || '').trim()).filter(Boolean))
+  );
   const { sourceUrl, workbook } = await downloadGoogleSheetWorkbook(options.sourceUrl);
+  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(sourceUrl, identityCandidates);
   const tabs = listMonthlySheetTabs(workbook.SheetNames);
 
   if (tabs.length === 0) {
@@ -1325,6 +1504,7 @@ export async function executeGoogleSheetWorkbookSync(
       _workbook: workbook,
       _collaboratorPenNames: collaboratorPenNames,
       _skipEnsureInitialized: true,
+      _sharedState: sharedState,
     });
 
     aggregate.total += result.total;
