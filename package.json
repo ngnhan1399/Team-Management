@@ -15,6 +15,7 @@
   "dependencies": {
     "@material-symbols/font-400": "^0.40.2",
     "@types/pg": "^8.18.0",
+    "@vercel/analytics": "^1.6.1",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.1",
     "jose": "^6.1.3",
