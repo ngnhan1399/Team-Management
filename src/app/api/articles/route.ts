@@ -8,7 +8,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { and, desc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
 type ArticleInsert = typeof articles.$inferInsert;
 type ArticleUpdateInput = Partial<ArticleInsert> & { id?: number };
@@ -60,6 +60,30 @@ async function runNonBlockingStep<T>(task: () => Promise<T>, options: NonBlockin
     console.error(`[${options.scope}]`, error);
     return options.fallback;
   }
+}
+
+function scheduleBackgroundWork(task: () => Promise<void>) {
+  after(async () => {
+    try {
+      await task();
+    } catch (error) {
+      console.error("[articles.background]", error);
+    }
+  });
+}
+
+async function notifyGoogleSheetSyncIssue(userId: number, message: string) {
+  await runNonBlockingStep(
+    () =>
+      publishRealtimeEvent({
+        channels: ["articles"],
+        userIds: [userId],
+        toastTitle: "Google Sheet chưa kịp đồng bộ",
+        toastMessage: message,
+        toastVariant: "warning",
+      }),
+    { scope: "articles.background.sheetSyncToast", fallback: null }
+  );
 }
 
 function readCriteriaFromSearchParams(searchParams: URLSearchParams): ArticleCriteria {
@@ -447,21 +471,23 @@ export async function POST(request: NextRequest) {
       .returning({ id: articles.id })
       .get();
 
-    await runNonBlockingStep(
-      () => writeAuditLog({
-        userId: context.user.id,
-        action: "article_created",
-        entity: "article",
-        entityId: String(insertedArticle?.id),
-        payload: { title, penName: finalPenName },
-      }),
-      { scope: "articles.post.audit", fallback: undefined }
-    );
+    const createdArticleId = Number(insertedArticle?.id);
+    if (createdArticleId > 0) {
+      scheduleBackgroundWork(async () => {
+        await runNonBlockingStep(
+          () => writeAuditLog({
+            userId: context.user.id,
+            action: "article_created",
+            entity: "article",
+            entityId: String(createdArticleId),
+            payload: { title, penName: finalPenName },
+          }),
+          { scope: "articles.post.audit", fallback: undefined }
+        );
 
-    const sheetSync = insertedArticle?.id
-      ? await runNonBlockingStep(
+        const sheetSyncResult = await runNonBlockingStep(
           () => createArticleInGoogleSheet({
-            articleId: Number(insertedArticle.id),
+            articleId: createdArticleId,
             actorUserId: context.user.id,
             actorDisplayName: getContextDisplayName(context),
             reason: "article_post",
@@ -475,15 +501,24 @@ export async function POST(request: NextRequest) {
               message: "Không thể kết nối tới Google Sheet lúc này. Bài viết vẫn đã lưu trong hệ thống.",
             },
           }
-        )
-      : null;
+        );
 
-    await runNonBlockingStep(
-      () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
-      { scope: "articles.post.realtime", fallback: null }
-    );
+        if (sheetSyncResult && (sheetSyncResult.skipped || !sheetSyncResult.success)) {
+          await notifyGoogleSheetSyncIssue(context.user.id, sheetSyncResult.message);
+        }
 
-    return NextResponse.json({ success: true, id: Number(insertedArticle?.id), sheetSync });
+        await runNonBlockingStep(
+          () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
+          { scope: "articles.post.realtime", fallback: null }
+        );
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      id: createdArticleId,
+      backgroundSyncQueued: createdArticleId > 0,
+    });
   } catch (error) {
     return handleServerError("articles.post", error);
   }
@@ -558,19 +593,20 @@ export async function PUT(request: NextRequest) {
       .where(eq(articles.id, id))
       .run();
 
-    await runNonBlockingStep(
-      () => writeAuditLog({
-        userId: context.user.id,
-        action: "article_updated",
-        entity: "article",
-        entityId: id,
-        payload: updateData,
-      }),
-      { scope: "articles.put.audit", fallback: undefined }
-    );
+    scheduleBackgroundWork(async () => {
+      await runNonBlockingStep(
+        () => writeAuditLog({
+          userId: context.user.id,
+          action: "article_updated",
+          entity: "article",
+          entityId: id,
+          payload: updateData,
+        }),
+        { scope: "articles.put.audit", fallback: undefined }
+      );
 
-    const sheetSync = shouldMirrorToGoogleSheet
-      ? await runNonBlockingStep(
+      if (shouldMirrorToGoogleSheet) {
+        const sheetSyncResult = await runNonBlockingStep(
           () => mirrorArticleUpdateToGoogleSheet({
             articleId: id,
             actorUserId: context.user.id,
@@ -586,15 +622,20 @@ export async function PUT(request: NextRequest) {
               message: "Không thể kết nối tới Google Sheet lúc này. Bài viết vẫn đã được cập nhật trong hệ thống.",
             },
           }
-        )
-      : null;
+        );
 
-    await runNonBlockingStep(
-      () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
-      { scope: "articles.put.realtime", fallback: null }
-    );
+        if (sheetSyncResult && (sheetSyncResult.skipped || !sheetSyncResult.success)) {
+          await notifyGoogleSheetSyncIssue(context.user.id, sheetSyncResult.message);
+        }
+      }
 
-    return NextResponse.json({ success: true, sheetSync });
+      await runNonBlockingStep(
+        () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
+        { scope: "articles.put.realtime", fallback: null }
+      );
+    });
+
+    return NextResponse.json({ success: true, backgroundSyncQueued: true });
   } catch (error) {
     return handleServerError("articles.put", error);
   }
