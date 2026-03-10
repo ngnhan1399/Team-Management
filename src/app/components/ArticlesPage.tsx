@@ -40,6 +40,7 @@ const CATEGORY_OPTIONS = ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "
 const ARTICLE_TYPE_OPTIONS = ["Mô tả SP ngắn", "Mô tả SP dài", "Bài dịch Review SP", "Bài SEO ICT", "Bài SEO Gia dụng", "Bài SEO ICT 1K5", "Bài SEO Gia dụng 1K5", "Bài SEO ICT 2K", "Bài SEO Gia dụng 2K", "Thủ thuật"];
 const CONTENT_TYPE_OPTIONS = ["Viết mới", "Viết lại"];
 const DEFAULT_ARTICLE_STATUS = "Submitted";
+const LINK_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
 const ARTICLE_STATUS_OPTIONS = [
   { value: "", label: "Tất cả" },
   { value: "Draft", label: "📋 Nháp" },
@@ -68,6 +69,8 @@ const EMPTY_DELETE_CRITERIA: ArticleDeleteCriteria = {
 };
 
 export default function ArticlesPage() {
+  type LinkHealthStatus = "ok" | "broken" | "unknown";
+  type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
   const { user } = useAuth();
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const importInputId = React.useId();
@@ -110,7 +113,7 @@ export default function ArticlesPage() {
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" });
-  const [brokenLinks, setBrokenLinks] = useState<Record<string, boolean>>({});
+  const [linkHealth, setLinkHealth] = useState<Record<string, LinkHealthEntry>>({});
   const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [commentArticle, setCommentArticle] = useState<Article | null>(null);
   const [comments, setComments] = useState<ArticleComment[]>([]);
@@ -147,19 +150,43 @@ export default function ArticlesPage() {
   useEffect(() => {
     const published = articles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
     if (published.length === 0) {
-      setBrokenLinks({});
+      setLinkHealth({});
       return;
     }
     const urls = Array.from(new Set(published.map(a => a.link).filter(Boolean)));
-    const pendingUrls = urls.filter((url) => !(url in brokenLinks));
+    setLinkHealth((prev) => {
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([url]) => urls.includes(url))
+      );
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+
+    const now = Date.now();
+    const pendingUrls = urls.filter((url) => {
+      const existingEntry = linkHealth[url];
+      if (!existingEntry) return true;
+      if (existingEntry.status === "ok") return false;
+      return now - existingEntry.checkedAt >= LINK_RECHECK_INTERVAL_MS;
+    });
     if (pendingUrls.length === 0) {
       return;
     }
     fetch("/api/check-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: pendingUrls }) })
       .then(r => r.json())
-      .then(d => { if (d.success) setBrokenLinks(prev => ({ ...prev, ...d.results })); })
+      .then(d => {
+        if (d.success && d.results) {
+          const checkedAt = Date.now();
+          const nextEntries = Object.fromEntries(
+            Object.entries(d.results as Record<string, LinkHealthStatus>).map(([url, status]) => [
+              url,
+              { status, checkedAt },
+            ])
+          );
+          setLinkHealth(prev => ({ ...prev, ...nextEntries }));
+        }
+      })
       .catch(() => { });
-  }, [articles, brokenLinks]);
+  }, [articles, linkHealth]);
 
   const handleSearch = (e?: React.FormEvent) => { e?.preventDefault(); fetchArticles(1, search, filters); };
   const applyFilter = (key: string, val: string) => { const f = { ...filters, [key]: val }; setFilters(f); fetchArticles(1, search, f); };
@@ -848,7 +875,9 @@ export default function ArticlesPage() {
       return <span style={{ color: "rgba(0,0,0,0.2)" }}>—</span>;
     }
 
-    if (isApprovedArticleStatus(article.status) && brokenLinks[article.link] === false) {
+    const health = article.link ? linkHealth[article.link] : undefined;
+
+    if (isApprovedArticleStatus(article.status) && health?.status === "broken") {
       return (
         <span title="Link lỗi" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link_off</span>
@@ -856,7 +885,7 @@ export default function ArticlesPage() {
       );
     }
 
-    if (isApprovedArticleStatus(article.status) && brokenLinks[article.link] === true) {
+    if (isApprovedArticleStatus(article.status) && health?.status === "ok") {
       return (
         <span title="Link hoạt động" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--success)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link</span>
@@ -864,8 +893,16 @@ export default function ArticlesPage() {
       );
     }
 
+    if (isApprovedArticleStatus(article.status) && health?.status === "unknown") {
+      return (
+        <span title="Chưa xác minh được link, hệ thống sẽ tự kiểm tra lại" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-orange)" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>help_center</span>
+        </span>
+      );
+    }
+
     return (
-      <span title="Có link" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-blue)" }}>
+      <span title={isApprovedArticleStatus(article.status) ? "Đang kiểm tra link" : "Có link"} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-blue)" }}>
         <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link</span>
       </span>
     );

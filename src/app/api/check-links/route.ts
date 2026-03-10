@@ -1,6 +1,8 @@
 import { getCurrentUserContext } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 
+type LinkCheckStatus = "ok" | "broken" | "unknown";
+
 function isPrivateHostname(hostname: string) {
     const normalized = hostname.trim().toLowerCase();
     if (!normalized) return true;
@@ -20,6 +22,16 @@ function isPrivateHostname(hostname: string) {
 
 function isLikelyReachableStatus(status: number) {
     return (status >= 200 && status < 400) || [401, 403, 405, 416, 429].includes(status);
+}
+
+function isConfirmedBrokenStatus(status: number) {
+    return [404, 410, 451].includes(status);
+}
+
+function classifyResponseStatus(status: number): LinkCheckStatus {
+    if (isLikelyReachableStatus(status)) return "ok";
+    if (isConfirmedBrokenStatus(status)) return "broken";
+    return "unknown";
 }
 
 async function requestUrl(url: URL, method: "HEAD" | "GET", signal: AbortSignal) {
@@ -51,41 +63,51 @@ export async function POST(request: NextRequest) {
         }
 
         const maxCheck = Math.min(urls.length, 50);
-        const results: Record<string, boolean> = {};
+        const results: Record<string, LinkCheckStatus> = {};
 
         await Promise.allSettled(
             urls.slice(0, maxCheck).map(async (url: string) => {
                 try {
                     if (!url) {
-                        results[url] = false;
+                        results[url] = "broken";
                         return;
                     }
 
                     const parsedUrl = new URL(url);
                     if (!["http:", "https:"].includes(parsedUrl.protocol) || isPrivateHostname(parsedUrl.hostname)) {
-                        results[url] = false;
+                        results[url] = "broken";
                         return;
                     }
 
                     const controller = new AbortController();
                     const timeout = setTimeout(() => controller.abort(), 10000);
 
-                    let reachable = false;
+                    let status: LinkCheckStatus = "unknown";
                     try {
                         const headResponse = await requestUrl(parsedUrl, "HEAD", controller.signal);
-                        reachable = isLikelyReachableStatus(headResponse.status);
+                        const headStatus = classifyResponseStatus(headResponse.status);
 
-                        if (!reachable) {
+                        if (headStatus === "ok") {
+                            status = "ok";
+                        } else {
                             const getResponse = await requestUrl(parsedUrl, "GET", controller.signal);
-                            reachable = isLikelyReachableStatus(getResponse.status);
+                            const getStatus = classifyResponseStatus(getResponse.status);
+
+                            if (getStatus === "ok") {
+                                status = "ok";
+                            } else if (headStatus === "broken" && getStatus === "broken") {
+                                status = "broken";
+                            } else {
+                                status = "unknown";
+                            }
                         }
                     } finally {
                         clearTimeout(timeout);
                     }
 
-                    results[url] = reachable;
+                    results[url] = status;
                 } catch {
-                    results[url] = false;
+                    results[url] = "unknown";
                 }
             })
         );
