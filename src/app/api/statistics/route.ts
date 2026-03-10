@@ -25,9 +25,102 @@ function resolveCollaborator(articlePenName: string, directory: CollaboratorDire
 }
 
 function getActivityTimestamp(article: { id: number; date: string; createdAt?: string | null; updatedAt?: string | null }) {
-    const value = article.updatedAt || article.createdAt || article.date;
-    const timestamp = new Date(value).getTime();
-    return Number.isFinite(timestamp) ? timestamp : 0;
+  const value = article.updatedAt || article.createdAt || article.date;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function groupCount<T extends string>(values: T[]) {
+  return Object.entries(values.reduce<Record<string, number>>((acc, value) => {
+    acc[value] = (acc[value] || 0) + 1;
+    return acc;
+  }, {})).map(([key, count]) => ({ key, count }));
+}
+
+async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[]) {
+  const [
+    totalArticlesRow,
+    totalCTVRow,
+    statusRows,
+    categoryRows,
+    typeRows,
+    monthRows,
+    writerRows,
+    latestArticlesRows,
+  ] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(articles).get(),
+    db.select({ count: sql<number>`count(*)` }).from(collaborators).get(),
+    db.select({
+      status: articles.status,
+      count: sql<number>`count(*)`,
+    }).from(articles).groupBy(articles.status).all(),
+    db.select({
+      category: articles.category,
+      count: sql<number>`count(*)`,
+    }).from(articles).groupBy(articles.category).all(),
+    db.select({
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      count: sql<number>`count(*)`,
+    }).from(articles).groupBy(articles.articleType, articles.contentType).all(),
+    db.select({
+      date: articles.date,
+      count: sql<number>`count(*)`,
+    }).from(articles).groupBy(articles.date).all(),
+    db.select({
+      penName: articles.penName,
+      count: sql<number>`count(*)`,
+    }).from(articles).groupBy(articles.penName).all(),
+    db.select({
+      id: articles.id,
+      articleId: articles.articleId,
+      title: articles.title,
+      penName: articles.penName,
+      articleType: articles.articleType,
+      status: articles.status,
+      date: articles.date,
+      createdAt: articles.createdAt,
+      updatedAt: articles.updatedAt,
+    }).from(articles).orderBy(desc(articles.updatedAt), desc(articles.id)).limit(8).all(),
+  ]);
+
+  const articlesByWriter = writerRows
+    .map((row) => {
+      const resolvedCollaborator = resolveCollaborator(row.penName, allCollaborators);
+      return {
+        penName: resolvedCollaborator?.penName || row.penName,
+        displayName: resolvedCollaborator?.name || resolvedCollaborator?.penName || row.penName,
+        count: Number(row.count || 0),
+      };
+    })
+    .sort((left, right) => right.count - left.count || left.displayName.localeCompare(right.displayName, "vi"));
+
+  const latestArticles = latestArticlesRows.map((article) => ({
+    id: article.id,
+    articleId: article.articleId,
+    title: article.title,
+    penName: resolveCollaborator(article.penName, allCollaborators)?.penName || article.penName,
+    writerDisplayName: resolveCollaborator(article.penName, allCollaborators)?.name || article.penName,
+    articleType: article.articleType,
+    status: article.status,
+    date: article.date,
+    updatedAt: article.updatedAt || article.createdAt || article.date,
+  }));
+
+  return {
+    totalArticles: Number(totalArticlesRow?.count || 0),
+    totalCTVs: Number(totalCTVRow?.count || 0),
+    articlesByStatus: statusRows.map((row) => ({ status: row.status, count: Number(row.count || 0) })),
+    articlesByCategory: categoryRows.map((row) => ({ category: row.category, count: Number(row.count || 0) })),
+    articlesByWriter,
+    articlesByType: typeRows.map((row) => ({
+      articleType: row.articleType,
+      contentType: row.contentType,
+      count: Number(row.count || 0),
+    })),
+    articlesByMonth: monthRows.map((row) => ({ date: row.date, count: Number(row.count || 0) })),
+    latestArticles,
+  };
 }
 
 export async function GET() {
@@ -48,21 +141,18 @@ export async function GET() {
             })
             .from(collaborators)
             .all();
+        if (context.user.role === "admin") {
+            return NextResponse.json({
+                success: true,
+                data: await getAdminStatistics(allCollaborators),
+            });
+        }
+
         const allArticles = await db.select().from(articles).orderBy(desc(articles.id)).all();
-        const scopedArticles = context.user.role === "admin"
-            ? allArticles
-            : allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
+        const scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
 
         const totalArticles = scopedArticles.length;
-        const totalCTVCount = context.user.role === "admin"
-            ? (await db.select({ count: sql<number>`count(*)` }).from(collaborators).get())?.count || 0
-            : identityCandidates.length > 0 ? 1 : 0;
-
-        const groupCount = <T extends string>(values: T[]) =>
-            Object.entries(values.reduce<Record<string, number>>((acc, value) => {
-                acc[value] = (acc[value] || 0) + 1;
-                return acc;
-            }, {})).map(([key, count]) => ({ key, count }));
+        const totalCTVCount = identityCandidates.length > 0 ? 1 : 0;
 
         const articlesByStatus = groupCount(scopedArticles.map((article) => article.status))
             .map(({ key, count }) => ({ status: key, count }));

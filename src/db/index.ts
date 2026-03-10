@@ -310,7 +310,29 @@ const bootstrapStatements = [
   "CREATE INDEX IF NOT EXISTS idx_realtime_events_user_scope ON realtime_events(user_scope)",
 ];
 
+const RUNTIME_META_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS app_runtime_meta (
+    meta_key TEXT PRIMARY KEY,
+    meta_value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )
+`;
+
+const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
+const BOOTSTRAP_SCHEMA_VERSION = "1";
+
 export async function initializeDatabase() {
+  await pool.query(RUNTIME_META_TABLE_SQL);
+
+  const bootstrapMeta = await pool.query(
+    "SELECT meta_value FROM app_runtime_meta WHERE meta_key = $1 LIMIT 1",
+    [BOOTSTRAP_META_KEY]
+  );
+
+  if (bootstrapMeta.rowCount && bootstrapMeta.rows[0]?.meta_value === BOOTSTRAP_SCHEMA_VERSION) {
+    return;
+  }
+
   for (const statement of bootstrapStatements) {
     await pool.query(statement);
   }
@@ -335,6 +357,16 @@ export async function initializeDatabase() {
     )
     WHERE created_by_user_id IS NULL
   `);
+
+  await pool.query(
+    `
+      INSERT INTO app_runtime_meta (meta_key, meta_value, updated_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP::text)
+      ON CONFLICT (meta_key)
+      DO UPDATE SET meta_value = EXCLUDED.meta_value, updated_at = EXCLUDED.updated_at
+    `,
+    [BOOTSTRAP_META_KEY, BOOTSTRAP_SCHEMA_VERSION]
+  );
 }
 
 export function ensureDatabaseInitialized() {
