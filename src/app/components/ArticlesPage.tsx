@@ -39,6 +39,12 @@ const IMPORTANT_IMPORT_FIELDS = ["articleId", "date", "title", "penName", "statu
 const CATEGORY_OPTIONS = ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "Khác"];
 const ARTICLE_TYPE_OPTIONS = ["Mô tả SP ngắn", "Mô tả SP dài", "Bài dịch Review SP", "Bài SEO ICT", "Bài SEO Gia dụng", "Bài SEO ICT 1K5", "Bài SEO Gia dụng 1K5", "Bài SEO ICT 2K", "Bài SEO Gia dụng 2K", "Thủ thuật"];
 const CONTENT_TYPE_OPTIONS = ["Viết mới", "Viết lại"];
+const WORD_COUNT_RANGE_OPTIONS = [
+  { value: "800-1000", label: "800-1000 chữ" },
+  { value: "1000-1500", label: "1000-1500 chữ" },
+  { value: "1500-2000", label: "1500-2000 chữ" },
+  { value: "Từ 2000 trở lên", label: "Từ 2000 chữ trở lên" },
+];
 const DEFAULT_ARTICLE_STATUS = "Submitted";
 const LINK_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
 const ARTICLE_PAGE_SIZE = 30;
@@ -68,6 +74,26 @@ const EMPTY_DELETE_CRITERIA: ArticleDeleteCriteria = {
   year: "",
   reviewerName: "",
 };
+
+function normalizeWordCountRangeValue(value: string | null | undefined) {
+  const normalized = String(value || "").trim();
+  switch (normalized) {
+    case "800-1000":
+    case "800 - 1000 chữ":
+      return "800-1000";
+    case "1000-1500":
+    case "1000 - 1500 chữ":
+      return "1000-1500";
+    case "1500-2000":
+    case "1500 - 2000 chữ":
+      return "1500-2000";
+    case "Từ 2000 trở lên":
+    case "Từ 2000 chữ trở lên":
+      return "Từ 2000 trở lên";
+    default:
+      return "";
+  }
+}
 
 export default function ArticlesPage() {
   type LinkHealthStatus = "ok" | "broken" | "unknown";
@@ -526,7 +552,15 @@ export default function ArticlesPage() {
   };
 
   const handleSave = async () => {
-    if (!formData.title || !formData.penName || !formData.date || savingArticle) return;
+    if (savingArticle) return;
+    if (!formData.title || !formData.penName || !formData.date) {
+      alert("❌ Vui lòng nhập đủ tiêu đề, bút danh và ngày thực hiện.");
+      return;
+    }
+    if (!normalizeWordCountRangeValue(formData.wordCountRange)) {
+      alert("❌ Vui lòng chọn độ dài bài viết để đồng bộ đúng với file Excel gốc.");
+      return;
+    }
 
     try {
       setSavingArticle(true);
@@ -534,7 +568,10 @@ export default function ArticlesPage() {
       const res = await fetch("/api/articles", {
         method: formData.id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          wordCountRange: normalizeWordCountRangeValue(formData.wordCountRange),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
@@ -1092,7 +1129,7 @@ export default function ArticlesPage() {
               Xuất
             </a>
           )}
-          <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: isAdmin ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS }); setShowModal(true); }}>
+          <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: isAdmin ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" }); setShowModal(true); }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
             Thêm bài viết
           </button>
@@ -1299,7 +1336,7 @@ export default function ArticlesPage() {
                         <button data-testid={`article-comment-${a.id}`} onClick={() => openComments(a)} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Bình luận">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>forum</span>
                         </button>
-                        <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
+                        <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                         </button>
                         {(isAdmin || a.canDelete) && (
@@ -1380,6 +1417,15 @@ export default function ArticlesPage() {
               </div>
               <div className="grid-2">
                 <div className="form-group">
+                  <label className="form-label">Độ dài</label>
+                  <CustomSelect
+                    value={normalizeWordCountRangeValue(formData.wordCountRange)}
+                    onChange={v => setFormData({ ...formData, wordCountRange: v })}
+                    options={WORD_COUNT_RANGE_OPTIONS}
+                    placeholder="Chọn độ dài"
+                  />
+                </div>
+                <div className="form-group">
                   <label className="form-label">Trạng thái hiện tại</label>
                   <CustomSelect
                     value={formData.status === "Approved" ? "Published" : formData.status || DEFAULT_ARTICLE_STATUS}
@@ -1396,10 +1442,10 @@ export default function ArticlesPage() {
                     ]}
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Mã ID hệ thống</label>
-                  <input className="form-input" value={formData.articleId || ""} onChange={e => setFormData({ ...formData, articleId: e.target.value })} placeholder="VD: post-123" />
-                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Mã ID hệ thống</label>
+                <input className="form-input" value={formData.articleId || ""} onChange={e => setFormData({ ...formData, articleId: e.target.value })} placeholder="VD: post-123" />
               </div>
               <div className="form-group">
                 <label className="form-label">Đường dẫn bài viết (URL)</label>
@@ -2516,3 +2562,4 @@ export default function ArticlesPage() {
 }
 
 /* ══════════════════════════ TEAM ══════════════════════════ */
+
