@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
 import CustomSelect from "./CustomSelect";
 import { useRealtimeRefresh } from "./realtime";
-import { isApprovedArticleStatus } from "@/lib/article-status";
+import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import type {
   Article,
   ArticleComment,
@@ -41,6 +41,7 @@ const ARTICLE_TYPE_OPTIONS = ["Mô tả SP ngắn", "Mô tả SP dài", "Bài d�
 const CONTENT_TYPE_OPTIONS = ["Viết mới", "Viết lại"];
 const DEFAULT_ARTICLE_STATUS = "Submitted";
 const LINK_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
+const ARTICLE_PAGE_SIZE = 30;
 const ARTICLE_STATUS_OPTIONS = [
   { value: "", label: "Tất cả" },
   { value: "Draft", label: "📋 Nháp" },
@@ -529,6 +530,7 @@ export default function ArticlesPage() {
 
     try {
       setSavingArticle(true);
+      const isEditing = Boolean(formData.id);
       const res = await fetch("/api/articles", {
         method: formData.id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -539,17 +541,13 @@ export default function ArticlesPage() {
         throw new Error(data.error || "Không thể lưu bài viết");
       }
 
-      if (data.sheetSync && data.sheetSync.attempted && !data.sheetSync.success) {
-        alert(`⚠️ Bài viết đã lưu trong hệ thống nhưng chưa ghi được sang Google Sheet.\n\n${data.sheetSync.message || "Hãy kiểm tra cấu hình Apps Script/Vercel."}`);
-      }
-
-      if (data.sheetSync && data.sheetSync.skipped) {
-        alert(`ℹ️ Bài viết đã lưu trong hệ thống.\nGoogle Sheet chưa được cập nhật: ${data.sheetSync.message}`);
-      }
-
       setShowModal(false);
       setFormData({});
-      fetchArticles(pagination.page);
+      if (data.article) {
+        mergeSavedArticleIntoList(data.article as Article, isEditing);
+      } else {
+        fetchArticles(pagination.page, search, filters);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/Failed to fetch/i.test(message)) {
@@ -707,6 +705,104 @@ export default function ArticlesPage() {
   };
 
   const quickSyncSelection = getQuickSyncSelection();
+
+  const compareArticleRows = useCallback((left: Article, right: Article) => {
+    const dateCompare = String(right.date || "").localeCompare(String(left.date || ""));
+    if (dateCompare !== 0) return dateCompare;
+
+    const updatedCompare = String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""));
+    if (updatedCompare !== 0) return updatedCompare;
+
+    return Number(right.id || 0) - Number(left.id || 0);
+  }, []);
+
+  const doesArticleMatchCurrentView = useCallback((article: Article) => {
+    const normalizedSearch = search.trim().toLowerCase();
+    if (normalizedSearch) {
+      const haystack = [
+        article.title,
+        article.articleId,
+        article.penName,
+        article.notes,
+      ]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ");
+
+      if (!haystack.includes(normalizedSearch)) {
+        return false;
+      }
+    }
+
+    if (!isAdmin && user?.collaborator?.penName && article.penName !== user.collaborator.penName) {
+      return false;
+    }
+    if (isAdmin && filters.penName && article.penName !== filters.penName) {
+      return false;
+    }
+    if (filters.status) {
+      const matchesStatus = isApprovedArticleStatusFilterValue(filters.status)
+        ? isApprovedArticleStatus(article.status)
+        : article.status === filters.status;
+      if (!matchesStatus) {
+        return false;
+      }
+    }
+    if (filters.category && article.category !== filters.category) {
+      return false;
+    }
+    if (filters.articleType && article.articleType !== filters.articleType) {
+      return false;
+    }
+    if (filters.contentType && article.contentType !== filters.contentType) {
+      return false;
+    }
+    if (filters.year && !String(article.date || "").startsWith(`${filters.year}-`)) {
+      return false;
+    }
+    if (filters.month) {
+      const expectedMonth = `-${filters.month.padStart(2, "0")}-`;
+      if (!String(article.date || "").includes(expectedMonth)) {
+        return false;
+      }
+    }
+
+    return true;
+  }, [filters, isAdmin, search, user]);
+
+  const mergeSavedArticleIntoList = useCallback((savedArticle: Article, isEditing: boolean) => {
+    const shouldBeVisible = doesArticleMatchCurrentView(savedArticle);
+    const wasVisible = articles.some((article) => article.id === savedArticle.id);
+
+    if ((pagination.page || 1) === 1 || wasVisible) {
+      setArticles((prev) => {
+        const withoutCurrent = prev.filter((article) => article.id !== savedArticle.id);
+        if (!shouldBeVisible) {
+          return withoutCurrent;
+        }
+
+        return [savedArticle, ...withoutCurrent]
+          .sort(compareArticleRows)
+          .slice(0, ARTICLE_PAGE_SIZE);
+      });
+    }
+
+    setPagination((prev) => {
+      const total = Number(prev.total || 0);
+      let nextTotal = total;
+
+      if (!isEditing && shouldBeVisible) {
+        nextTotal += 1;
+      } else if (isEditing && wasVisible && !shouldBeVisible) {
+        nextTotal = Math.max(0, nextTotal - 1);
+      }
+
+      return {
+        ...prev,
+        total: nextTotal,
+        totalPages: Math.ceil(nextTotal / ARTICLE_PAGE_SIZE),
+      };
+    });
+  }, [articles, compareArticleRows, doesArticleMatchCurrentView, pagination.page]);
 
   const focusSyncedArticles = (month: number, year: number) => {
     const nextFilters = {

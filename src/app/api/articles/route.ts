@@ -44,6 +44,25 @@ type DeleteResult = {
   clearedPayments: number;
 };
 
+type ArticleResponseRow = {
+  id: number;
+  articleId: string | null;
+  date: string;
+  title: string;
+  penName: string;
+  createdByUserId: number | null;
+  updatedAt: string;
+  category: string;
+  articleType: string;
+  contentType: string;
+  wordCountRange: string | null;
+  status: string;
+  link: string | null;
+  reviewerName: string | null;
+  notes: string | null;
+  canDelete: boolean;
+};
+
 type NonBlockingStepOptions<T> = {
   scope: string;
   fallback: T;
@@ -70,6 +89,37 @@ function scheduleBackgroundWork(task: () => Promise<void>) {
       console.error("[articles.background]", error);
     }
   });
+}
+
+async function loadArticleResponseRow(articleId: number, currentUserId: number, isAdmin: boolean): Promise<ArticleResponseRow | null> {
+  const row = await db
+    .select({
+      id: articles.id,
+      articleId: articles.articleId,
+      date: articles.date,
+      title: articles.title,
+      penName: articles.penName,
+      createdByUserId: articles.createdByUserId,
+      updatedAt: articles.updatedAt,
+      category: articles.category,
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      wordCountRange: articles.wordCountRange,
+      status: articles.status,
+      link: articles.link,
+      reviewerName: articles.reviewerName,
+      notes: articles.notes,
+    })
+    .from(articles)
+    .where(eq(articles.id, articleId))
+    .get();
+
+  if (!row) return null;
+
+  return {
+    ...row,
+    canDelete: isAdmin || row.createdByUserId === currentUserId,
+  };
 }
 
 async function notifyGoogleSheetSyncIssue(userId: number, message: string) {
@@ -514,10 +564,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const article = createdArticleId > 0
+      ? await loadArticleResponseRow(createdArticleId, context.user.id, context.user.role === "admin")
+      : null;
+
     return NextResponse.json({
       success: true,
       id: createdArticleId,
       backgroundSyncQueued: createdArticleId > 0,
+      article,
     });
   } catch (error) {
     return handleServerError("articles.post", error);
@@ -635,7 +690,9 @@ export async function PUT(request: NextRequest) {
       );
     });
 
-    return NextResponse.json({ success: true, backgroundSyncQueued: true });
+    const article = await loadArticleResponseRow(id, context.user.id, context.user.role === "admin");
+
+    return NextResponse.json({ success: true, backgroundSyncQueued: true, article });
   } catch (error) {
     return handleServerError("articles.put", error);
   }

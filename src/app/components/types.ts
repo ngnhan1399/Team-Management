@@ -33,6 +33,7 @@ export interface Article {
   title: string;
   penName: string;
   createdByUserId?: number | null;
+  updatedAt?: string;
   category: string;
   articleType: string;
   contentType: string;
