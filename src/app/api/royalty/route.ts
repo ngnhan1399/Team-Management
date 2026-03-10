@@ -143,6 +143,7 @@ export async function GET(request: NextRequest) {
             const currentArticles = monthlyMap[currentKey]?.totalArticles || 0;
             const budgetAmount = budget?.budgetAmount || 0;
             const budgetPercentage = budgetAmount > 0 ? Math.round((currentSpent / budgetAmount) * 100) : 0;
+            const remainingBudget = Math.max(budgetAmount - currentSpent, 0);
 
             const topWriters = Object.entries(writerAmounts)
                 .map(([penName, amount]) => ({ penName, amount }))
@@ -162,6 +163,7 @@ export async function GET(request: NextRequest) {
                     budget: {
                         budgetAmount,
                         spent: currentSpent,
+                        remaining: remainingBudget,
                         percentage: budgetPercentage,
                         hasBudget: budgetAmount > 0,
                     },

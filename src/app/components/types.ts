@@ -317,6 +317,6 @@ export interface RoyaltyTopWriter {
 export interface RoyaltyDashboardData {
   monthlyData: RoyaltyMonthlyDatum[];
   currentMonth: { month: number; year: number; totalAmount: number; totalArticles: number };
-  budget: { budgetAmount: number; spent: number; percentage: number; hasBudget: boolean };
+  budget: { budgetAmount: number; spent: number; remaining: number; percentage: number; hasBudget: boolean };
   topWriters: RoyaltyTopWriter[];
 }

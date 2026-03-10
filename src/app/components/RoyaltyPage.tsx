@@ -19,6 +19,8 @@ export default function RoyaltyPage() {
   const [dashboard, setDashboard] = useState<RoyaltyDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "rates" | "calculate" | "workflow">("overview");
+  const [overviewMonth, setOverviewMonth] = useState(new Date().getMonth() + 1);
+  const [overviewYear, setOverviewYear] = useState(new Date().getFullYear());
   const [calcMonth, setCalcMonth] = useState(new Date().getMonth() + 1);
   const [calcYear, setCalcYear] = useState(new Date().getFullYear());
   const [budgetInput, setBudgetInput] = useState("");
@@ -40,11 +42,10 @@ export default function RoyaltyPage() {
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
 
   const PIE_COLORS = ["var(--neon-cyan)", "var(--neon-violet)", "var(--accent)", "var(--success)", "var(--danger)", "#3b82f6", "#10b981", "#f59e0b", "#f97316", "#6366f1"];
-  const royaltyTabs: Array<{ id: "overview" | "rates" | "calculate" | "workflow"; label: string; icon: string }> = [
+  const royaltyTabs: Array<{ id: "overview" | "rates" | "calculate"; label: string; icon: string }> = [
     { id: "overview", label: "Tổng quan", icon: "analytics" },
     { id: "rates", label: "Bảng giá", icon: "payments" },
     { id: "calculate", label: "Tính nhuận bút", icon: "calculate" },
-    { id: "workflow", label: "Thanh toán", icon: "receipt_long" },
   ];
 
   const fmt = (n: number) => n.toLocaleString("vi-VN") + "đ";
@@ -66,15 +67,20 @@ export default function RoyaltyPage() {
 
   const fetchDashboard = useCallback(() => {
     setLoading(true);
-    fetch("/api/royalty?action=dashboard", { cache: "no-store" })
+    const params = new URLSearchParams({
+      action: "dashboard",
+      month: String(overviewMonth),
+      year: String(overviewYear),
+    });
+    fetch(`/api/royalty?${params}`, { cache: "no-store" })
       .then(r => r.json())
       .then(d => {
         setDashboard(d.data);
-        if (d.data?.budget?.budgetAmount) setBudgetInput(String(d.data.budget.budgetAmount));
+        setBudgetInput(d.data?.budget?.hasBudget ? String(d.data.budget.budgetAmount) : "");
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [overviewMonth, overviewYear]);
 
   const fetchRates = useCallback(() => {
     fetch("/api/royalty?action=rates", { cache: "no-store" })
@@ -123,12 +129,6 @@ export default function RoyaltyPage() {
     }
   }, [fetchCalculation, tab]);
 
-  useEffect(() => {
-    if (tab === "workflow") {
-      fetchPayments();
-    }
-  }, [fetchPayments, tab]);
-
   const refreshRoyaltyView = useCallback(() => {
     fetchDashboard();
     if (tab === "calculate") fetchCalculation();
@@ -141,11 +141,10 @@ export default function RoyaltyPage() {
     const amount = parseInt(budgetInput);
     if (isNaN(amount) || amount < 0) return;
     setBudgetSaving(true);
-    const now = new Date();
     await fetch("/api/royalty", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set-budget", month: now.getMonth() + 1, year: now.getFullYear(), budgetAmount: amount }),
+      body: JSON.stringify({ action: "set-budget", month: overviewMonth, year: overviewYear, budgetAmount: amount }),
     });
     setBudgetSaving(false);
     fetchDashboard();
@@ -223,7 +222,7 @@ export default function RoyaltyPage() {
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Nhuận bút</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
-            {isAdmin ? "Quản lý ngân sách, cơ cấu thanh toán và hiệu suất tài chính." : `Theo dõi nhuận bút của ${collaboratorLabel}.`}
+            {isAdmin ? "Theo dõi ngân sách và nhuận bút thực tế theo từng kỳ." : `Theo dõi nhuận bút thực tế của ${collaboratorLabel} theo từng kỳ.`}
           </p>
         </div>
       </header>
@@ -265,6 +264,20 @@ export default function RoyaltyPage() {
             <div className="loading" style={{ padding: 60, fontSize: 18, color: "var(--neon-cyan)" }}>⏳ Đang tải dữ liệu...</div>
           ) : dashboard ? (
             <>
+              <div className="obsidian-glass" style={{ padding: 24, borderRadius: 24, marginBottom: 24, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div className="form-group" style={{ marginBottom: 0, width: 160 }}>
+                  <label className="form-label">Kỳ đang xem</label>
+                  <CustomSelect value={String(overviewMonth)} onChange={(value) => setOverviewMonth(parseInt(value, 10))} options={monthSelectOptions} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0, width: 120 }}>
+                  <label className="form-label">Năm</label>
+                  <CustomSelect value={String(overviewYear)} onChange={(value) => setOverviewYear(parseInt(value, 10))} options={yearSelectOptions} />
+                </div>
+                <div style={{ minWidth: 220, paddingBottom: 8, color: "var(--text-muted)", fontSize: 13 }}>
+                  Mọi chỉ số ngân sách và nhuận bút bên dưới đang bám theo kỳ {monthNames[overviewMonth - 1]}/{overviewYear}.
+                </div>
+              </div>
+
               {/* Budget Alert Card */}
               {hasBudget && budgetPct >= 80 && (
                 <div className="glass-card" style={{ padding: "24px 32px", marginBottom: 32, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap", borderLeft: `6px solid ${gaugeColor}`, background: `${gaugeColor}05` }}>
@@ -287,7 +300,7 @@ export default function RoyaltyPage() {
                   { label: "Nhuận bút phát sinh", value: fmt(dashboard.currentMonth?.totalAmount || 0), icon: "account_balance_wallet", color: "var(--accent-blue)" },
                   { label: "Bài đã duyệt", value: dashboard.currentMonth?.totalArticles || 0, icon: "history_edu", color: "var(--accent-teal)" },
                   { label: "Ngân sách tháng", value: hasBudget ? fmt(dashboard.budget.budgetAmount) : "CHƯA ĐẶT", icon: "track_changes", color: "var(--accent-purple)" },
-                  { label: "Còn lại", value: hasBudget ? fmt(Math.max(dashboard.budget.budgetAmount - dashboard.budget.spent, 0)) : "—", icon: "troubleshoot", color: "var(--accent-orange)" }
+                  { label: "Còn lại", value: hasBudget ? fmt(dashboard.budget.remaining) : "—", icon: "troubleshoot", color: "var(--accent-orange)" }
                 ].map((s, i) => (
                   <div key={i} className="glass-card" style={{ display: "flex", alignItems: "center", gap: 20 }}>
                     <div style={{ width: 48, height: 48, borderRadius: 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -304,7 +317,7 @@ export default function RoyaltyPage() {
               {isAdmin && (
                 <div className="glass-card" style={{ padding: 24, marginBottom: 32, display: "flex", gap: 20, alignItems: "flex-end", background: "rgba(0,0,0,0.01)" }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.05em" }}>🎯 Mục tiêu ngân sách tháng ({new Date().getMonth() + 1}/{new Date().getFullYear()})</label>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.05em" }}>🎯 Ngân sách mục tiêu cho {monthNames[overviewMonth - 1]}/{overviewYear}</label>
                     <input className="form-input" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border)" }} type="number" value={budgetInput} onChange={e => setBudgetInput(e.target.value)} placeholder="Nhập số tiền (VD: 10.000.000)" />
                   </div>
                   <button className="btn-ios-pill btn-ios-primary" onClick={handleSetBudget} disabled={budgetSaving}>
@@ -320,9 +333,10 @@ export default function RoyaltyPage() {
                   <div className="royalty-chart">
                     {dashboard.monthlyData?.map((m, i: number) => {
                       const heightPct = maxAmount > 0 ? Math.max((m.totalAmount / maxAmount) * 100, 2) : 2;
+                      const isActivePeriod = m.month === overviewMonth && m.year === overviewYear;
                       return (
                         <div key={i} className="royalty-chart-bar">
-                          <div className="royalty-chart-bar-fill" style={{ height: `${heightPct}%`, background: i === new Date().getMonth() ? "var(--accent-blue)" : "rgba(59, 130, 246, 0.15)" }}>
+                          <div className="royalty-chart-bar-fill" style={{ height: `${heightPct}%`, background: isActivePeriod ? "var(--accent-blue)" : "rgba(59, 130, 246, 0.15)" }}>
                             <div className="chart-tooltip">{fmt(m.totalAmount)}</div>
                           </div>
                           <span className="royalty-chart-bar-label">{monthNames[m.month - 1]}</span>
