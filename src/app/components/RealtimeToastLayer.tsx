@@ -35,6 +35,7 @@ export default function RealtimeToastLayer() {
 
     const listener = (event: Event) => {
       const detail = (event as CustomEvent<RealtimePayload>).detail;
+      if (detail?.replayed) return;
       if (!detail?.toastTitle || !detail?.toastMessage) return;
 
       const toastId = detail.id || Date.now();

@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (payload: RealtimeEvent | { channels: string[]; at: string }) => {
+      const send = (payload: RealtimeEvent | { channels: string[]; at: string; replayed?: boolean }) => {
         const eventId = "id" in payload ? payload.id : 0;
         if (eventId > 0) {
           lastEventId = Math.max(lastEventId, eventId);
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
           if (event.id <= lastEventId) {
             continue;
           }
-          send(event);
+          send({ ...event, replayed: true });
         }
       };
 

@@ -9,6 +9,7 @@ export type RealtimePayload = {
   id?: number;
   channels: string[];
   at: string;
+  replayed?: boolean;
   toastTitle?: string | null;
   toastMessage?: string | null;
   toastVariant?: RealtimeToastVariant | null;
