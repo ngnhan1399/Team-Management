@@ -759,7 +759,9 @@ export async function refreshScopedArticlesFromGoogleSheet(
 
   let updated = 0;
   let duplicates = 0;
+  let deleted = 0;
   const errors: string[] = [];
+  const articleIdsToDelete = new Set<number>();
   let resultSheetName = "";
   let resultMonth = options.month ?? null;
   let resultYear = options.year ?? null;
@@ -795,6 +797,17 @@ export async function refreshScopedArticlesFromGoogleSheet(
       const matchedRow = findPreparedRowForArticle(article, lookup, syncLink);
 
       if (!matchedRow) {
+        const shouldMirrorDelete = syncLink != null
+          && syncLink.sourceUrl === sourceUrl
+          && syncLink.sheetName === selectedSheet.name
+          && syncLink.sheetMonth === selectedSheet.month
+          && syncLink.sheetYear === selectedSheet.year;
+
+        if (shouldMirrorDelete) {
+          articleIdsToDelete.add(article.id);
+          continue;
+        }
+
         skipped += 1;
         if (warnings.length < 20) {
           warnings.push(`Không tìm thấy bài "${article.title}" trong sheet ${selectedSheet.name}.`);
@@ -864,6 +877,17 @@ export async function refreshScopedArticlesFromGoogleSheet(
     }
   }
 
+  if (articleIdsToDelete.size > 0) {
+    const deletedResult = await deleteArticlesForSync([...articleIdsToDelete]);
+    deleted = deletedResult.deletedArticles;
+
+    if (warnings.length < 20) {
+      warnings.push(
+        `${deleted} bài đã bị xóa khỏi hệ thống vì không còn tồn tại trong Google Sheet gốc của tab đang đồng bộ.`
+      );
+    }
+  }
+
   return {
     sourceUrl,
     sheetName: resultSheetName || "Scoped sync",
@@ -876,7 +900,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
     inserted: 0,
     updated,
     duplicates,
-    deleted: 0,
+    deleted,
     skipped,
     errors: errors.slice(0, 20),
     warnings: warnings.slice(0, 20),
