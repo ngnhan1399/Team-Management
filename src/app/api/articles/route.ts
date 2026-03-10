@@ -1,9 +1,8 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, notifications, payments } from "@/db/schema";
-import { getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { createArticleInGoogleSheet, mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
 import { publishRealtimeEvent } from "@/lib/realtime";
-import { parseRoyaltyDateParts } from "@/lib/royalty";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
@@ -157,6 +156,24 @@ function buildArticleWhere(criteria: ArticleCriteria, isAdmin: boolean): SQL | u
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
+function combineWhereClauses(...clauses: Array<SQL | undefined>) {
+  const filteredClauses = clauses.filter(Boolean) as SQL[];
+  return filteredClauses.length > 0 ? and(...filteredClauses) : undefined;
+}
+
+function buildArticleOwnershipWhere(ownerCandidates: string[]): SQL | undefined {
+  const normalizedCandidates = Array.from(new Set(ownerCandidates.map((value) => normalizeString(value)).filter(Boolean)));
+  if (normalizedCandidates.length === 0) {
+    return undefined;
+  }
+
+  if (normalizedCandidates.length === 1) {
+    return eq(articles.penName, normalizedCandidates[0] as never);
+  }
+
+  return inArray(articles.penName, normalizedCandidates as never[]);
+}
+
 function buildAffectedPaymentWhere(rows: Array<Pick<ArticleDeleteRow, "penName" | "date">>) {
   const conditions: SQL[] = [];
   const seen = new Set<string>();
@@ -179,28 +196,6 @@ function buildAffectedPaymentWhere(rows: Array<Pick<ArticleDeleteRow, "penName" 
   }
 
   return conditions.length > 0 ? or(...conditions) : undefined;
-}
-
-function getArticleDateSortValue(value: string) {
-  const parsed = parseRoyaltyDateParts(value);
-  if (parsed) {
-    return Number(`${parsed.year}${String(parsed.month).padStart(2, "0")}${String(parsed.day).padStart(2, "0")}`);
-  }
-
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function sortArticlesByLatestDate<T extends { id: number; date: string; updatedAt?: string | null; createdAt?: string | null }>(rows: T[]) {
-  return [...rows].sort((left, right) => {
-    const dateDiff = getArticleDateSortValue(right.date) - getArticleDateSortValue(left.date);
-    if (dateDiff !== 0) return dateDiff;
-
-    const updatedDiff = new Date(right.updatedAt || right.createdAt || 0).getTime() - new Date(left.updatedAt || left.createdAt || 0).getTime();
-    if (Number.isFinite(updatedDiff) && updatedDiff !== 0) return updatedDiff;
-
-    return right.id - left.id;
-  });
 }
 
 async function getDeletePreview(whereClause?: SQL) {
@@ -356,9 +351,9 @@ export async function GET(request: NextRequest) {
 
     const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 200);
-    const identityCandidates = getContextIdentityCandidates(context);
+    const ownerCandidates = getContextArticleOwnerCandidates(context);
 
-    if (context.user.role !== "admin" && identityCandidates.length === 0) {
+    if (context.user.role !== "admin" && ownerCandidates.length === 0) {
       return NextResponse.json({
         success: true,
         data: [],
@@ -366,21 +361,28 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const filteredRows = await db
-      .select()
-      .from(articles)
-      .where(whereClause)
-      .orderBy(desc(articles.id))
-      .all();
+    const scopedWhereClause = context.user.role === "admin"
+      ? whereClause
+      : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
 
-    const scopedRows = context.user.role === "admin"
-      ? filteredRows
-      : filteredRows.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
+    const [{ count: totalCount }, pagedRows] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(articles)
+        .where(scopedWhereClause)
+        .get()
+        .then((row) => ({ count: Number(row?.count || 0) })),
+      db
+        .select()
+        .from(articles)
+        .where(scopedWhereClause)
+        .orderBy(desc(articles.date), desc(articles.updatedAt), desc(articles.id))
+        .limit(limit)
+        .offset((page - 1) * limit)
+        .all(),
+    ]);
 
-    const sortedRows = sortArticlesByLatestDate(scopedRows);
-
-    const data = sortedRows
-      .slice((page - 1) * limit, page * limit)
+    const data = pagedRows
       .map((article) => ({
         ...article,
         canDelete: context.user.role === "admin" || article.createdByUserId === context.user.id,
@@ -392,8 +394,8 @@ export async function GET(request: NextRequest) {
       pagination: {
         page,
         limit,
-        total: sortedRows.length,
-        totalPages: Math.ceil(sortedRows.length / limit),
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
       },
     });
   } catch (error) {

@@ -151,11 +151,15 @@ export default function ArticlesPage() {
       return;
     }
     const urls = Array.from(new Set(published.map(a => a.link).filter(Boolean)));
-    fetch("/api/check-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls }) })
+    const pendingUrls = urls.filter((url) => !(url in brokenLinks));
+    if (pendingUrls.length === 0) {
+      return;
+    }
+    fetch("/api/check-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: pendingUrls }) })
       .then(r => r.json())
-      .then(d => { if (d.success) setBrokenLinks(d.results); })
+      .then(d => { if (d.success) setBrokenLinks(prev => ({ ...prev, ...d.results })); })
       .catch(() => { });
-  }, [articles]);
+  }, [articles, brokenLinks]);
 
   const handleSearch = (e?: React.FormEvent) => { e?.preventDefault(); fetchArticles(1, search, filters); };
   const applyFilter = (key: string, val: string) => { const f = { ...filters, [key]: val }; setFilters(f); fetchArticles(1, search, f); };

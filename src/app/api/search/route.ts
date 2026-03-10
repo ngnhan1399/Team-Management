@@ -1,9 +1,22 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articles } from "@/db/schema";
-import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextArticleOwnerCandidates, getCurrentUserContext } from "@/lib/auth";
 import { handleServerError } from "@/lib/server-error";
-import { like, or, desc } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+function buildArticleOwnershipWhere(ownerCandidates: string[]): SQL | undefined {
+    const normalizedCandidates = Array.from(new Set(ownerCandidates.map((value) => String(value || "").trim()).filter(Boolean)));
+    if (normalizedCandidates.length === 0) {
+        return undefined;
+    }
+
+    if (normalizedCandidates.length === 1) {
+        return eq(articles.penName, normalizedCandidates[0] as never);
+    }
+
+    return inArray(articles.penName, normalizedCandidates as never[]);
+}
 
 export async function GET(request: NextRequest) {
     try {
@@ -16,7 +29,16 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const query = searchParams.get("q") || "";
         const limit = parseInt(searchParams.get("limit") || "20");
-        const identityCandidates = getContextIdentityCandidates(context);
+        const ownerCandidates = getContextArticleOwnerCandidates(context);
+
+        if (context.user.role !== "admin" && ownerCandidates.length === 0) {
+            return NextResponse.json({
+                success: true,
+                data: [],
+                query,
+                count: 0,
+            });
+        }
 
         if (!query || query.length < 2) {
             return NextResponse.json(
@@ -33,19 +55,17 @@ export async function GET(request: NextRequest) {
             like(articles.notes, `%${query}%`)
         );
 
-        const dbLimit = context.user.role === "admin" ? limit : Math.max(limit * 5, 100);
+        const scopedWhere = context.user.role === "admin"
+            ? searchCondition
+            : and(searchCondition, buildArticleOwnershipWhere(ownerCandidates));
 
-        let results = await db
+        const results = await db
             .select()
             .from(articles)
-            .where(searchCondition)
+            .where(scopedWhere)
             .orderBy(desc(articles.id))
-            .limit(dbLimit)
+            .limit(limit)
             .all();
-
-        if (context.user.role !== "admin") {
-            results = results.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName)).slice(0, limit);
-        }
 
         return NextResponse.json({
             success: true,

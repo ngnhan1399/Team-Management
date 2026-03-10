@@ -153,6 +153,28 @@ export function getContextIdentityCandidates(context: CurrentUserContext): strin
     return candidates;
 }
 
+export function getContextArticleOwnerCandidates(context: CurrentUserContext): string[] {
+    const values = [
+        context.collaborator?.name,
+        context.collaborator?.penName,
+        context.token.penName,
+        context.user.email.split("@")[0],
+    ];
+
+    const seen = new Set<string>();
+    const candidates: string[] = [];
+
+    for (const value of values) {
+        const trimmed = String(value || "").trim();
+        if (!trimmed) continue;
+        if (seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        candidates.push(trimmed);
+    }
+
+    return candidates;
+}
+
 export function matchesIdentityCandidate(candidates: string[], value: unknown): boolean {
     const valueVariants = buildIdentityVariants(value);
     if (valueVariants.length === 0) return false;
