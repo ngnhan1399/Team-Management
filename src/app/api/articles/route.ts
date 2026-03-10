@@ -45,8 +45,22 @@ type DeleteResult = {
   clearedPayments: number;
 };
 
+type NonBlockingStepOptions<T> = {
+  scope: string;
+  fallback: T;
+};
+
 function normalizeString(value: unknown): string {
   return String(value || "").trim();
+}
+
+async function runNonBlockingStep<T>(task: () => Promise<T>, options: NonBlockingStepOptions<T>): Promise<T> {
+  try {
+    return await task();
+  } catch (error) {
+    console.error(`[${options.scope}]`, error);
+    return options.fallback;
+  }
 }
 
 function readCriteriaFromSearchParams(searchParams: URLSearchParams): ArticleCriteria {
@@ -431,24 +445,41 @@ export async function POST(request: NextRequest) {
       .returning({ id: articles.id })
       .get();
 
-    await writeAuditLog({
-      userId: context.user.id,
-      action: "article_created",
-      entity: "article",
-      entityId: String(insertedArticle?.id),
-      payload: { title, penName: finalPenName },
-    });
+    await runNonBlockingStep(
+      () => writeAuditLog({
+        userId: context.user.id,
+        action: "article_created",
+        entity: "article",
+        entityId: String(insertedArticle?.id),
+        payload: { title, penName: finalPenName },
+      }),
+      { scope: "articles.post.audit", fallback: undefined }
+    );
 
     const sheetSync = insertedArticle?.id
-      ? await createArticleInGoogleSheet({
-          articleId: Number(insertedArticle.id),
-          actorUserId: context.user.id,
-          actorDisplayName: getContextDisplayName(context),
-          reason: "article_post",
-        })
+      ? await runNonBlockingStep(
+          () => createArticleInGoogleSheet({
+            articleId: Number(insertedArticle.id),
+            actorUserId: context.user.id,
+            actorDisplayName: getContextDisplayName(context),
+            reason: "article_post",
+          }),
+          {
+            scope: "articles.post.sheetSync",
+            fallback: {
+              attempted: true,
+              success: false,
+              skipped: false,
+              message: "Không thể kết nối tới Google Sheet lúc này. Bài viết vẫn đã lưu trong hệ thống.",
+            },
+          }
+        )
       : null;
 
-    await publishRealtimeEvent(["articles", "dashboard", "royalty"]);
+    await runNonBlockingStep(
+      () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
+      { scope: "articles.post.realtime", fallback: null }
+    );
 
     return NextResponse.json({ success: true, id: Number(insertedArticle?.id), sheetSync });
   } catch (error) {
@@ -525,24 +556,41 @@ export async function PUT(request: NextRequest) {
       .where(eq(articles.id, id))
       .run();
 
-    await writeAuditLog({
-      userId: context.user.id,
-      action: "article_updated",
-      entity: "article",
-      entityId: id,
-      payload: updateData,
-    });
+    await runNonBlockingStep(
+      () => writeAuditLog({
+        userId: context.user.id,
+        action: "article_updated",
+        entity: "article",
+        entityId: id,
+        payload: updateData,
+      }),
+      { scope: "articles.put.audit", fallback: undefined }
+    );
 
     const sheetSync = shouldMirrorToGoogleSheet
-      ? await mirrorArticleUpdateToGoogleSheet({
-          articleId: id,
-          actorUserId: context.user.id,
-          actorDisplayName: getContextDisplayName(context),
-          reason: "article_put",
-        })
+      ? await runNonBlockingStep(
+          () => mirrorArticleUpdateToGoogleSheet({
+            articleId: id,
+            actorUserId: context.user.id,
+            actorDisplayName: getContextDisplayName(context),
+            reason: "article_put",
+          }),
+          {
+            scope: "articles.put.sheetSync",
+            fallback: {
+              attempted: true,
+              success: false,
+              skipped: false,
+              message: "Không thể kết nối tới Google Sheet lúc này. Bài viết vẫn đã được cập nhật trong hệ thống.",
+            },
+          }
+        )
       : null;
 
-    await publishRealtimeEvent(["articles", "dashboard", "royalty"]);
+    await runNonBlockingStep(
+      () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
+      { scope: "articles.put.realtime", fallback: null }
+    );
 
     return NextResponse.json({ success: true, sheetSync });
   } catch (error) {

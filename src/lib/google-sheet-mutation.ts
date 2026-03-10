@@ -71,6 +71,8 @@ function normalizeText(value: unknown) {
   return String(value || "").trim();
 }
 
+const GOOGLE_SHEET_WEB_APP_TIMEOUT_MS = 8000;
+
 function parseInteger(value: unknown) {
   const parsed = Number(value);
   return Number.isInteger(parsed) ? parsed : null;
@@ -315,12 +317,16 @@ async function postMutationToAppsScript(
   };
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GOOGLE_SHEET_WEB_APP_TIMEOUT_MS);
     const response = await fetch(webAppUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       cache: "no-store",
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     const rawText = await response.text();
     const parsed = parseJsonSafely(rawText);
@@ -358,10 +364,16 @@ async function postMutationToAppsScript(
       payload,
     } as const;
   } catch (error) {
+    const isTimeoutError =
+      error instanceof Error
+      && (error.name === "AbortError" || /aborted|timeout/i.test(error.message));
+
     return {
       skipped: false,
       success: false,
-      message: normalizeText(error) || "Không gọi được Apps Script web app.",
+      message: isTimeoutError
+        ? "Google Sheet phản hồi quá chậm. Bài viết vẫn đã lưu trong hệ thống, bạn có thể thử đồng bộ lại sau."
+        : normalizeText(error) || "Không gọi được Apps Script web app.",
       response: null,
       payload,
     } as const;

@@ -82,6 +82,7 @@ export default function ArticlesPage() {
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 0 });
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [formData, setFormData] = useState<Partial<Article>>({});
+  const [savingArticle, setSavingArticle] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [importStep, setImportStep] = useState(1);
@@ -493,9 +494,10 @@ export default function ArticlesPage() {
   };
 
   const handleSave = async () => {
-    if (!formData.title || !formData.penName || !formData.date) return;
+    if (!formData.title || !formData.penName || !formData.date || savingArticle) return;
 
     try {
+      setSavingArticle(true);
       const res = await fetch("/api/articles", {
         method: formData.id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -518,7 +520,14 @@ export default function ArticlesPage() {
       setFormData({});
       fetchArticles(pagination.page);
     } catch (error) {
-      alert("❌ " + String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Failed to fetch/i.test(message)) {
+        alert("❌ Không kết nối được tới máy chủ trong lúc lưu bài viết.\n\nKhả năng cao bài chưa kịp phản hồi hoặc Google Sheet đang chậm. Hãy tải lại trang để kiểm tra bài đã được lưu chưa, rồi thử lại nếu cần.");
+      } else {
+        alert("❌ " + message);
+      }
+    } finally {
+      setSavingArticle(false);
     }
   };
 
@@ -1263,10 +1272,10 @@ export default function ArticlesPage() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowModal(false)}>Hủy bỏ</button>
-              <button className="btn-ios-pill btn-ios-primary" onClick={handleSave}>
+              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowModal(false)} disabled={savingArticle}>Hủy bỏ</button>
+              <button className="btn-ios-pill btn-ios-primary" onClick={handleSave} disabled={savingArticle}>
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>save</span>
-                Lưu thông tin
+                {savingArticle ? "Đang lưu..." : "Lưu thông tin"}
               </button>
             </div>
           </div>
