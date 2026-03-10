@@ -623,8 +623,7 @@ function buildWarnings(
   return warnings;
 }
 
-export function prepareArticleImport(buffer: Buffer, options: PrepareArticleImportOptions = {}): PreparedArticleImport {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
+export function prepareArticleImportFromWorkbook(workbook: XLSX.WorkBook, options: PrepareArticleImportOptions = {}): PreparedArticleImport {
   const workbookSheets = workbook.Workbook?.Sheets || [];
   const sheetName = options.sheetName && workbook.SheetNames.includes(options.sheetName)
     ? options.sheetName
@@ -686,6 +685,11 @@ export function prepareArticleImport(buffer: Buffer, options: PrepareArticleImpo
     analysis,
     rawRows,
   };
+}
+
+export function prepareArticleImport(buffer: Buffer, options: PrepareArticleImportOptions = {}): PreparedArticleImport {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
+  return prepareArticleImportFromWorkbook(workbook, options);
 }
 
 function normalizeArticleText(value: unknown): string {

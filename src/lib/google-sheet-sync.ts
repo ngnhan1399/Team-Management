@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments } from "@/db/schema";
-import { normalizeImportedArticleRow, prepareArticleImport, type ImportFieldId } from "./article-import";
+import { normalizeImportedArticleRow, prepareArticleImportFromWorkbook, type ImportFieldId } from "./article-import";
 import { matchesIdentityCandidate } from "./auth";
 import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 
@@ -68,6 +68,9 @@ export interface ExecuteGoogleSheetSyncOptions {
   sheetName?: string;
   createdByUserId?: number | null;
   identityCandidates?: string[];
+  _workbook?: XLSX.WorkBook;
+  _collaboratorPenNames?: string[];
+  _skipEnsureInitialized?: boolean;
 }
 
 export interface RefreshScopedGoogleSheetSyncOptions extends ExecuteGoogleSheetSyncOptions {
@@ -213,14 +216,8 @@ export function pickSheetTab(
   return sortGoogleSheetTabs(parsed)[0] ?? null;
 }
 
-export async function loadGoogleSheetImport(options: {
-  sourceUrl?: string;
-  sheetName?: string;
-  month?: number | null;
-  year?: number | null;
-  collaboratorPenNames?: string[];
-}) {
-  const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+async function downloadGoogleSheetWorkbook(sourceUrlInput?: string) {
+  const sourceUrl = sourceUrlInput?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
   const exportUrl = buildSpreadsheetExportUrl(sourceUrl);
   const response = await fetch(exportUrl, { cache: "no-store" });
 
@@ -230,22 +227,65 @@ export async function loadGoogleSheetImport(options: {
 
   const buffer = Buffer.from(await response.arrayBuffer());
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
-  const selectedSheet = pickSheetTab(workbook.SheetNames, options.sheetName, options.month, options.year);
+
+  return { sourceUrl, workbook };
+}
+
+function loadGoogleSheetImportFromWorkbook(options: {
+  sourceUrl: string;
+  workbook: XLSX.WorkBook;
+  sheetName?: string;
+  month?: number | null;
+  year?: number | null;
+  collaboratorPenNames?: string[];
+}) {
+  const selectedSheet = pickSheetTab(options.workbook.SheetNames, options.sheetName, options.month, options.year);
 
   if (!selectedSheet) {
     throw new Error("Không tìm thấy tab tháng/năm phù hợp trong Google Sheets.");
   }
 
-  const prepared = prepareArticleImport(buffer, {
+  const prepared = prepareArticleImportFromWorkbook(options.workbook, {
     sheetName: selectedSheet.name,
     collaboratorPenNames: options.collaboratorPenNames || [],
   });
 
   return {
-    sourceUrl,
+    sourceUrl: options.sourceUrl,
     selectedSheet,
     prepared,
   };
+}
+
+export async function loadGoogleSheetImport(options: {
+  sourceUrl?: string;
+  sheetName?: string;
+  month?: number | null;
+  year?: number | null;
+  collaboratorPenNames?: string[];
+  workbook?: XLSX.WorkBook;
+}) {
+  if (options.workbook) {
+    const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+    return loadGoogleSheetImportFromWorkbook({
+      sourceUrl,
+      workbook: options.workbook,
+      sheetName: options.sheetName,
+      month: options.month,
+      year: options.year,
+      collaboratorPenNames: options.collaboratorPenNames,
+    });
+  }
+
+  const { sourceUrl, workbook } = await downloadGoogleSheetWorkbook(options.sourceUrl);
+  return loadGoogleSheetImportFromWorkbook({
+    sourceUrl,
+    workbook,
+    sheetName: options.sheetName,
+    month: options.month,
+    year: options.year,
+    collaboratorPenNames: options.collaboratorPenNames,
+  });
 }
 
 function normalizeCompositeKey(title: string, penName: string, date: string) {
@@ -963,9 +1003,11 @@ export async function refreshScopedArticlesFromGoogleSheet(
 export async function executeGoogleSheetSync(
   options: ExecuteGoogleSheetSyncOptions = {}
 ): Promise<GoogleSheetSyncExecutionResult> {
-  await ensureDatabaseInitialized();
+  if (!options._skipEnsureInitialized) {
+    await ensureDatabaseInitialized();
+  }
 
-  const collaboratorPenNames = await getCollaboratorPenNames();
+  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames();
   const identityCandidates = Array.from(
     new Set((options.identityCandidates || []).map((value) => String(value || "").trim()).filter(Boolean))
   );
@@ -977,6 +1019,7 @@ export async function executeGoogleSheetSync(
     month: options.month,
     year: options.year,
     collaboratorPenNames,
+    workbook: options._workbook,
   });
 
   if (prepared.rawRows.length === 0) {
@@ -1243,16 +1286,10 @@ export async function executeGoogleSheetSync(
 export async function executeGoogleSheetWorkbookSync(
   options: ExecuteGoogleSheetSyncOptions = {}
 ): Promise<GoogleSheetSyncExecutionResult> {
-  const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
-  const exportUrl = buildSpreadsheetExportUrl(sourceUrl);
-  const response = await fetch(exportUrl, { cache: "no-store" });
+  await ensureDatabaseInitialized();
 
-  if (!response.ok) {
-    throw new Error("Không tải được dữ liệu từ Google Sheets.");
-  }
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
+  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames();
+  const { sourceUrl, workbook } = await downloadGoogleSheetWorkbook(options.sourceUrl);
   const tabs = listMonthlySheetTabs(workbook.SheetNames);
 
   if (tabs.length === 0) {
@@ -1285,6 +1322,9 @@ export async function executeGoogleSheetWorkbookSync(
       sheetName: tab.name,
       month: tab.month,
       year: tab.year,
+      _workbook: workbook,
+      _collaboratorPenNames: collaboratorPenNames,
+      _skipEnsureInitialized: true,
     });
 
     aggregate.total += result.total;
