@@ -612,7 +612,7 @@ function findPreparedRowForArticle(
     return matchedByComposite;
   }
 
-  return lookup.byTitlePenName.get(normalizeTitlePenNameKey(article.title, article.penName));
+  return undefined;
 }
 
 function setLookupMaps(
@@ -1080,12 +1080,10 @@ export async function executeGoogleSheetSync(
       const sourceRowKey = buildSourceRowKey({ ...normalized, articleId: articleId ?? undefined, link: link ?? undefined });
       seenSourceRowKeys.add(sourceRowKey);
       const compositeKey = normalizeCompositeKey(normalized.title, normalized.penName, normalized.date as string);
-      const titlePenNameKey = normalizeTitlePenNameKey(normalized.title, normalized.penName);
       const matchedByArticleId = articleId ? articleIdMap.get(articleId) : undefined;
       const matchedByComposite = compositeMap.get(compositeKey);
       const matchedByLink = link ? linkMap.get(normalizeLinkKey(link)) : undefined;
-      const matchedByTitlePenName = titlePenNameMap.get(titlePenNameKey);
-      const target = matchedByArticleId ?? matchedByLink ?? matchedByComposite ?? matchedByTitlePenName;
+      const target = matchedByArticleId ?? matchedByLink ?? matchedByComposite;
 
       let resolvedArticleId = target?.id ?? null;
       const nextPayload = buildArticlePayload({ ...normalized, articleId: articleId ?? undefined }, mappedFields);
