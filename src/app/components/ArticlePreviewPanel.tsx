@@ -35,69 +35,113 @@ function statusLabel(status: string) {
   }
 }
 
-/**
- * Opens the CMS URL in a regular named browser tab (NOT a popup with custom features).
- * Regular tabs share the same cookie/localStorage session as the user's normal browsing,
- * so the CMS session will persist across browser restarts.
- *
- * Using a named tab (`cms_review`) means:
- * - First call: opens a new tab
- * - Subsequent calls: navigates the SAME tab to the new article URL
- * - No duplicate tabs
- */
 const CMS_TAB_NAME = "cms_review";
+
+declare global {
+  interface Window {
+    __cmsReviewTab?: Window | null;
+  }
+}
+
+function getLiveCmsTab() {
+  if (typeof window === "undefined") return null;
+  const existing = window.__cmsReviewTab;
+  if (existing && !existing.closed) {
+    return existing;
+  }
+  window.__cmsReviewTab = null;
+  return null;
+}
 
 export default function ArticlePreviewPanel({ article, onClose }: Props) {
   const url = getArticleUrl(article);
   const tabRef = useRef<Window | null>(null);
   const [tabOpen, setTabOpen] = useState(false);
+  const [tabBlocked, setTabBlocked] = useState(false);
+  const [needsNavigateHint, setNeedsNavigateHint] = useState(false);
   const prevUrlRef = useRef("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const openOrNavigateTab = useCallback(() => {
+  const openCmsTab = useCallback(() => {
     if (!url) return;
 
-    // Try to reuse existing tab
-    if (tabRef.current && !tabRef.current.closed) {
-      try {
-        tabRef.current.location.href = url;
-      } catch {
-        // Cross-origin error — reopen via named tab
-        tabRef.current = window.open(url, CMS_TAB_NAME) || tabRef.current;
-      }
-      tabRef.current.focus();
+    const activeTab = tabRef.current && !tabRef.current.closed ? tabRef.current : getLiveCmsTab();
+    if (activeTab) {
+      tabRef.current = activeTab;
+      window.__cmsReviewTab = activeTab;
+      activeTab.focus();
       setTabOpen(true);
+      setTabBlocked(false);
+      setNeedsNavigateHint(true);
       return;
     }
 
-    // Open as a REGULAR TAB — NO features string = regular tab with full session
     const win = window.open(url, CMS_TAB_NAME);
-
     if (!win) {
       setTabOpen(false);
+      setTabBlocked(true);
       return;
     }
 
     tabRef.current = win;
+    window.__cmsReviewTab = win;
     setTabOpen(true);
+    setTabBlocked(false);
+    setNeedsNavigateHint(true);
   }, [url]);
 
-  // Auto-open on article change
+  const navigateTabToArticle = useCallback(() => {
+    if (!url) return;
+
+    const activeTab = tabRef.current && !tabRef.current.closed ? tabRef.current : getLiveCmsTab();
+    if (activeTab) {
+      tabRef.current = window.open(url, CMS_TAB_NAME) || activeTab;
+    } else {
+      tabRef.current = window.open(url, CMS_TAB_NAME) || null;
+    }
+
+    if (!tabRef.current) {
+      setTabOpen(false);
+      setTabBlocked(true);
+      return;
+    }
+
+    window.__cmsReviewTab = tabRef.current;
+    tabRef.current.focus();
+    setTabOpen(true);
+    setTabBlocked(false);
+    setNeedsNavigateHint(false);
+  }, [url]);
+
   useEffect(() => {
     if (!url || url === prevUrlRef.current) return;
     prevUrlRef.current = url;
-    const timer = setTimeout(openOrNavigateTab, 200);
+    const timer = setTimeout(() => {
+      const activeTab = getLiveCmsTab();
+      if (activeTab) {
+        tabRef.current = activeTab;
+        activeTab.focus();
+        setTabOpen(true);
+        setTabBlocked(false);
+        setNeedsNavigateHint(true);
+        return;
+      }
+      openCmsTab();
+    }, 200);
     return () => clearTimeout(timer);
-  }, [url, openOrNavigateTab]);
+  }, [url, openCmsTab]);
 
-  // Poll tab status
   useEffect(() => {
     intervalRef.current = setInterval(() => {
-      if (tabRef.current && tabRef.current.closed) {
-        setTabOpen(false);
-        tabRef.current = null;
-      } else if (tabRef.current && !tabRef.current.closed) {
+      const activeTab = tabRef.current && !tabRef.current.closed ? tabRef.current : getLiveCmsTab();
+      if (activeTab) {
+        tabRef.current = activeTab;
+        window.__cmsReviewTab = activeTab;
         setTabOpen(true);
+      } else {
+        tabRef.current = null;
+        window.__cmsReviewTab = null;
+        setTabOpen(false);
       }
     }, 1000);
     return () => {
@@ -174,7 +218,7 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
 
         {url && (
           <button
-            onClick={openOrNavigateTab}
+            onClick={tabOpen ? navigateTabToArticle : openCmsTab}
             title={tabOpen ? "Chuyển đến bài duyệt" : "Mở CMS"}
             style={toolbarBtnStyle}
           >
@@ -198,7 +242,7 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
 
         {/* Action button */}
         <button
-          onClick={openOrNavigateTab}
+          onClick={tabOpen ? navigateTabToArticle : openCmsTab}
           style={{
             display: "flex",
             alignItems: "center",
@@ -226,7 +270,19 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
         {tabOpen && (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 700 }}>● Tab CMS đang mở</span>
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>— phiên đăng nhập được giữ</span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>— giữ nguyên tab này để giữ phiên đăng nhập</span>
+          </div>
+        )}
+
+        {tabOpen && needsNavigateHint && (
+          <div style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(59,130,246,0.14)", background: "rgba(59,130,246,0.06)", color: "var(--text-main, #fff)", fontSize: 12, lineHeight: 1.6 }}>
+            Nếu tab CMS đang ở màn đăng nhập hoặc dashboard, hãy đăng nhập xong rồi bấm <strong>`Chuyển đến bài duyệt`</strong> để đi tới bài hiện tại mà không làm reset tab CMS giữa chừng.
+          </div>
+        )}
+
+        {tabBlocked && (
+          <div style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(239,68,68,0.18)", background: "rgba(239,68,68,0.08)", color: "var(--text-main, #fff)", fontSize: 12, lineHeight: 1.6 }}>
+            Trình duyệt đang chặn việc mở tab CMS. Hãy cho phép popup/tab mới cho domain này rồi thử lại.
           </div>
         )}
 

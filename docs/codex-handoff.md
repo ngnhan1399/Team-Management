@@ -22,6 +22,7 @@ Ngày cập nhật: `2026-03-11` (phiên chiều)
 - **Thêm CMS Browser Panel** (`ArticlePreviewPanel.tsx`): click tiêu đề bài viết mở panel trượt phải + popup window hiển thị CMS. Có toolbar (URL bar, refresh, mở tab mới, đóng), thông tin bài viết, đèn trạng thái, nút **"Chuyển đến bài duyệt"** để re-navigate popup sau khi đăng nhập CMS, và hướng dẫn login flow. CMS FPT Shop chặn iframe nên dùng `window.open` thay thế.
 - **Lazy-load CMS Browser Panel**: `ArticlesPage.tsx` không còn kéo `ArticlePreviewPanel.tsx` vào bundle chính. Preview panel giờ được `next/dynamic` lazy-load và preload chunk theo `hover` / `focus` / `touch` trên tiêu đề bài, nên lần mở tab Bài viết đầu nhẹ hơn nhưng lúc người dùng chuẩn bị mở preview vẫn phản hồi nhanh.
 - **Dọn sạch warning lint của preview panel**: `ArticlePreviewPanel.tsx` đã sửa dependency cho `useEffect` mở popup theo đúng hooks rule. `npm run lint` hiện sạch hoàn toàn.
+- **Ổn định lại phiên đăng nhập CMS**: `ArticlePreviewPanel.tsx` giờ giữ một named tab CMS ở cấp `window`, lần đầu mở sẽ vào link duyệt bài, nhưng các lần đổi bài sau chỉ `focus` lại tab CMS đang mở thay vì auto-navigate ngay. Người dùng chủ động bấm `Chuyển đến bài duyệt` sau khi đăng nhập xong, tránh việc tab CMS bị điều hướng lại giữa chừng làm tưởng như mất session.
 - **Tách `directory view` cho `/api/collaborators`**: các màn `Articles`, `EditorialTasks`, `Notifications`, `Royalty` không còn lấy full hồ sơ cộng tác viên nữa mà dùng `?view=directory`. Route chỉ trả field nhẹ cần cho dropdown/search/list, còn `TeamPage` vẫn giữ bản đầy đủ. Nhánh admin cũng bỏ cách ghép `allUsers.find(...)` lặp nhiều lần, chuyển sang `Map` để giảm chi phí join trong memory.
 
 ### Phiên sáng 11/03 và trước đó
@@ -40,6 +41,7 @@ Ngày cập nhật: `2026-03-11` (phiên chiều)
 
 - **Redeploy Apps Script**: file `output/google-sheets-webhook.workdocker.gs` đã có handler `deleteArticle` nhưng cần deploy lại trên Google để có hiệu lực. Nếu chưa redeploy, xóa bài trên web vẫn thành công nhưng dòng trên Sheet sẽ không bị xóa (warning trong audit log).
 - **CMS Browser Panel dùng popup**: CMS FPT Shop chặn iframe (`X-Frame-Options: SAMEORIGIN`), nên panel dùng `window.open`. Lần đầu dùng cần cho phép popup cho domain Vercel. Sau khi đăng nhập CMS một lần, phiên được trình duyệt ghi nhớ.
+- Nếu lại gặp tình trạng CMS "bắt đăng nhập lại nhiều lần", kiểm tra xem tab CMS có đang bị đóng giữa chừng không; luồng mới giữ phiên bằng cách tái sử dụng cùng một named tab, không phải mở tab mới mỗi lần đổi bài.
 - `findMatchingCollaboratorPenNames` vẫn còn fallback full-scan; nếu bảng lớn thêm nên dùng `pg_trgm`/`unaccent`.
 - Route `statistics` fallback legacy vẫn đọc full bảng nếu narrow query trượt.
 - `ArticlesPage` và `DashboardPage` vẫn là hai chunk client lớn nhất; `ArticlePreviewPanel` đã được tách khỏi bundle chính, nên bước tối ưu client kế tiếp nên ưu tiên các modal/import flow còn nằm chung trong `ArticlesPage.tsx`.
