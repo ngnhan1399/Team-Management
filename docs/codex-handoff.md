@@ -3,16 +3,11 @@
 ## Trạng thái hiện tại
 
 - Stack chính: `Next.js App Router` + `TypeScript` + `Drizzle ORM` + `PostgreSQL`.
-- Nghiệp vụ nhạy cảm nhất hiện tại là đồng bộ bài viết hai chiều với Google Sheets.
-- Luồng xóa `web -> Google Sheet` đang là **non-blocking**:
-  - Xóa trên web luôn thành công nếu DB xử lý được.
-  - Nếu sync Google Sheet lỗi thì chỉ ghi warning vào audit log và trả warning về response.
-- Phân quyền bài viết hiện theo mô hình:
-  - tài khoản: `admin` / `ctv`
-  - cờ hệ thống: `isLeader`
-  - cộng tác viên: `writer` / `reviewer`
-- Reviewer hiện xem được hàng chờ duyệt và bài đã nhận duyệt trong đúng phạm vi của mình.
-- Tính năng phản hồi bài viết hiện tập trung quanh luồng `comments` + `review state`, không còn tách rời kiểu cũ.
+- Mô hình phân quyền hiện tại: `leader -> admin team -> writer/reviewer -> ctv account`.
+- Scope dữ liệu đã đi theo `teamId` ở các module chính; leader xem toàn hệ thống, admin team bị giới hạn trong team của mình.
+- Nghiệp vụ nhạy cảm nhất vẫn là đồng bộ bài viết hai chiều với Google Sheets.
+- Luồng xóa `web -> Google Sheet` đang là `non-blocking`: web xóa thành công trước, nếu sync sheet lỗi thì chỉ ghi warning vào audit log và trả cảnh báo.
+- `RoyaltyPage` hiện tính ngân sách CTV chỉ theo bài của collaborator role `writer`; không tính bài của `reviewer` hoặc tài khoản `admin`.
 - Repo đã có tài liệu định vị tốt hơn:
   - `AGENTS.md`
   - `docs/codex-thread-safety.md`
@@ -22,7 +17,26 @@
 
 Ngày cập nhật: `2026-03-11`
 
-### Phiên tối 2 — 11/03
+### Phiên tối 3 - 11/03
+
+**Mục tiêu:** Chuẩn bị bản mới để push GitHub và redeploy Vercel.
+
+#### Đã hoàn thành
+
+- Cài `git` trên máy local để có thể commit/push trực tiếp.
+- Đồng bộ local với `origin/main` và gộp commit team-management mới nhất từ remote.
+- Xử lý conflict ở:
+  - `src/app/components/TeamPage.tsx`
+  - `docs/codex-handoff.md`
+
+#### Kiểm tra đã chạy
+
+- `npm run build` ✅
+- `npm run lint` ✅
+  - Còn warning từ `.next_stale_build/*`
+- `npx tsc --noEmit --pretty false` ✅
+
+### Phiên tối 2 - 11/03
 
 **Mục tiêu:** Điều chỉnh logic Nhuận bút theo ngân sách CTV và bổ sung biểu đồ cân bằng `Viết mới / Viết lại`.
 
@@ -34,84 +48,62 @@ Ngày cập nhật: `2026-03-11`
   - top writers
   - royalty calculation
   - payment generation và payment listing
-- Thêm `contentBalance` vào payload dashboard để trả về:
+- Thêm `contentBalance` vào dashboard:
   - số bài `Viết mới`
   - số bài `Viết lại`
-  - tỉ lệ phần trăm
+  - tỷ lệ phần trăm
   - mức chênh lệch
   - cờ cảnh báo lệch từ `10%`
 - Cập nhật `RoyaltyPage.tsx`:
   - thêm biểu đồ tròn `Viết mới / Viết lại`
-  - admin chỉ thấy tổng bài của CTV writer
+  - admin chỉ thấy tổng bài của CTV writer trong scope team
   - CTV chỉ thấy bài của chính mình
   - thêm cảnh báo trực quan trong UI
-  - thêm popup `alert` khi chênh lệch vượt ngưỡng
+  - thêm popup `alert` khi lệch vượt ngưỡng
 
-#### Kiểm tra đã chạy
+#### File đã động vào
 
-- `npx eslint src/app/api/royalty/route.ts src/app/api/payments/route.ts src/app/components/RoyaltyPage.tsx src/app/components/types.ts src/lib/royalty.ts`
-- `npx tsc --noEmit --pretty false`
+- `src/lib/royalty.ts`
+- `src/app/api/royalty/route.ts`
+- `src/app/api/payments/route.ts`
+- `src/app/components/RoyaltyPage.tsx`
+- `src/app/components/types.ts`
 
-### Phiên tối — 11/03
+### Phiên tối - 11/03
 
 **Mục tiêu:** Bổ sung tài liệu định vị hệ thống và cập nhật lại overview cũ.
 
 #### Đã hoàn thành
 
 - Tạo `docs/project-map.md`:
-  - mô tả cấu trúc thư mục
-  - các module nghiệp vụ
+  - cấu trúc thư mục
+  - module nghiệp vụ
   - bảng dữ liệu
   - phân quyền
   - luồng dữ liệu chính
   - script và CI
-- Cập nhật `../project_overview.md` ở root workspace:
-  - bỏ nội dung cũ lệch trạng thái thật
-  - bỏ mô tả AI runtime/SQLite/single-file UI
-  - thay bằng overview gọn và trỏ sang doc chi tiết mới
+- Cập nhật `../project_overview.md` ở root workspace để bỏ mô tả cũ lệch runtime hiện tại.
 
-#### Ghi chú
+### Phiên chiều và khuya - 11/03
 
-- Không sửa code nghiệp vụ trong phiên này.
-- Tài liệu cũ từng lệch với runtime hiện tại ở các điểm:
-  - còn nói tới AI page
-  - còn nói tới SQLite runtime
-  - còn mô tả `page.tsx` kiểu single-file lớn
+**Những thay đổi nền quan trọng đang có trong repo**
 
-### Phiên chiều 2 — 11/03
-
-**Mục tiêu:** Rebuild CMS Browser Panel với UI/UX nâng cao + session persistence.
-
-#### Đã hoàn thành
-
-- Tạo lại `ArticlePreviewPanel.tsx`:
-  - panel sidebar bên phải
-  - không chặn bảng bài viết
-  - dùng `window.open(url, "cms_review")` để giữ session CMS
-- Tích hợp vào `ArticlesPage.tsx`:
-  - click tiêu đề mở panel thay vì mở tab mới
-  - state `previewArticle` quản lý bài đang xem
-- Layout responsive khi panel mở:
-  - thêm class `cms-panel-open` vào `<html>`
-  - nới rộng layout và chừa `padding-right` cho panel
-
-### Các thay đổi quan trọng khác trong ngày 11/03
-
-- Tối ưu `GET /api/notifications`, `GET /api/statistics`, `getDeletePreview` và SSE fallback poll.
-- Luồng xóa bài tối ưu phản hồi:
-  - toast đang xử lý
-  - realtime/audit chạy background
-- `MainApp.tsx` lazy-load theo tab và preload khi hover/focus/touch.
-- Thêm mutation `deleteArticle` cho Apps Script để hỗ trợ xóa trên workbook.
-- Vá quyền reviewer và chuẩn hóa migrate `editor -> reviewer`.
-- Thêm trường `review_link`.
+- Nâng app từ `admin toàn cục` sang `leader + team admin`.
+- Thêm bảng `teams`, `users.isLeader`, `users.teamId`, và backfill dữ liệu legacy vào `Team mặc định`.
+- Thêm API `GET/POST/PUT /api/teams` cho leader tạo team và bàn giao owner.
+- `TeamPage.tsx` có selector team cho leader, modal tạo team, modal bàn giao owner, và roster theo team.
+- Vá bootstrap/login:
+  - tách tạo index `team_id` sau bước tạo cột
+  - reset `initializationPromise` nếu bootstrap fail để request sau có thể retry
+- Thêm chẩn đoán DB ở:
+  - `src/lib/runtime-diagnostics.ts`
+  - `src/app/api/health/route.ts`
 
 ## Việc còn cần nhớ
 
 - **Redeploy Apps Script**:
   - file `output/google-sheets-webhook.workdocker.gs` đã có handler `deleteArticle`
-  - nhưng cần deploy lại trên Google để có hiệu lực
-- Luồng mở link duyệt bài hiện ưu tiên copy `review_link` hoặc mở panel thay vì ép điều hướng cross-site.
+  - cần deploy lại trên Google để thay đổi có hiệu lực
 - `findMatchingCollaboratorPenNames` vẫn còn fallback full scan; nếu dữ liệu lớn hơn nên cân nhắc `pg_trgm` hoặc `unaccent`.
 - `ArticlesPage.tsx` và `google-sheet-sync.ts` vẫn là hai điểm phức tạp lớn nhất của codebase.
 - Branding hiện còn chưa thống nhất:
@@ -127,6 +119,9 @@ Ngày cập nhật: `2026-03-11`
 - `docs/project-map.md`
 - `src/db/schema.ts`
 - `src/db/index.ts`
+- `src/lib/teams.ts`
+- `src/app/api/teams/route.ts`
+- `src/app/components/TeamPage.tsx`
 - `src/app/api/articles/route.ts`
 - `src/lib/google-sheet-sync.ts`
 - `src/lib/google-sheet-mutation.ts`
@@ -147,13 +142,6 @@ Ngày cập nhật: `2026-03-11`
 npm run lint
 npm run build
 ```
-
-## Ghi chú kiểm tra gần nhất
-
-- Trong phiên tài liệu này, chưa xác nhận được `lint/build` hoàn tất:
-  - `npm run lint` treo quá lâu trong workspace hiện tại
-  - `npm run build` có lúc vướng `.next/lock`, sau đó vẫn chạy quá lâu nên đã dừng
-- Khi sửa code nghiệp vụ tiếp theo, nên chạy lại kiểm tra trong môi trường sạch hơn hoặc sau khi bảo đảm không còn tiến trình build/lint treo nền.
 
 ## Mẫu handoff cho thread sau
 
