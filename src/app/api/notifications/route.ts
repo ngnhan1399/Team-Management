@@ -101,8 +101,8 @@ export async function POST(request: NextRequest) {
         } else {
             const broadcastConditions = [
                 sql`${users.id} != ${context.user.id}`,
-                adminTeamId ? eq(users.teamId, adminTeamId) : null,
-            ].filter(Boolean);
+                adminTeamId ? eq(users.teamId, adminTeamId) : undefined,
+            ].filter((c): c is NonNullable<typeof c> => c != null);
             const broadcastTargets = await db
                 .select({ id: users.id, penName: collaborators.penName, teamId: users.teamId })
                 .from(users)

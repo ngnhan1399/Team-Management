@@ -7,7 +7,8 @@ import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
-import { eq, desc } from "drizzle-orm";
+import { canAccessTeam } from "@/lib/teams";
+import { eq, desc, and } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 function canAccessArticleReview(
@@ -65,6 +66,9 @@ export async function GET(request: NextRequest) {
         if (!article) {
             return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
         }
+        if (!canAccessTeam(context, article.teamId)) {
+            return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+        }
 
         if (!canAccessArticleReview(context, article)) {
             return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
@@ -103,6 +107,9 @@ export async function POST(request: NextRequest) {
         const article = await db.select().from(articles).where(eq(articles.id, articleId)).get();
         if (!article) {
             return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+        }
+        if (!canAccessTeam(context, article.teamId)) {
+            return NextResponse.json({ success: false, error: "Reviewer access required" }, { status: 403 });
         }
 
         if (!canCreateArticleReview(context, article)) {
@@ -210,6 +217,9 @@ export async function PUT(request: NextRequest) {
         if (!article) {
             return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
         }
+        if (!canAccessTeam(context, article.teamId)) {
+            return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+        }
 
         if (hasArticleReviewAccess(context) && !hasArticleManagerAccess(context)) {
             return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
@@ -236,7 +246,11 @@ export async function PUT(request: NextRequest) {
             .where(eq(articles.id, review.articleId))
             .run();
 
-        const adminUser = await db.select().from(users).where(eq(users.role, "admin")).get();
+        const adminUser = await db
+            .select()
+            .from(users)
+            .where(and(eq(users.role, "admin"), eq(users.teamId, article.teamId)))
+            .get();
 
         if (adminUser) {
             await createNotification({

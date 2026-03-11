@@ -262,8 +262,8 @@ export async function POST(request: NextRequest) {
           eq(payments.month, month),
           eq(payments.year, year),
           eq(payments.penName, row.penName),
-          row.teamId ? eq(payments.teamId, row.teamId) : adminTeamId ? eq(payments.teamId, adminTeamId) : null,
-        ].filter(Boolean);
+          row.teamId ? eq(payments.teamId, row.teamId) : adminTeamId ? eq(payments.teamId, adminTeamId) : undefined,
+        ].filter((c): c is NonNullable<typeof c> => c != null);
         const existing = await db
           .select()
           .from(payments)
@@ -312,9 +312,9 @@ export async function POST(request: NextRequest) {
       const stalePaymentConditions = [
         eq(payments.month, month),
         eq(payments.year, year),
-        penName ? eq(payments.penName, penName) : null,
-        adminTeamId ? eq(payments.teamId, adminTeamId) : null,
-      ].filter(Boolean);
+        penName ? eq(payments.penName, penName) : undefined,
+        adminTeamId ? eq(payments.teamId, adminTeamId) : undefined,
+      ].filter((c): c is NonNullable<typeof c> => c != null);
       const stalePaymentWhere = and(...stalePaymentConditions);
 
       const stalePayments = await db

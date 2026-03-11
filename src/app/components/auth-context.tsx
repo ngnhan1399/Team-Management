@@ -15,8 +15,16 @@ export interface AuthUser {
   id: number;
   email: string;
   role: "admin" | "ctv";
+  isLeader: boolean;
   mustChangePassword: boolean;
   collaboratorId: number | null;
+  teamId: number | null;
+  team?: {
+    id: number;
+    name: string;
+    description?: string | null;
+    status?: "active" | "archived";
+  } | null;
   collaborator?: AuthCollaborator;
 }
 

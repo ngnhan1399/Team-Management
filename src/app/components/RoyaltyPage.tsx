@@ -39,6 +39,7 @@ export default function RoyaltyPage() {
   const [forceGenerate, setForceGenerate] = useState(false);
   const [expandedPaymentId, setExpandedPaymentId] = useState<number | null>(null);
   const isAdmin = user?.role === "admin";
+  const isLeader = Boolean(isAdmin && user?.isLeader);
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
 
   const PIE_COLORS = ["var(--neon-cyan)", "var(--neon-violet)", "var(--accent)", "var(--success)", "var(--danger)", "#3b82f6", "#10b981", "#f59e0b", "#f97316", "#6366f1"];
@@ -222,7 +223,11 @@ export default function RoyaltyPage() {
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Nhuận bút</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
-            {isAdmin ? "Theo dõi ngân sách và nhuận bút thực tế theo từng kỳ." : `Theo dõi nhuận bút thực tế của ${collaboratorLabel} theo từng kỳ.`}
+            {isLeader
+              ? "Theo dõi ngân sách hệ thống và nhuận bút thực tế theo từng kỳ."
+              : isAdmin
+                ? "Theo dõi nhuận bút thực tế của team bạn theo từng kỳ."
+                : `Theo dõi nhuận bút thực tế của ${collaboratorLabel} theo từng kỳ.`}
           </p>
         </div>
       </header>
@@ -314,7 +319,7 @@ export default function RoyaltyPage() {
                 ))}
               </div>
 
-              {isAdmin && (
+              {isLeader && (
                 <div className="glass-card" style={{ padding: 24, marginBottom: 32, display: "flex", gap: 20, alignItems: "flex-end", background: "rgba(0,0,0,0.01)" }}>
                   <div style={{ flex: 1 }}>
                     <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.05em" }}>🎯 Ngân sách mục tiêu cho {monthNames[overviewMonth - 1]}/{overviewYear}</label>

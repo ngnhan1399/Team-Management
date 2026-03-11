@@ -2,6 +2,7 @@ export type Page = "dashboard" | "articles" | "tasks" | "team" | "royalty" | "no
 
 export interface Collaborator {
   id: number;
+  teamId?: number | null;
   name: string;
   penName: string;
   role: "writer" | "reviewer";
@@ -17,13 +18,32 @@ export interface Collaborator {
   linkedUserId?: number | null;
   linkedUserEmail?: string | null;
   linkedUserRole?: "admin" | "ctv" | null;
+  linkedUserIsLeader?: boolean;
+  linkedUserTeamId?: number | null;
 }
 
 export interface UserAccount {
   id: number;
   email: string;
   role: "admin" | "ctv";
+  isLeader?: boolean;
   collaboratorId: number | null;
+  teamId?: number | null;
+}
+
+export interface TeamSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  status: "active" | "archived";
+  ownerUserId: number | null;
+  ownerEmail: string | null;
+  ownerName: string | null;
+  ownerPenName: string | null;
+  memberCount: number;
+  writerCount: number;
+  reviewerCount: number;
+  adminCount: number;
 }
 
 export interface Article {
@@ -109,6 +129,7 @@ export interface FeedbackItem {
   id: number;
   userId: number;
   collaboratorId: number | null;
+  teamId: number | null;
   submitterName: string;
   submitterEmail: string;
   category: "bug" | "feature" | "improvement" | "other";

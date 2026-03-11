@@ -85,17 +85,25 @@ export default function MainApp() {
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
     || "Người dùng";
+  const isAdmin = user?.role === "admin";
+  const isLeader = Boolean(isAdmin && user?.isLeader);
   const collaboratorRole = typeof user?.collaborator?.role === "string" ? user.collaborator.role : "";
-  const roleSubtitle = user?.role === "admin"
-    ? "BIÊN TẬP VIÊN CHÍNH"
-    : collaboratorRole === "reviewer"
-      ? "CTV DUYỆT BÀI"
-      : "CỘNG TÁC VIÊN";
-  const mobileRoleLabel = user?.role === "admin"
-    ? "Biên tập viên chính"
-    : collaboratorRole === "reviewer"
-      ? "CTV duyệt bài"
-      : "Cộng tác viên";
+  const roleSubtitle = isLeader
+    ? "LEADER HỆ THỐNG"
+    : isAdmin
+      ? "ADMIN TEAM"
+      : collaboratorRole === "reviewer"
+        ? "CTV DUYỆT BÀI"
+        : "CỘNG TÁC VIÊN";
+  const mobileRoleLabel = isLeader
+    ? "Leader hệ thống"
+    : isAdmin
+      ? "Admin team"
+      : collaboratorRole === "reviewer"
+        ? "CTV duyệt bài"
+        : "Cộng tác viên";
+  const teamName = user?.team?.name?.trim() || "";
+  const roleSubtitleWithTeam = teamName && isAdmin ? `${roleSubtitle} • ${teamName}` : roleSubtitle;
 
   const refreshUnreadCount = useCallback((announceNew = false) => {
     fetch("/api/notifications?unread=true", { cache: "no-store" })
@@ -223,8 +231,6 @@ export default function MainApp() {
     void loader().catch(() => { }).finally(commitNavigation);
   }, [page]);
 
-  const isAdmin = user?.role === "admin";
-
   const navItems = [
     { id: "dashboard", label: "Tổng quan", icon: "dashboard", section: "Tổng quan" },
     { id: "notifications", label: "Thông báo", icon: "notifications", section: "Tổng quan", count: unreadCount },
@@ -233,7 +239,7 @@ export default function MainApp() {
     { id: "tasks", label: "Lịch biên tập", icon: "task_alt", section: "Quản lý" },
     { id: "team", label: "Đội ngũ", icon: "group", section: "Quản lý", adminOnly: true },
     { id: "royalty", label: "Nhuận bút", icon: "payments", section: "Quản lý" },
-    { id: "audit", label: "Audit Logs", icon: "history", section: "Quản lý", adminOnly: true },
+    { id: "audit", label: "Audit Logs", icon: "history", section: "Quản lý", adminOnly: true, leaderOnly: true },
   ];
 
   return (
@@ -245,13 +251,17 @@ export default function MainApp() {
           <BrandLogo
             markSize={42}
             titleSize={18}
-            subtitle={roleSubtitle}
+            subtitle={roleSubtitleWithTeam}
           />
         </div>
 
         <nav className="flex-1 px-4 mt-4 space-y-1 overflow-y-auto custom-scrollbar">
           {["Tổng quan", "Quản lý"].map(section => {
-            const items = navItems.filter(item => item.section === section && (!item.adminOnly || isAdmin));
+            const items = navItems.filter((item) =>
+              item.section === section
+              && (!item.adminOnly || isAdmin)
+              && (!item.leaderOnly || isLeader)
+            );
             if (items.length === 0) return null;
             return (
               <React.Fragment key={section}>
@@ -355,7 +365,7 @@ export default function MainApp() {
           {page === "tasks" && <EditorialTasksPage />}
           {page === "team" && isAdmin && <TeamPage />}
           {page === "royalty" && <RoyaltyPage />}
-          {page === "audit" && isAdmin && <AuditLogsPage />}
+          {page === "audit" && isLeader && <AuditLogsPage />}
           {page === "notifications" && <NotificationsPage />}
           {page === "profile" && <ProfilePage />}
         </div>
