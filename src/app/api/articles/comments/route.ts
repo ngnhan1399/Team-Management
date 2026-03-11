@@ -7,7 +7,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { requiredInt, requiredString, optionalString, ValidationError } from "@/lib/validation";
-import { and, desc, eq, leftJoin } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type UserDirectoryEntry = {
