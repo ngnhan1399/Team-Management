@@ -1,31 +1,86 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
-import ArticlesPage from "./ArticlesPage";
-import AuditLogsPage from "./AuditLogsPage";
 import DashboardPage from "./DashboardPage";
-import EditorialTasksPage from "./EditorialTasksPage";
-import FeedbackPage from "./FeedbackPage";
-import NotificationsPage from "./NotificationsPage";
-import ProfilePage from "./ProfilePage";
 import RealtimeToastLayer from "./RealtimeToastLayer";
-import RoyaltyPage from "./RoyaltyPage";
-import TeamPage from "./TeamPage";
 import BrandLogo from "./BrandLogo";
 import { useAuth } from "./auth-context";
 import { emitRealtimePayload } from "./realtime";
 import type { Page } from "./types";
 
+const loadArticlesPage = () => import("./ArticlesPage");
+const loadAuditLogsPage = () => import("./AuditLogsPage");
+const loadEditorialTasksPage = () => import("./EditorialTasksPage");
+const loadFeedbackPage = () => import("./FeedbackPage");
+const loadNotificationsPage = () => import("./NotificationsPage");
+const loadProfilePage = () => import("./ProfilePage");
+const loadRoyaltyPage = () => import("./RoyaltyPage");
+const loadTeamPage = () => import("./TeamPage");
+
+function PageLoadingState({ label }: { label: string }) {
+  return (
+    <div
+      className="card"
+      style={{
+        minHeight: 240,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        textAlign: "center",
+      }}
+    >
+      <p style={{ color: "var(--text-muted)", fontSize: 14, fontWeight: 600 }}>{label}</p>
+    </div>
+  );
+}
+
+const ArticlesPage = dynamic(loadArticlesPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const AuditLogsPage = dynamic(loadAuditLogsPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const EditorialTasksPage = dynamic(loadEditorialTasksPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const FeedbackPage = dynamic(loadFeedbackPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const NotificationsPage = dynamic(loadNotificationsPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const ProfilePage = dynamic(loadProfilePage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const RoyaltyPage = dynamic(loadRoyaltyPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const TeamPage = dynamic(loadTeamPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+
+const pageLoaders: Partial<Record<Page, () => Promise<unknown>>> = {
+  articles: loadArticlesPage,
+  audit: loadAuditLogsPage,
+  feedback: loadFeedbackPage,
+  notifications: loadNotificationsPage,
+  profile: loadProfilePage,
+  royalty: loadRoyaltyPage,
+  tasks: loadEditorialTasksPage,
+  team: loadTeamPage,
+};
+
+const pageLabels: Record<Page, string> = {
+  dashboard: "Tổng quan",
+  articles: "Bài viết",
+  tasks: "Lịch biên tập",
+  team: "Đội ngũ",
+  royalty: "Nhuận bút",
+  notifications: "Thông báo",
+  feedback: "Feedback",
+  audit: "Audit Logs",
+  profile: "Hồ sơ",
+};
+
 export default function MainApp() {
   const { user, logout, refreshUser } = useAuth();
   const [page, setPage] = useState<Page>("dashboard");
+  const [pendingPage, setPendingPage] = useState<Page | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isPageTransitionPending, startPageTransition] = useTransition();
   const seenRealtimeIdsRef = useRef<number[]>([]);
   const seenNotificationToastIdsRef = useRef<number[]>([]);
   const lastUnreadCountRef = useRef(0);
   const unreadBaselineReadyRef = useRef(false);
+  const navigationRequestIdRef = useRef(0);
   const displayName = (typeof user?.collaborator?.name === "string" && user.collaborator.name.trim())
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
@@ -131,10 +186,42 @@ export default function MainApp() {
     }
   }, [user?.id]);
 
-  const navigateToPage = useCallback((nextPage: Page) => {
-    setPage(nextPage);
-    setSidebarOpen(false);
+  const preloadPage = useCallback((nextPage: Page) => {
+    const loader = pageLoaders[nextPage];
+    if (!loader || typeof window === "undefined") {
+      return;
+    }
+    void loader().catch(() => { });
   }, []);
+
+  const navigateToPage = useCallback((nextPage: Page) => {
+    setSidebarOpen(false);
+    if (nextPage === page) {
+      setPendingPage(null);
+      return;
+    }
+
+    setPendingPage(nextPage);
+    const requestId = navigationRequestIdRef.current + 1;
+    navigationRequestIdRef.current = requestId;
+    const loader = pageLoaders[nextPage];
+    const commitNavigation = () => {
+      if (navigationRequestIdRef.current !== requestId) {
+        return;
+      }
+      startPageTransition(() => {
+        setPage(nextPage);
+        setPendingPage(null);
+      });
+    };
+
+    if (!loader || typeof window === "undefined") {
+      commitNavigation();
+      return;
+    }
+
+    void loader().catch(() => { }).finally(commitNavigation);
+  }, [page]);
 
   const isAdmin = user?.role === "admin";
 
@@ -155,10 +242,10 @@ export default function MainApp() {
       {sidebarOpen && <button className="sidebar-backdrop lg:hidden" aria-label="Đóng menu điều hướng" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div style={{ padding: 24, display: "flex", alignItems: "flex-start", width: "100%" }}>
-          <BrandLogo 
-            markSize={42} 
-            titleSize={18} 
-            subtitle={roleSubtitle} 
+          <BrandLogo
+            markSize={42}
+            titleSize={18}
+            subtitle={roleSubtitle}
           />
         </div>
 
@@ -170,7 +257,15 @@ export default function MainApp() {
               <React.Fragment key={section}>
                 <div className="text-[11px] text-[var(--text-muted)] font-bold uppercase tracking-wider mb-2 mt-6 px-2">{section}</div>
                 {items.map(item => (
-                  <button key={item.id} data-testid={`nav-${item.id}`} onClick={() => navigateToPage(item.id as Page)} className={`sidebar-nav-item ${page === item.id ? "active" : ""}`}>
+                  <button
+                    key={item.id}
+                    data-testid={`nav-${item.id}`}
+                    onMouseEnter={() => preloadPage(item.id as Page)}
+                    onFocus={() => preloadPage(item.id as Page)}
+                    onTouchStart={() => preloadPage(item.id as Page)}
+                    onClick={() => navigateToPage(item.id as Page)}
+                    className={`sidebar-nav-item ${page === item.id ? "active" : ""}`}
+                  >
                     <span className="material-symbols-outlined">{item.icon}</span>
                     <span style={{ flex: 1 }}>{item.label}</span>
                     {item.count !== undefined && item.count > 0 && (
@@ -215,9 +310,33 @@ export default function MainApp() {
                 {displayName}
               </p>
             </div>
+            {(pendingPage || isPageTransitionPending) && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "var(--text-muted)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>progress_activity</span>
+                {pageLabels[pendingPage ?? page]}
+              </div>
+            )}
             <button
               type="button"
               className="mobile-nav-trigger"
+              onMouseEnter={() => preloadPage("notifications")}
+              onFocus={() => preloadPage("notifications")}
+              onTouchStart={() => preloadPage("notifications")}
               onClick={() => navigateToPage("notifications")}
               aria-label="Mở thông báo"
               style={{ position: "relative" }}

@@ -14,6 +14,7 @@ Ngày cập nhật: `2026-03-11`
 
 - Đã tối ưu một số route nóng theo hướng ít rủi ro: `GET /api/notifications` trả list + unread count song song, `getDeletePreview` đếm comment/review/notification/payment song song, `GET /api/statistics` cho user thường chỉ lấy các cột cần thiết thay vì kéo full row, và SSE fallback poll ở `api/realtime` đã nới từ 1.5s lên 5s để giảm tải DB.
 - Luồng xóa bài đã được tối ưu cảm giác phản hồi: UI phát toast "đang xóa" ngay khi xác nhận, nút xóa đổi sang spinner/disabled, và API dời `writeAuditLog` + `publishRealtimeEvent` sang background để trả kết quả sớm hơn.
+- `src/app/components/MainApp.tsx` đã được tách bundle theo tab: giữ `DashboardPage` eager vì là màn mặc định, còn các page nặng như `Articles`, `Team`, `Royalty`, `Audit`, `Notifications`... được `next/dynamic` lazy-load. Điều hướng còn preload chunk theo hover/focus/touch và chỉ commit chuyển trang sau khi chunk sẵn sàng để giảm cảm giác khựng khi đổi tab.
 - Đã gỡ đoạn nút reviewer dang dở trong `src/app/components/ArticlesPage.tsx` còn gọi `setReviewArticle` / `setShowReviewModal` nhưng không còn state tương ứng; đây là nguyên nhân build production fail nên web chưa nhận được trường `review_link`.
 - Dọn helper xóa không còn dùng trong `src/app/api/articles/route.ts` để giữ `npm run lint` sạch.
 - Đã thêm mutation `deleteArticle` trong `src/lib/google-sheet-mutation.ts`.
@@ -30,6 +31,7 @@ Ngày cập nhật: `2026-03-11`
 - `findMatchingCollaboratorPenNames` trong `src/app/api/articles/route.ts` vẫn đọc toàn bộ bảng `collaborators` khi có search text; nếu search bài còn chậm ở dữ liệu lớn, đây là ứng viên tối ưu tiếp theo.
 - Route `statistics` cho user thường vẫn gom toàn bộ bài thuộc scope của user để tính aggregate; đã giảm bớt payload nhưng nếu một user có rất nhiều bài thì vẫn nên chuyển thêm phần group/count xuống SQL.
 - Luồng xóa vẫn chờ xác nhận từ Google Sheet trước khi xóa DB; nếu còn chậm bất thường thì cần đo riêng Apps Script/webhook vì timeout web app hiện là 8 giây.
+- `MainApp` đã bớt nặng bundle đầu, nhưng nếu còn cảm giác chậm khi mở lần đầu từng tab thì nên đo tiếp chunk size của `ArticlesPage` và `DashboardPage`; đây nhiều khả năng là hai page client lớn nhất hiện tại.
 - Nếu production chưa thấy ô `Đường dẫn duyệt bài` trong modal thêm/sửa bài, kiểm tra xem commit gỡ lỗi build reviewer đã được push và redeploy hay chưa.
 - Cần redeploy Apps Script bằng file `output/google-sheets-webhook.workdocker.gs` mới nhất.
 - Nếu chưa redeploy, thao tác xóa từ web có thể bị chặn để tránh lệch dữ liệu.
