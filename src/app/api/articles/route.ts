@@ -307,17 +307,6 @@ async function ensureGoogleSheetDeleteConsistency(
   return warnings;
 }
 
-function buildDeleteSyncFailureResponse(failures: string[]) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: "Không thể xác nhận xóa trên Google Sheet, nên hệ thống đã hủy thao tác để tránh lệch dữ liệu.",
-      details: failures.slice(0, 5),
-    },
-    { status: 409 }
-  );
-}
-
 function readCriteriaFromSearchParams(searchParams: URLSearchParams): ArticleCriteria {
   return {
     search: normalizeString(searchParams.get("search")),

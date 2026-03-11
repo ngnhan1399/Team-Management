@@ -12,6 +12,8 @@
 
 Ngày cập nhật: `2026-03-11`
 
+- Đã gỡ đoạn nút reviewer dang dở trong `src/app/components/ArticlesPage.tsx` còn gọi `setReviewArticle` / `setShowReviewModal` nhưng không còn state tương ứng; đây là nguyên nhân build production fail nên web chưa nhận được trường `review_link`.
+- Dọn helper xóa không còn dùng trong `src/app/api/articles/route.ts` để giữ `npm run lint` sạch.
 - Đã thêm mutation `deleteArticle` trong `src/lib/google-sheet-mutation.ts`.
 - `DELETE /api/articles` giờ xác nhận xóa được trên Google Sheet rồi mới xóa DB.
 - Apps Script xuất ra ở `output/google-sheets-webhook.workdocker.gs` giờ dò xóa trên toàn workbook để tránh báo thành công giả khi tìm nhầm tab.
@@ -23,6 +25,7 @@ Ngày cập nhật: `2026-03-11`
 
 ## Việc còn cần nhớ
 
+- Nếu production chưa thấy ô `Đường dẫn duyệt bài` trong modal thêm/sửa bài, kiểm tra xem commit gỡ lỗi build reviewer đã được push và redeploy hay chưa.
 - Cần redeploy Apps Script bằng file `output/google-sheets-webhook.workdocker.gs` mới nhất.
 - Nếu chưa redeploy, thao tác xóa từ web có thể bị chặn để tránh lệch dữ liệu.
 - UI đã hiện chi tiết lỗi xóa rõ hơn nếu Google Sheet chưa xác nhận được dòng gốc.

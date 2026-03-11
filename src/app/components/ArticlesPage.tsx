@@ -159,7 +159,6 @@ export default function ArticlesPage() {
   const isReviewer = user?.role === "ctv" && collaboratorRole === "reviewer";
   const isWriter = user?.role === "ctv" && collaboratorRole === "writer";
   const canManageArticles = isAdmin;
-  const canReviewArticles = isAdmin || isReviewer;
   const canCreateArticles = isAdmin || isWriter;
   const canSyncArticles = isAdmin || isWriter;
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
@@ -1409,11 +1408,6 @@ export default function ArticlesPage() {
                         {(canManageArticles || a.canDelete) && (
                           <button data-testid={`article-delete-${a.id}`} onClick={() => deleteSingleArticle(a)} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} title="Xóa bài">
                             <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
-                          </button>
-                        )}
-                        {canReviewArticles && a.status === "Submitted" && (
-                          <button onClick={() => { setReviewArticle(a); setShowReviewModal(true); }} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(168, 85, 247, 0.1)", color: "#a855f7", border: "1px solid rgba(168, 85, 247, 0.2)" }} title="Duyệt lỗi">
-                            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>rule</span>
                           </button>
                         )}
                       </div>
