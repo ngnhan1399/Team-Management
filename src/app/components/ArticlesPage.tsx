@@ -511,7 +511,15 @@ export default function ArticlesPage() {
       const res = await fetch(`/api/articles/comments?articleId=${articleId}`, { cache: "no-store" });
       const data = await res.json();
       if (data.success) {
-        setComments(data.data || []);
+        const nextComments = Array.isArray(data.data) ? data.data : [];
+        setComments(nextComments);
+        setArticles((prev) =>
+          prev.map((article) =>
+            article.id === articleId
+              ? { ...article, commentCount: nextComments.length, unreadCommentCount: 0 }
+              : article
+          )
+        );
       } else {
         alert("❌ " + (data.error || "Không tải được bình luận"));
       }
@@ -879,6 +887,29 @@ export default function ArticlesPage() {
     await fetch("/api/articles/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ articleId: reviewArticle.id, errorNotes }) });
     setShowReviewModal(false); setErrorNotes(""); setReviewArticle(null);
     alert("✅ Đã gửi lỗi cho CTV!"); fetchArticles(pagination.page);
+  };
+
+  const getCommentBadgeLabel = (article: Article) => {
+    const unreadCount = Number(article.unreadCommentCount || 0);
+    const totalCount = Number(article.commentCount || 0);
+    const count = unreadCount > 0 ? unreadCount : totalCount;
+    if (count <= 0) return "";
+    return count > 9 ? "9+" : String(count);
+  };
+
+  const getCommentButtonTitle = (article: Article) => {
+    const unreadCount = Number(article.unreadCommentCount || 0);
+    const totalCount = Number(article.commentCount || 0);
+
+    if (unreadCount > 0) {
+      return `Bình luận (${unreadCount} chưa đọc, ${totalCount} tổng cộng)`;
+    }
+
+    if (totalCount > 0) {
+      return `Bình luận (${totalCount} bình luận)`;
+    }
+
+    return "Bình luận";
   };
 
   const statusBadge = (s: string) => {
@@ -1284,9 +1315,56 @@ export default function ArticlesPage() {
                     </td>
                     <td style={{ padding: "12px 14px", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
-                        <button data-testid={`article-comment-${a.id}`} onClick={() => openComments(a)} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Bình luận">
-                          <span className="material-symbols-outlined" style={{ fontSize: 17 }}>forum</span>
-                        </button>
+                        <div style={{ position: "relative", display: "inline-flex" }}>
+                          <button
+                            data-testid={`article-comment-${a.id}`}
+                            onClick={() => openComments(a)}
+                            className="btn-ios-pill btn-ios-secondary"
+                            style={{ padding: "5px 9px", minWidth: 34, height: 34 }}
+                            title={getCommentButtonTitle(a)}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>forum</span>
+                          </button>
+                          {Number(a.commentCount || 0) > 0 && (
+                            <span
+                              className={Number(a.unreadCommentCount || 0) > 0 ? "comment-badge-pulse" : ""}
+                              style={{
+                                position: "absolute",
+                                top: -5,
+                                right: -5,
+                                minWidth: 17,
+                                height: 17,
+                                padding: "0 4px",
+                                borderRadius: 999,
+                                background: Number(a.unreadCommentCount || 0) > 0 ? "var(--danger)" : "var(--accent-blue)",
+                                color: "#fff",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                boxShadow: Number(a.unreadCommentCount || 0) > 0 ? "0 0 0 2px rgba(239, 68, 68, 0.12)" : "0 0 0 2px rgba(59, 130, 246, 0.12)",
+                              }}
+                            >
+                              {getCommentBadgeLabel(a)}
+                            </span>
+                          )}
+                          {Number(a.unreadCommentCount || 0) > 0 && Number(a.commentCount || 0) === 0 && (
+                            <span
+                              className="comment-badge-pulse"
+                              style={{
+                                position: "absolute",
+                                top: -3,
+                                right: -3,
+                                width: 10,
+                                height: 10,
+                                borderRadius: 999,
+                                background: "var(--danger)",
+                                boxShadow: "0 0 0 2px white",
+                              }}
+                            />
+                          )}
+                        </div>
                         <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                         </button>

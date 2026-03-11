@@ -75,6 +75,8 @@ type ArticleResponseRow = {
   reviewerName: string | null;
   notes: string | null;
   canDelete: boolean;
+  commentCount: number;
+  unreadCommentCount: number;
 };
 
 type NonBlockingStepOptions<T> = {
@@ -128,10 +130,71 @@ async function loadArticleResponseRow(articleId: number, currentUserId: number, 
 
   if (!row) return null;
 
+  const [article] = await attachArticleResponseMetadata([row], currentUserId, canManageArticles);
+  return article ?? null;
+}
+
+async function loadArticleCommentMetadata(articleIds: number[], currentUserId: number) {
+  if (articleIds.length === 0) {
+    return {
+      commentCounts: new Map<number, number>(),
+      unreadCommentCounts: new Map<number, number>(),
+    };
+  }
+
+  const [commentRows, unreadRows] = await Promise.all([
+    db
+      .select({
+        articleId: articleComments.articleId,
+        count: sql<number>`count(*)`,
+      })
+      .from(articleComments)
+      .where(inArray(articleComments.articleId, articleIds))
+      .groupBy(articleComments.articleId)
+      .all(),
+    db
+      .select({
+        articleId: notifications.relatedArticleId,
+        count: sql<number>`count(*)`,
+      })
+      .from(notifications)
+      .where(
+        and(
+          inArray(notifications.relatedArticleId, articleIds),
+          eq(notifications.toUserId, currentUserId),
+          eq(notifications.type, "comment"),
+          eq(notifications.isRead, false)
+        )
+      )
+      .groupBy(notifications.relatedArticleId)
+      .all(),
+  ]);
+
   return {
+    commentCounts: new Map(commentRows.map((row) => [Number(row.articleId), Number(row.count || 0)])),
+    unreadCommentCounts: new Map(unreadRows.map((row) => [Number(row.articleId || 0), Number(row.count || 0)])),
+  };
+}
+
+async function attachArticleResponseMetadata<
+  T extends {
+    id: number;
+    createdByUserId: number | null;
+  },
+>(
+  rows: T[],
+  currentUserId: number,
+  canManageArticles: boolean
+): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount">>> {
+  const articleIds = rows.map((row) => row.id).filter((id) => Number.isInteger(id) && id > 0);
+  const { commentCounts, unreadCommentCounts } = await loadArticleCommentMetadata(articleIds, currentUserId);
+
+  return rows.map((row) => ({
     ...row,
     canDelete: canManageArticles || row.createdByUserId === currentUserId,
-  };
+    commentCount: commentCounts.get(row.id) || 0,
+    unreadCommentCount: unreadCommentCounts.get(row.id) || 0,
+  }));
 }
 
 async function notifyGoogleSheetSyncIssue(userId: number, message: string) {
@@ -608,11 +671,7 @@ export async function GET(request: NextRequest) {
         .all(),
     ]);
 
-    const data = pagedRows
-      .map((article) => ({
-        ...article,
-        canDelete: canManageArticles || article.createdByUserId === context.user.id,
-      }));
+    const data = await attachArticleResponseMetadata(pagedRows, context.user.id, canManageArticles);
 
     return NextResponse.json({
       success: true,

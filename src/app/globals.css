@@ -1813,3 +1813,13 @@ input[type=number] {
     padding-bottom: 4px;
   }
 }
+
+/* Comment badge pulse animation */
+@keyframes commentBadgePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.18); opacity: 0.85; }
+}
+
+.comment-badge-pulse {
+  animation: commentBadgePulse 1.6s ease-in-out infinite;
+}
