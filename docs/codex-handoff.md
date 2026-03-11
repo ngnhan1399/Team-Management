@@ -3,57 +3,133 @@
 ## Trạng thái hiện tại
 
 - Stack chính: `Next.js App Router` + `TypeScript` + `Drizzle ORM` + `PostgreSQL`.
-- Nghiệp vụ nhạy cảm nhất hiện tại là đồng bộ bài viết hai chiều với Google Sheet.
-- Luồng xóa `web -> Google Sheet` giờ là **non-blocking**: bài xóa trên web luôn thành công, nếu Google Sheet sync thất bại thì chỉ ghi warning vào audit log và trả về response.
-- Luồng phân quyền bài viết đã được chỉnh lại theo mô hình `admin` / `reviewer` / `writer`; reviewer giờ xem được hàng chờ duyệt và bài đã nhận duyệt.
-- Tính năng "Duyệt lỗi" đã được gom vào luồng **Bình luận** duy nhất — chỉ còn 1 entry point cho phản hồi bài viết.
-- Repo đã có `AGENTS.md` và bộ tài liệu Codex để giảm nguy cơ kẹt thread do context quá dài.
+- Nghiệp vụ nhạy cảm nhất hiện tại là đồng bộ bài viết hai chiều với Google Sheets.
+- Luồng xóa `web -> Google Sheet` đang là **non-blocking**:
+  - Xóa trên web luôn thành công nếu DB xử lý được.
+  - Nếu sync Google Sheet lỗi thì chỉ ghi warning vào audit log và trả warning về response.
+- Phân quyền bài viết hiện theo mô hình:
+  - tài khoản: `admin` / `ctv`
+  - cờ hệ thống: `isLeader`
+  - cộng tác viên: `writer` / `reviewer`
+- Reviewer hiện xem được hàng chờ duyệt và bài đã nhận duyệt trong đúng phạm vi của mình.
+- Tính năng phản hồi bài viết hiện tập trung quanh luồng `comments` + `review state`, không còn tách rời kiểu cũ.
+- Repo đã có tài liệu định vị tốt hơn:
+  - `AGENTS.md`
+  - `docs/codex-thread-safety.md`
+  - `docs/project-map.md`
 
 ## Thay đổi quan trọng gần nhất
 
-Ngày cập nhật: `2026-03-11` (phiên chiều)
+Ngày cập nhật: `2026-03-11`
 
-### Phiên chiều 11/03
+### Phiên tối 2 — 11/03
 
-- **Gom "Duyệt lỗi" vào "Bình luận"**: xóa nút "Duyệt lỗi", modal review, state `showReviewModal`/`reviewArticle`/`errorNotes`, hàm `handleReview` trong `ArticlesPage.tsx`. Phản hồi bài viết giờ chỉ qua comment.
-- **Fix xóa bài bị chặn bởi Google Sheet sync**: `ensureGoogleSheetDeleteConsistency` trong `articles/route.ts` giờ trả **warnings** (non-blocking) thay vì failures (blocking). Bài xóa trên web luôn thành công, warnings ghi vào audit log + trả về response.
-- **Xóa `buildDeleteSyncFailureResponse`**: helper không còn dùng sau khi chuyển sang non-blocking.
-- **Xóa mô tả chi tiết trong modal đồng bộ**: loại bỏ đoạn text giải thích engine/mirror/scope CTV và link Google Sheet cứng — tránh lộ thông tin triển khai.
-- **Đã bỏ hẳn CMS Browser Panel**: theo yêu cầu mới, `ArticlesPage.tsx` không còn mở khung preview bên phải nữa. Click tiêu đề giờ là một anchor native mở tab mới (`target="_blank"`) với đúng URL gốc đang được ưu tiên (`review_link` trước, fallback `link`).
-- **Chuẩn hóa `review_link` kiểu login redirect**: thêm helper `src/lib/review-link.ts` để bóc các URL dạng `.../admin/auth/login?redirectTo=...` về URL bài duyệt gốc. Helper này đang được dùng cả lúc hiển thị/mở link và lúc `POST`/`PUT` bài viết, nên dữ liệu cũ mở đúng hơn ngay lập tức và dữ liệu mới sẽ không còn lưu nhầm link login.
-- **Tách `directory view` cho `/api/collaborators`**: các màn `Articles`, `EditorialTasks`, `Notifications`, `Royalty` không còn lấy full hồ sơ cộng tác viên nữa mà dùng `?view=directory`. Route chỉ trả field nhẹ cần cho dropdown/search/list, còn `TeamPage` vẫn giữ bản đầy đủ. Nhánh admin cũng bỏ cách ghép `allUsers.find(...)` lặp nhiều lần, chuyển sang `Map` để giảm chi phí join trong memory.
+**Mục tiêu:** Điều chỉnh logic Nhuận bút theo ngân sách CTV và bổ sung biểu đồ cân bằng `Viết mới / Viết lại`.
 
-### Phiên sáng 11/03 và trước đó
+#### Đã hoàn thành
 
-- Tối ưu route nóng: `GET /api/notifications`, `getDeletePreview` đếm song song, `GET /api/statistics` narrow query, SSE fallback poll nới lên 5s.
-- Luồng xóa bài tối ưu phản hồi: toast "đang xóa", spinner/disabled, audit+realtime chạy background.
-- `MainApp.tsx` tách bundle lazy-load theo tab, preload chunk hover/focus/touch.
-- `findMatchingCollaboratorPenNames` narrow bằng `ILIKE` trước, fallback full scan.
-- `GET /api/statistics` cho user thường + admin đều đã tối ưu aggregate xuống SQL.
-- Gỡ nút reviewer dang dở gây build fail, dọn helper xóa không dùng.
-- Thêm mutation `deleteArticle`, Apps Script xử lý xóa trên toàn workbook.
-- Vá quyền reviewer, dọn mô hình 3 quyền, bootstrap migrate `editor` → `reviewer`.
-- Thêm trường `review_link`; form có ô "Đường dẫn duyệt bài".
+- Sửa backend `royalty` và `payments` để chỉ tính bài của `writer` vào ngân sách CTV.
+- Loại bài của `reviewer` hoặc tài khoản `admin` khỏi:
+  - dashboard ngân sách
+  - top writers
+  - royalty calculation
+  - payment generation và payment listing
+- Thêm `contentBalance` vào payload dashboard để trả về:
+  - số bài `Viết mới`
+  - số bài `Viết lại`
+  - tỉ lệ phần trăm
+  - mức chênh lệch
+  - cờ cảnh báo lệch từ `10%`
+- Cập nhật `RoyaltyPage.tsx`:
+  - thêm biểu đồ tròn `Viết mới / Viết lại`
+  - admin chỉ thấy tổng bài của CTV writer
+  - CTV chỉ thấy bài của chính mình
+  - thêm cảnh báo trực quan trong UI
+  - thêm popup `alert` khi chênh lệch vượt ngưỡng
+
+#### Kiểm tra đã chạy
+
+- `npx eslint src/app/api/royalty/route.ts src/app/api/payments/route.ts src/app/components/RoyaltyPage.tsx src/app/components/types.ts src/lib/royalty.ts`
+- `npx tsc --noEmit --pretty false`
+
+### Phiên tối — 11/03
+
+**Mục tiêu:** Bổ sung tài liệu định vị hệ thống và cập nhật lại overview cũ.
+
+#### Đã hoàn thành
+
+- Tạo `docs/project-map.md`:
+  - mô tả cấu trúc thư mục
+  - các module nghiệp vụ
+  - bảng dữ liệu
+  - phân quyền
+  - luồng dữ liệu chính
+  - script và CI
+- Cập nhật `../project_overview.md` ở root workspace:
+  - bỏ nội dung cũ lệch trạng thái thật
+  - bỏ mô tả AI runtime/SQLite/single-file UI
+  - thay bằng overview gọn và trỏ sang doc chi tiết mới
+
+#### Ghi chú
+
+- Không sửa code nghiệp vụ trong phiên này.
+- Tài liệu cũ từng lệch với runtime hiện tại ở các điểm:
+  - còn nói tới AI page
+  - còn nói tới SQLite runtime
+  - còn mô tả `page.tsx` kiểu single-file lớn
+
+### Phiên chiều 2 — 11/03
+
+**Mục tiêu:** Rebuild CMS Browser Panel với UI/UX nâng cao + session persistence.
+
+#### Đã hoàn thành
+
+- Tạo lại `ArticlePreviewPanel.tsx`:
+  - panel sidebar bên phải
+  - không chặn bảng bài viết
+  - dùng `window.open(url, "cms_review")` để giữ session CMS
+- Tích hợp vào `ArticlesPage.tsx`:
+  - click tiêu đề mở panel thay vì mở tab mới
+  - state `previewArticle` quản lý bài đang xem
+- Layout responsive khi panel mở:
+  - thêm class `cms-panel-open` vào `<html>`
+  - nới rộng layout và chừa `padding-right` cho panel
+
+### Các thay đổi quan trọng khác trong ngày 11/03
+
+- Tối ưu `GET /api/notifications`, `GET /api/statistics`, `getDeletePreview` và SSE fallback poll.
+- Luồng xóa bài tối ưu phản hồi:
+  - toast đang xử lý
+  - realtime/audit chạy background
+- `MainApp.tsx` lazy-load theo tab và preload khi hover/focus/touch.
+- Thêm mutation `deleteArticle` cho Apps Script để hỗ trợ xóa trên workbook.
+- Vá quyền reviewer và chuẩn hóa migrate `editor -> reviewer`.
+- Thêm trường `review_link`.
 
 ## Việc còn cần nhớ
 
-- **Redeploy Apps Script**: file `output/google-sheets-webhook.workdocker.gs` đã có handler `deleteArticle` nhưng cần deploy lại trên Google để có hiệu lực. Nếu chưa redeploy, xóa bài trên web vẫn thành công nhưng dòng trên Sheet sẽ không bị xóa (warning trong audit log).
-- Luồng mở link duyệt bài hiện ưu tiên **copy link duyệt bài** thay vì điều hướng thẳng sang CMS, vì user đã xác nhận việc dán URL trực tiếp vào trình duyệt/tab CMS đang đăng nhập hoạt động ổn định hơn click cross-site từ web app.
-- `findMatchingCollaboratorPenNames` vẫn còn fallback full-scan; nếu bảng lớn thêm nên dùng `pg_trgm`/`unaccent`.
-- Route `statistics` fallback legacy vẫn đọc full bảng nếu narrow query trượt.
-- `ArticlesPage` và `DashboardPage` vẫn là hai chunk client lớn nhất; bước tối ưu client kế tiếp nên ưu tiên các modal/import flow còn nằm chung trong `ArticlesPage.tsx`.
-- `TeamPage` hiện vẫn là nơi duy nhất cần full payload của `/api/collaborators`; nếu tối ưu sâu hơn route này, có thể tách riêng một endpoint admin-detail để không phải giữ backward-compat trong cùng handler.
-- Bootstrap schema version là `4`; cần restart app để cột `articles.review_link` được tạo.
-- Từ khóa `editor` còn lại chỉ dùng để map dữ liệu legacy.
+- **Redeploy Apps Script**:
+  - file `output/google-sheets-webhook.workdocker.gs` đã có handler `deleteArticle`
+  - nhưng cần deploy lại trên Google để có hiệu lực
+- Luồng mở link duyệt bài hiện ưu tiên copy `review_link` hoặc mở panel thay vì ép điều hướng cross-site.
+- `findMatchingCollaboratorPenNames` vẫn còn fallback full scan; nếu dữ liệu lớn hơn nên cân nhắc `pg_trgm` hoặc `unaccent`.
+- `ArticlesPage.tsx` và `google-sheet-sync.ts` vẫn là hai điểm phức tạp lớn nhất của codebase.
+- Branding hiện còn chưa thống nhất:
+  - package: `ctv-management`
+  - README: `Team Management`
+  - app name env: `Workdocker`
+- Bootstrap schema version hiện tại trong code là `5`.
 
 ## File nên mở đầu tiên
 
 - `AGENTS.md`
 - `docs/codex-thread-safety.md`
+- `docs/project-map.md`
+- `src/db/schema.ts`
+- `src/db/index.ts`
 - `src/app/api/articles/route.ts`
 - `src/lib/google-sheet-sync.ts`
 - `src/lib/google-sheet-mutation.ts`
-- `src/app/api/articles/google-sync/webhook/route.ts`
 - `src/app/components/ArticlesPage.tsx`
 - `output/google-sheets-webhook.workdocker.gs`
 
@@ -71,6 +147,13 @@ Ngày cập nhật: `2026-03-11` (phiên chiều)
 npm run lint
 npm run build
 ```
+
+## Ghi chú kiểm tra gần nhất
+
+- Trong phiên tài liệu này, chưa xác nhận được `lint/build` hoàn tất:
+  - `npm run lint` treo quá lâu trong workspace hiện tại
+  - `npm run build` có lúc vướng `.next/lock`, sau đó vẫn chạy quá lâu nên đã dừng
+- Khi sửa code nghiệp vụ tiếp theo, nên chạy lại kiểm tra trong môi trường sạch hơn hoặc sau khi bảo đảm không còn tiến trình build/lint treo nền.
 
 ## Mẫu handoff cho thread sau
 

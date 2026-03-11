@@ -1,8 +1,14 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { royaltyRates, articles, monthlyBudgets } from "@/db/schema";
+import { royaltyRates, articles, monthlyBudgets, collaborators, users } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getCurrentUserContext } from "@/lib/auth";
 import { publishRealtimeEvent } from "@/lib/realtime";
-import { matchesRoyaltyMonthYear, parseRoyaltyDateParts } from "@/lib/royalty";
+import {
+    filterBudgetEligibleRoyaltyArticles,
+    matchesRoyaltyMonthYear,
+    parseRoyaltyDateParts,
+    summarizeRoyaltyContentBalance,
+    type RoyaltyContributorProfile,
+} from "@/lib/royalty";
 import { requiredInt, optionalString, ValidationError } from "@/lib/validation";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -54,6 +60,21 @@ async function selectRoyaltyArticles(options?: { ownerCandidates?: string[]; exa
         .all() as Promise<RoyaltySourceArticle[]>;
 }
 
+async function loadRoyaltyContributorProfiles(teamId?: number | null) {
+    return db
+        .select({
+            teamId: collaborators.teamId,
+            penName: collaborators.penName,
+            name: collaborators.name,
+            role: collaborators.role,
+            linkedUserRole: users.role,
+        })
+        .from(collaborators)
+        .leftJoin(users, eq(users.collaboratorId, collaborators.id))
+        .where(teamId ? eq(collaborators.teamId, teamId) : undefined)
+        .all() as Promise<RoyaltyContributorProfile[]>;
+}
+
 export async function GET(request: NextRequest) {
     try {
         await ensureDatabaseInitialized();
@@ -99,6 +120,7 @@ export async function GET(request: NextRequest) {
                         currentMonth: { month: new Date().getMonth() + 1, year: new Date().getFullYear(), totalAmount: 0, totalArticles: 0 },
                         budget: { budgetAmount: 0, spent: 0, remaining: 0, percentage: 0, hasBudget: false },
                         topWriters: [],
+                        contentBalance: summarizeRoyaltyContentBalance([]),
                     },
                 });
             }
@@ -117,15 +139,22 @@ export async function GET(request: NextRequest) {
             }
 
             const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
-            const scopedArticles = await selectRoyaltyArticles({
-                ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
-                teamId: adminTeamId,
-            });
+            const profileScopeTeamId = context.user.role === "admin"
+                ? adminTeamId
+                : getContextTeamId(context);
+            const [scopedArticles, contributorProfiles] = await Promise.all([
+                selectRoyaltyArticles({
+                    ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
+                    teamId: adminTeamId,
+                }),
+                loadRoyaltyContributorProfiles(profileScopeTeamId),
+            ]);
+            const budgetEligibleArticles = filterBudgetEligibleRoyaltyArticles(scopedArticles, contributorProfiles);
 
             const monthlyMap: Record<string, { month: number; year: number; totalAmount: number; totalArticles: number }> = {};
             const writerAmounts: Record<string, number> = {};
 
-            for (const article of scopedArticles) {
+            for (const article of budgetEligibleArticles) {
                 const dateParts = parseRoyaltyDateParts(article.date);
                 if (!dateParts) continue;
                 const articleYear = dateParts.year;
@@ -168,6 +197,10 @@ export async function GET(request: NextRequest) {
             const budgetAmount = budget?.budgetAmount || 0;
             const budgetPercentage = budgetAmount > 0 ? Math.round((currentSpent / budgetAmount) * 100) : 0;
             const remainingBudget = Math.max(budgetAmount - currentSpent, 0);
+            const currentPeriodArticles = budgetEligibleArticles.filter((article) =>
+                matchesRoyaltyMonthYear(article.date, currentMonth, currentYear)
+            );
+            const contentBalance = summarizeRoyaltyContentBalance(currentPeriodArticles);
 
             const topWriters = Object.entries(writerAmounts)
                 .map(([penName, amount]) => ({ penName, amount }))
@@ -192,6 +225,7 @@ export async function GET(request: NextRequest) {
                         hasBudget: budgetAmount > 0,
                     },
                     topWriters,
+                    contentBalance,
                 },
             });
         }
@@ -211,13 +245,20 @@ export async function GET(request: NextRequest) {
             }
 
             const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
-            const scopedArticles = await selectRoyaltyArticles({
-                exactPenName: context.user.role === "admin" ? requestPenName || undefined : undefined,
-                ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
-                teamId: adminTeamId,
-            });
+            const profileScopeTeamId = context.user.role === "admin"
+                ? adminTeamId
+                : getContextTeamId(context);
+            const [scopedArticles, contributorProfiles] = await Promise.all([
+                selectRoyaltyArticles({
+                    exactPenName: context.user.role === "admin" ? requestPenName || undefined : undefined,
+                    ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
+                    teamId: adminTeamId,
+                }),
+                loadRoyaltyContributorProfiles(profileScopeTeamId),
+            ]);
+            const budgetEligibleArticles = filterBudgetEligibleRoyaltyArticles(scopedArticles, contributorProfiles);
 
-            const filtered = scopedArticles.filter((article) => {
+            const filtered = budgetEligibleArticles.filter((article) => {
                 if (!month || !year) return true;
                 return matchesRoyaltyMonthYear(article.date, month, year);
             });

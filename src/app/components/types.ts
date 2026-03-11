@@ -357,9 +357,23 @@ export interface RoyaltyTopWriter {
   amount: number;
 }
 
+export interface RoyaltyContentBalance {
+  newArticles: number;
+  rewriteArticles: number;
+  totalArticles: number;
+  newPercentage: number;
+  rewritePercentage: number;
+  differencePercentage: number;
+  thresholdPercentage: number;
+  dominantType: "new" | "rewrite" | null;
+  isImbalanced: boolean;
+  warningMessage: string | null;
+}
+
 export interface RoyaltyDashboardData {
   monthlyData: RoyaltyMonthlyDatum[];
   currentMonth: { month: number; year: number; totalAmount: number; totalArticles: number };
   budget: { budgetAmount: number; spent: number; remaining: number; percentage: number; hasBudget: boolean };
   topWriters: RoyaltyTopWriter[];
+  contentBalance: RoyaltyContentBalance;
 }

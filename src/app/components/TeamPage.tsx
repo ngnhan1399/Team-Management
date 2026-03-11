@@ -3,10 +3,15 @@
 import React, { useEffect, useState } from "react";
 import CustomSelect from "./CustomSelect";
 import { useRealtimeRefresh } from "./realtime";
-import type { Collaborator, UserAccount } from "./types";
+import { useAuth } from "./auth-context";
+import type { Collaborator, TeamSummary, UserAccount } from "./types";
 export default function TeamPage() {
+  const { user } = useAuth();
+  const isLeader = Boolean(user?.role === "admin" && user?.isLeader);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState<Partial<Collaborator>>({});
@@ -15,9 +20,35 @@ export default function TeamPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [teamForm, setTeamForm] = useState({ name: "", description: "", ownerName: "", ownerPenName: "", ownerEmail: "" });
+  const [teamError, setTeamError] = useState("");
+  const [teamSaving, setTeamSaving] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferTargetUserId, setTransferTargetUserId] = useState("");
+  const [transferring, setTransferring] = useState(false);
+
+  const fetchTeams = () => {
+    if (user?.role !== "admin") return;
+    fetch("/api/teams", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const nextTeams = d.data || [];
+        setTeams(nextTeams);
+        if (!selectedTeamId && nextTeams[0]?.id) {
+          setSelectedTeamId(String(nextTeams[0].id));
+        }
+      })
+      .catch(() => setTeams([]));
+  };
 
   const fetchCTVs = () => {
-    fetch("/api/collaborators", { cache: "no-store" })
+    const params = new URLSearchParams();
+    if (isLeader && selectedTeamId) {
+      params.set("teamId", selectedTeamId);
+    }
+    const query = params.toString();
+    fetch(`/api/collaborators${query ? `?${query}` : ""}`, { cache: "no-store" })
       .then(r => r.json())
       .then(d => {
         setCollaborators(d.data || []);
@@ -27,14 +58,31 @@ export default function TeamPage() {
       .catch(() => setLoading(false));
   };
 
-  useEffect(() => { fetchCTVs(); }, []);
-  useRealtimeRefresh(["team"], fetchCTVs);
+  useEffect(() => {
+    fetchTeams();
+  }, [user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isLeader && !selectedTeamId && teams.length > 0) return;
+    fetchCTVs();
+  }, [isLeader, selectedTeamId, teams.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(["team"], () => {
+    fetchTeams();
+    fetchCTVs();
+  });
 
   const closeModal = () => {
     setShowModal(false);
     setFormData({});
     setFormError("");
     setIsSaving(false);
+  };
+
+  const closeTeamModal = () => {
+    setShowTeamModal(false);
+    setTeamForm({ name: "", description: "", ownerName: "", ownerPenName: "", ownerEmail: "" });
+    setTeamError("");
+    setTeamSaving(false);
   };
 
   const openCreateModal = () => {
@@ -47,6 +95,76 @@ export default function TeamPage() {
     setFormData(collaborator);
     setFormError("");
     setShowModal(true);
+  };
+
+  const createTeam = async () => {
+    if (!teamForm.name.trim()) {
+      setTeamError("Vui lòng nhập tên team.");
+      return;
+    }
+
+    try {
+      setTeamSaving(true);
+      setTeamError("");
+      const res = await fetch("/api/teams", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(teamForm),
+      });
+      const data = await res.json().catch(() => ({ success: false, error: "Không thể đọc phản hồi từ máy chủ" }));
+      if (!res.ok || !data.success) {
+        setTeamError(data.error || "Không thể tạo team.");
+        return;
+      }
+
+      closeTeamModal();
+      fetchTeams();
+      if (data.id) {
+        setSelectedTeamId(String(data.id));
+      }
+      fetchCTVs();
+      alert(data.generatedPassword
+        ? `✅ Đã tạo team mới.\n\n🔑 Mật khẩu tạm của admin team: ${data.generatedPassword}`
+        : "✅ Đã tạo team mới.");
+    } catch {
+      setTeamError("Không thể kết nối tới máy chủ.");
+    } finally {
+      setTeamSaving(false);
+    }
+  };
+
+  const transferTeamOwner = async () => {
+    if (!selectedTeamId || !transferTargetUserId) return;
+
+    try {
+      setTransferring(true);
+      const res = await fetch("/api/teams", {
+        method: "PUT",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "transfer-owner",
+          teamId: Number(selectedTeamId),
+          targetUserId: Number(transferTargetUserId),
+        }),
+      });
+      const data = await res.json().catch(() => ({ success: false, error: "Không thể đọc phản hồi từ máy chủ" }));
+      if (!res.ok || !data.success) {
+        alert("❌ " + (data.error || "Không thể bàn giao team"));
+        return;
+      }
+
+      setShowTransferModal(false);
+      setTransferTargetUserId("");
+      fetchTeams();
+      fetchCTVs();
+      alert("✅ Đã chuyển quyền quản lý team thành công.");
+    } catch {
+      alert("❌ Không thể kết nối tới máy chủ.");
+    } finally {
+      setTransferring(false);
+    }
   };
 
   const deletableMembers = collaborators.filter((c) => {

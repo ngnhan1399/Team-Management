@@ -249,7 +249,7 @@ export async function PUT(request: NextRequest) {
         const adminUser = await db
             .select()
             .from(users)
-            .where(and(eq(users.role, "admin"), eq(users.teamId, article.teamId)))
+            .where(and(eq(users.role, "admin"), ...(article.teamId != null ? [eq(users.teamId, article.teamId)] : [])))
             .get();
 
         if (adminUser) {

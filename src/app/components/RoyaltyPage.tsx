@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import CustomSelect from "./CustomSelect";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
@@ -38,6 +38,7 @@ export default function RoyaltyPage() {
   const [paymentActionId, setPaymentActionId] = useState<number | null>(null);
   const [forceGenerate, setForceGenerate] = useState(false);
   const [expandedPaymentId, setExpandedPaymentId] = useState<number | null>(null);
+  const imbalanceAlertKeyRef = useRef("");
   const isAdmin = user?.role === "admin";
   const isLeader = Boolean(isAdmin && user?.isLeader);
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
@@ -55,6 +56,7 @@ export default function RoyaltyPage() {
   const yearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
   const monthSelectOptions = monthNames.map((label, index) => ({ value: String(index + 1), label }));
   const yearSelectOptions = yearOptions.map((year) => ({ value: String(year), label: String(year) }));
+  const overviewPeriodLabel = monthNames[overviewMonth - 1] || `Tháng ${overviewMonth}`;
   const collaboratorSelectOptions = [
     { value: "", label: "Tất cả" },
     ...collaborators.filter((c) => c.role === "writer").map((c) => ({ value: c.penName, label: c.penName })),
@@ -138,6 +140,35 @@ export default function RoyaltyPage() {
 
   useRealtimeRefresh(["royalty", "dashboard", "articles"], refreshRoyaltyView);
 
+  useEffect(() => {
+    if (tab !== "overview" || !dashboard?.contentBalance?.isImbalanced) {
+      return;
+    }
+
+    const alertKey = [
+      overviewPeriodLabel,
+      overviewYear,
+      isAdmin ? "admin" : user?.id ?? "guest",
+      dashboard.contentBalance.dominantType ?? "balanced",
+      dashboard.contentBalance.differencePercentage,
+      dashboard.contentBalance.totalArticles,
+    ].join(":");
+
+    if (imbalanceAlertKeyRef.current === alertKey) {
+      return;
+    }
+
+    imbalanceAlertKeyRef.current = alertKey;
+    const scopeLabel = isAdmin
+      ? "tổng bài của CTV"
+      : `bài của ${collaboratorLabel}`;
+    const warningMessage = dashboard.contentBalance.warningMessage || "Tỷ lệ bài viết mới và viết lại đang chênh lệch cao.";
+
+    window.alert(
+      `Canh bao ty le bai viet\n\n${warningMessage}\nKy ${overviewPeriodLabel}/${overviewYear} dang tinh tren ${scopeLabel}, khong gom admin/bien tap vien.`
+    );
+  }, [collaboratorLabel, dashboard, isAdmin, overviewPeriodLabel, overviewYear, tab, user?.id]);
+
   const handleSetBudget = async () => {
     const amount = parseInt(budgetInput);
     if (isNaN(amount) || amount < 0) return;
@@ -216,6 +247,25 @@ export default function RoyaltyPage() {
   const hasBudget = dashboard?.budget?.hasBudget || false;
   const gaugeColor = budgetPct >= 100 ? "var(--danger)" : budgetPct >= 80 ? "var(--warning)" : "var(--success)";
   const gaugeAngle = Math.min(budgetPct, 100) * 3.6;
+  const contentBalance = dashboard?.contentBalance || {
+    newArticles: 0,
+    rewriteArticles: 0,
+    totalArticles: 0,
+    newPercentage: 0,
+    rewritePercentage: 0,
+    differencePercentage: 0,
+    thresholdPercentage: 10,
+    dominantType: null,
+    isImbalanced: false,
+    warningMessage: null,
+  };
+  const newAngle = Math.round((contentBalance.newPercentage / 100) * 360);
+  const contentBalancePie = contentBalance.totalArticles > 0
+    ? `conic-gradient(var(--accent-blue) 0deg ${newAngle}deg, var(--accent-orange) ${newAngle}deg 360deg)`
+    : "conic-gradient(rgba(148, 163, 184, 0.16) 0deg 360deg)";
+  const contentScopeHint = isAdmin
+    ? "Chi tinh tong bai cua cac CTV writer, khong gom admin/bien tap vien."
+    : `Chi tinh bai cua ${collaboratorLabel}, khong lay bai cua nguoi khac.`;
 
   return (
     <>
@@ -279,7 +329,7 @@ export default function RoyaltyPage() {
                   <CustomSelect value={String(overviewYear)} onChange={(value) => setOverviewYear(parseInt(value, 10))} options={yearSelectOptions} />
                 </div>
                 <div style={{ minWidth: 220, paddingBottom: 8, color: "var(--text-muted)", fontSize: 13 }}>
-                  Mọi chỉ số ngân sách và nhuận bút bên dưới đang bám theo kỳ {monthNames[overviewMonth - 1]}/{overviewYear}.
+                  Mọi chỉ số ngân sách và nhuận bút bên dưới đang bám theo kỳ {monthNames[overviewMonth - 1]}/{overviewYear}, chỉ tính bài của CTV writer.
                 </div>
               </div>
 
@@ -295,6 +345,20 @@ export default function RoyaltyPage() {
                       {budgetPct >= 100
                         ? `Chi tiêu (${fmt(dashboard.budget.spent)}) đã vượt giới hạn ${fmt(dashboard.budget.budgetAmount)}.`
                         : `Đã sử dụng ${budgetPct}% ngân sách tháng (${fmt(dashboard.budget.spent)} / ${fmt(dashboard.budget.budgetAmount)}).`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {contentBalance.isImbalanced && (
+                <div className="glass-card" style={{ padding: "20px 24px", marginBottom: 32, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", borderLeft: "6px solid var(--warning)", background: "rgba(245, 158, 11, 0.07)" }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(245, 158, 11, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 28, color: "var(--warning)" }}>pie_chart</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <h4 style={{ fontSize: 17, fontWeight: 800, color: "var(--text-main)" }}>Cảnh báo tỉ lệ bài viết</h4>
+                    <p style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 4 }}>
+                      {contentBalance.warningMessage} Mức lệch hiện tại là {contentBalance.differencePercentage}% và đang vượt ngưỡng {contentBalance.thresholdPercentage}%.
                     </p>
                   </div>
                 </div>
@@ -366,6 +430,52 @@ export default function RoyaltyPage() {
                       </div>
                     </>
                   ) : <div className="text-muted">Chưa đặt mục tiêu ngân sách.</div>}
+                </div>
+
+                <div className="card" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+                  <div style={{ width: "100%", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+                    <div style={{ textAlign: "left" }}>
+                      <h3 className="text-xl font-bold">Tỉ lệ Viết mới / Viết lại</h3>
+                      <p style={{ marginTop: 6, fontSize: 13, color: "var(--text-muted)" }}>{contentScopeHint}</p>
+                    </div>
+                    {contentBalance.isImbalanced && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999, background: "rgba(245, 158, 11, 0.14)", color: "var(--warning)", fontSize: 12, fontWeight: 800 }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>warning</span>
+                        Lệch {contentBalance.differencePercentage}%
+                      </span>
+                    )}
+                  </div>
+
+                  {contentBalance.totalArticles > 0 ? (
+                    <>
+                      <div style={{ position: "relative", width: 220, height: 220, borderRadius: "50%", background: contentBalancePie, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.05)" }}>
+                        <div style={{ position: "absolute", inset: 28, borderRadius: "50%", background: "var(--bg-card)", border: "1px solid var(--glass-border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                          <div style={{ fontSize: 36, fontWeight: 900, color: "var(--text-main)", lineHeight: 1 }}>{contentBalance.totalArticles}</div>
+                          <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Bài đủ điều kiện</div>
+                        </div>
+                      </div>
+
+                      <div style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginTop: 24 }}>
+                        {[
+                          { label: "Viết mới", count: contentBalance.newArticles, percentage: contentBalance.newPercentage, color: "var(--accent-blue)" },
+                          { label: "Viết lại", count: contentBalance.rewriteArticles, percentage: contentBalance.rewritePercentage, color: "var(--accent-orange)" },
+                        ].map((item) => (
+                          <div key={item.label} style={{ padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)", textAlign: "left" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                              <span style={{ width: 12, height: 12, borderRadius: "50%", background: item.color, boxShadow: `0 0 0 4px ${item.color}20` }} />
+                              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{item.label}</span>
+                            </div>
+                            <div style={{ fontSize: 28, fontWeight: 900, color: "var(--text-main)", lineHeight: 1 }}>{item.count}</div>
+                            <div style={{ marginTop: 8, fontSize: 13, color: "var(--text-muted)" }}>{item.percentage}% tổng bài</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ width: "100%", minHeight: 220, borderRadius: 20, border: "1px dashed var(--glass-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 14 }}>
+                      Chưa có bài đủ điều kiện trong kỳ này để tính tỉ lệ nội dung.
+                    </div>
+                  )}
                 </div>
               </div>
 

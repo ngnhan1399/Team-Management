@@ -1,4 +1,35 @@
+import { matchesIdentityCandidate } from "@/lib/auth";
+
 const ROYALTY_ELIGIBLE_STATUSES = new Set(["Published", "Approved"]);
+
+export type RoyaltyContributorProfile = {
+  teamId?: number | null;
+  penName: string;
+  name?: string | null;
+  role?: string | null;
+  linkedUserRole?: string | null;
+};
+
+export type RoyaltyScopedArticle = {
+  teamId?: number | null;
+  penName: string;
+  articleType: string;
+  contentType: string;
+  date: string;
+};
+
+export type RoyaltyContentBalance = {
+  newArticles: number;
+  rewriteArticles: number;
+  totalArticles: number;
+  newPercentage: number;
+  rewritePercentage: number;
+  differencePercentage: number;
+  thresholdPercentage: number;
+  dominantType: "new" | "rewrite" | null;
+  isImbalanced: boolean;
+  warningMessage: string | null;
+};
 
 export function isRoyaltyEligibleArticleStatus(status: unknown) {
   return ROYALTY_ELIGIBLE_STATUSES.has(String(status || "").trim());
@@ -62,4 +93,75 @@ export function parseRoyaltyDateParts(value: unknown): RoyaltyDateParts | null {
 export function matchesRoyaltyMonthYear(value: unknown, month: number, year: number) {
   const parts = parseRoyaltyDateParts(value);
   return Boolean(parts && parts.year === year && parts.month === month);
+}
+
+export function isBudgetEligibleContributor(profile: RoyaltyContributorProfile | null | undefined) {
+  if (!profile) return false;
+  return String(profile.role || "").trim() === "writer" && String(profile.linkedUserRole || "").trim() !== "admin";
+}
+
+export function resolveRoyaltyContributorProfile(
+  articlePenName: unknown,
+  profiles: RoyaltyContributorProfile[]
+) {
+  const articleIdentity = String(articlePenName || "").trim();
+  if (!articleIdentity) return null;
+
+  return profiles.find((profile) =>
+    matchesIdentityCandidate(
+      [profile.penName, profile.name || ""].filter(Boolean) as string[],
+      articleIdentity
+    )
+  ) || null;
+}
+
+export function filterBudgetEligibleRoyaltyArticles<T extends RoyaltyScopedArticle>(
+  articles: T[],
+  profiles: RoyaltyContributorProfile[]
+) {
+  return articles.filter((article) => isBudgetEligibleContributor(resolveRoyaltyContributorProfile(article.penName, profiles)));
+}
+
+export function summarizeRoyaltyContentBalance(
+  articles: Array<Pick<RoyaltyScopedArticle, "contentType">>,
+  thresholdPercentage = 10
+): RoyaltyContentBalance {
+  let newArticles = 0;
+  let rewriteArticles = 0;
+
+  for (const article of articles) {
+    const contentType = String(article.contentType || "").trim();
+    if (contentType === "Viết lại") {
+      rewriteArticles += 1;
+      continue;
+    }
+    if (contentType === "Viết mới") {
+      newArticles += 1;
+    }
+  }
+
+  const totalArticles = newArticles + rewriteArticles;
+  const newPercentage = totalArticles > 0 ? Math.round((newArticles / totalArticles) * 100) : 0;
+  const rewritePercentage = totalArticles > 0 ? Math.round((rewriteArticles / totalArticles) * 100) : 0;
+  const differencePercentage = Math.abs(newPercentage - rewritePercentage);
+  const dominantType = newArticles === rewriteArticles ? null : newArticles > rewriteArticles ? "new" : "rewrite";
+  const isImbalanced = totalArticles > 0 && differencePercentage >= thresholdPercentage;
+  const warningMessage = isImbalanced
+    ? dominantType === "new"
+      ? `Bài viết mới đang cao hơn bài viết lại ${differencePercentage}%.`
+      : `Bài viết lại đang cao hơn bài viết mới ${differencePercentage}%.`
+    : null;
+
+  return {
+    newArticles,
+    rewriteArticles,
+    totalArticles,
+    newPercentage,
+    rewritePercentage,
+    differencePercentage,
+    thresholdPercentage,
+    dominantType,
+    isImbalanced,
+    warningMessage,
+  };
 }

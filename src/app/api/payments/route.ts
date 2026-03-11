@@ -4,7 +4,13 @@ import { getContextArticleOwnerCandidates, getContextIdentityCandidates, getCurr
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications";
-import { matchesRoyaltyMonthYear } from "@/lib/royalty";
+import {
+  filterBudgetEligibleRoyaltyArticles,
+  isBudgetEligibleContributor,
+  matchesRoyaltyMonthYear,
+  resolveRoyaltyContributorProfile,
+  type RoyaltyContributorProfile,
+} from "@/lib/royalty";
 import { requiredInt, optionalString, ValidationError, enumValue } from "@/lib/validation";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -63,6 +69,21 @@ async function selectPaymentSourceArticles(options?: { exactPenName?: string; ow
     .all() as Promise<PaymentSourceArticle[]>;
 }
 
+async function loadRoyaltyContributorProfiles(teamId?: number | null) {
+  return db
+    .select({
+      teamId: collaborators.teamId,
+      penName: collaborators.penName,
+      name: collaborators.name,
+      role: collaborators.role,
+      linkedUserRole: users.role,
+    })
+    .from(collaborators)
+    .leftJoin(users, eq(users.collaboratorId, collaborators.id))
+    .where(teamId ? eq(collaborators.teamId, teamId) : undefined)
+    .all() as Promise<RoyaltyContributorProfile[]>;
+}
+
 function parsePaymentDetails(raw: string | null): PaymentDetails | null {
   if (!raw) return null;
   try {
@@ -80,12 +101,16 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
     rateMap.set(`${rate.articleType}|${rate.contentType}`, rate.price);
   }
 
-  const sourceArticles = (await selectPaymentSourceArticles(options))
+  const [sourceArticles, contributorProfiles] = await Promise.all([
+    selectPaymentSourceArticles(options),
+    loadRoyaltyContributorProfiles(options?.teamId),
+  ]);
+  const eligibleSourceArticles = filterBudgetEligibleRoyaltyArticles(sourceArticles, contributorProfiles)
     .filter((article) => matchesRoyaltyMonthYear(article.date, month, year));
 
   const byWriter: Record<string, CalcRow> = {};
 
-  for (const article of sourceArticles) {
+  for (const article of eligibleSourceArticles) {
     if (!byWriter[article.penName]) {
       byWriter[article.penName] = {
         teamId: article.teamId ?? options?.teamId ?? null,
@@ -154,6 +179,9 @@ export async function GET(request: NextRequest) {
     const identityCandidates = getContextIdentityCandidates(context);
     const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
     const adminTeamId = context.user.role === "admin" && !isLeader(context) ? getContextTeamId(context) : null;
+    const profileScopeTeamId = context.user.role === "admin"
+      ? adminTeamId
+      : getContextTeamId(context);
 
     const conditions: SQL[] = [];
     if (month) conditions.push(eq(payments.month, month));
@@ -170,12 +198,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    let data = (await db
-      .select()
-      .from(payments)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(payments.id))
-      .all())
+    const [rawPayments, contributorProfiles] = await Promise.all([
+      db
+        .select()
+        .from(payments)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(payments.id))
+        .all(),
+      loadRoyaltyContributorProfiles(profileScopeTeamId),
+    ]);
+
+    let data = rawPayments
+      .filter((payment) => isBudgetEligibleContributor(resolveRoyaltyContributorProfile(payment.penName, contributorProfiles)))
       .map((payment) => ({
         ...payment,
         details: parsePaymentDetails(payment.details),
@@ -194,6 +228,7 @@ export async function GET(request: NextRequest) {
           const now = new Date().toISOString();
           data = [{
             id: -(year * 100 + month),
+            teamId: estimated.teamId ?? null,
             month,
             year,
             penName: estimated.penName,
