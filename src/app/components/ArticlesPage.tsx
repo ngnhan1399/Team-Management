@@ -2,7 +2,10 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
+import dynamic from "next/dynamic";
 import CustomSelect from "./CustomSelect";
+
+const ArticlePreviewPanel = dynamic(() => import("./ArticlePreviewPanel"), { ssr: false });
 import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
@@ -141,6 +144,7 @@ export default function ArticlesPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteExecuting, setDeleteExecuting] = useState(false);
   const [deletingArticleIds, setDeletingArticleIds] = useState<number[]>([]);
+  const [previewArticle, setPreviewArticle] = useState<Article | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" });
@@ -1342,11 +1346,10 @@ export default function ArticlesPage() {
                     <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
                     <td style={{ padding: "12px 14px" }}>
                       {getPreferredArticleNavigationLink(a) ? (
-                        <a
-                          href={getPreferredArticleNavigationLink(a)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={a.reviewLink ? `${a.title} (mở CMS duyệt bài)` : a.title}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewArticle(a)}
+                          title={a.reviewLink ? `${a.title} (xem trước & mở CMS)` : a.title}
                           style={{
                             color: "var(--accent-blue)",
                             textDecoration: "none",
@@ -1360,10 +1363,12 @@ export default function ArticlesPage() {
                             padding: 0,
                             cursor: "pointer",
                             textAlign: "left",
+                            background: "none",
+                            border: "none",
                           }}
                         >
                           {a.title}
-                        </a>
+                        </button>
                       ) : (
                         <span
                           title={a.title}
@@ -2618,6 +2623,12 @@ export default function ArticlesPage() {
         </div>
       )}
 
+      {previewArticle && (
+        <ArticlePreviewPanel
+          article={previewArticle}
+          onClose={() => setPreviewArticle(null)}
+        />
+      )}
     </>
   );
 }
