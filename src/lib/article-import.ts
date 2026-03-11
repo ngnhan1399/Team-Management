@@ -716,13 +716,21 @@ function mapWordCountRange(value: string): "800-1000" | "1000-1500" | "1500-2000
   return null;
 }
 
-function mapStatus(value: string): "Draft" | "Submitted" | "Reviewing" | "NeedsFix" | "Approved" | "Published" | "Rejected" {
+function mapStatus(
+  value: string,
+  options: {
+    hasValidLink?: boolean;
+    reviewerName?: string;
+    articleId?: string;
+  } = {}
+): "Draft" | "Submitted" | "Reviewing" | "NeedsFix" | "Approved" | "Published" | "Rejected" {
   const folded = foldText(value);
   if (["published", "approved", "da duyet", "hoan thanh", "xong", "done", "completed", "complete"].some((keyword) => folded.includes(keyword))) return "Published";
   if (["reviewing", "dang duyet"].some((keyword) => folded.includes(keyword))) return "Reviewing";
   if (["submitted", "pending", "cho duyet", "gui duyet"].some((keyword) => folded.includes(keyword))) return "Submitted";
   if (["needsfix", "sua loi", "can sua", "fix"].some((keyword) => folded.includes(keyword))) return "NeedsFix";
   if (["rejected", "tu choi"].some((keyword) => folded.includes(keyword))) return "Rejected";
+  if (!folded && options.hasValidLink && (normalizeArticleText(options.reviewerName) || normalizeArticleText(options.articleId))) return "Published";
   return "Draft";
 }
 
@@ -833,7 +841,11 @@ export function normalizeImportedArticleRow(
   const wordCountRange = mapWordCountRange(rawWordCountRange);
   const contentType = mapContentType(contentTypeSource);
   const articleType = mapArticleType(rawArticleType, category, wordCountRange);
-  const status = mapStatus(rawStatus);
+  const status = mapStatus(rawStatus, {
+    hasValidLink: validLink,
+    reviewerName: rawReviewerName,
+    articleId,
+  });
   const reviewerName = rawReviewerName ? fuzzyMatchPenName(rawReviewerName, collaboratorPenNames) : "";
 
   return {

@@ -207,6 +207,28 @@ export function listMonthlySheetTabs(sheetNames: string[]) {
   );
 }
 
+function resolveCanonicalSheetRequest(
+  requestedSheetName?: string | null,
+  requestedMonth?: number | null,
+  requestedYear?: number | null
+) {
+  const requestedTab = requestedSheetName ? parseSheetTabInfo(requestedSheetName) : null;
+
+  if (!requestedTab?.isCopy) {
+    return {
+      sheetName: requestedSheetName,
+      month: requestedMonth,
+      year: requestedYear,
+    };
+  }
+
+  return {
+    sheetName: undefined,
+    month: requestedMonth ?? requestedTab.month,
+    year: requestedYear ?? requestedTab.year,
+  };
+}
+
 export function pickSheetTab(
   sheetNames: string[],
   requestedSheetName?: string | null,
@@ -260,7 +282,13 @@ function loadGoogleSheetImportFromWorkbook(options: {
   year?: number | null;
   collaboratorPenNames?: string[];
 }) {
-  const selectedSheet = pickSheetTab(options.workbook.SheetNames, options.sheetName, options.month, options.year);
+  const canonicalRequest = resolveCanonicalSheetRequest(options.sheetName, options.month, options.year);
+  const selectedSheet = pickSheetTab(
+    options.workbook.SheetNames,
+    canonicalRequest.sheetName,
+    canonicalRequest.month,
+    canonicalRequest.year
+  );
 
   if (!selectedSheet) {
     throw new Error("Không tìm thấy tab tháng/năm phù hợp trong Google Sheets.");
@@ -1049,9 +1077,10 @@ export async function refreshScopedArticlesFromGoogleSheet(
 
   for (const article of targetArticles) {
     const syncLink = syncLinkByArticleId.get(article.id);
-    const resolvedMonth = syncLink?.sheetMonth ?? options.month ?? getYearMonthFromDate(article.date)?.month ?? null;
-    const resolvedYear = syncLink?.sheetYear ?? options.year ?? getYearMonthFromDate(article.date)?.year ?? null;
-    const resolvedSheetName = syncLink?.sheetName || undefined;
+    const syncLinkTab = syncLink?.sheetName ? parseSheetTabInfo(syncLink.sheetName) : null;
+    const resolvedMonth = syncLink?.sheetMonth ?? options.month ?? syncLinkTab?.month ?? getYearMonthFromDate(article.date)?.month ?? null;
+    const resolvedYear = syncLink?.sheetYear ?? options.year ?? syncLinkTab?.year ?? getYearMonthFromDate(article.date)?.year ?? null;
+    const resolvedSheetName = syncLinkTab?.isCopy ? undefined : (syncLink?.sheetName || undefined);
 
     if (!resolvedMonth || !resolvedYear) {
       skipped += 1;
@@ -1560,7 +1589,9 @@ export async function executeGoogleSheetWorkbookSync(
     options.teamId,
     options.allowedPenNames || []
   );
-  const tabs = listMonthlySheetTabs(workbook.SheetNames);
+  const allMonthlyTabs = listMonthlySheetTabs(workbook.SheetNames);
+  const tabs = listPreferredSheetTabs(workbook.SheetNames);
+  const skippedDuplicateTabs = Math.max(0, allMonthlyTabs.length - tabs.length);
 
   if (tabs.length === 0) {
     throw new Error("Không tìm thấy tab tháng/năm hợp lệ trong Google Sheets.");
@@ -1620,6 +1651,10 @@ export async function executeGoogleSheetWorkbookSync(
 
   if ((aggregate.processedSheets?.length || 0) > 0 && aggregate.warnings.length < 20) {
     aggregate.warnings.unshift(`Đã reconcile toàn workbook qua ${aggregate.processedSheets?.length} tab tháng hợp lệ.`);
+  }
+
+  if (skippedDuplicateTabs > 0 && aggregate.warnings.length < 20) {
+    aggregate.warnings.unshift(`Đã bỏ qua ${skippedDuplicateTabs} tab bản sao để tránh ghi đè dữ liệu từ Google Sheet copy.`);
   }
 
   return aggregate;
