@@ -343,7 +343,35 @@ async function findMatchingCollaboratorPenNames(search: string) {
     return [] as string[];
   }
 
-  const rows = await db
+  const rawSearch = normalizeString(search);
+  const searchTerms = Array.from(
+    new Set(
+      [rawSearch, ...rawSearch.split(/\s+/)]
+        .map((term) => normalizeString(term))
+        .filter((term) => term.length >= 2)
+    )
+  );
+
+  const collaboratorSearchClauses = searchTerms.flatMap((term) => ([
+    ilike(collaborators.name, `%${term}%`),
+    ilike(collaborators.penName, `%${term}%`),
+    ilike(collaborators.email, `%${term}%`),
+  ]));
+
+  const narrowedRows = collaboratorSearchClauses.length > 0
+    ? await db
+      .select({
+        name: collaborators.name,
+        penName: collaborators.penName,
+        email: collaborators.email,
+      })
+      .from(collaborators)
+      .where(or(...collaboratorSearchClauses))
+      .limit(80)
+      .all()
+    : [];
+
+  const rows = narrowedRows.length > 0 ? narrowedRows : await db
     .select({
       name: collaborators.name,
       penName: collaborators.penName,

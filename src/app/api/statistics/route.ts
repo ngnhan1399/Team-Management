@@ -1,9 +1,9 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articles, collaborators } from "@/db/schema";
 import { resolveArticleCategory } from "@/lib/article-category";
-import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextIdentityCandidates, getContextIdentityLabels, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { handleServerError } from "@/lib/server-error";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 type CollaboratorDirectoryItem = {
@@ -50,6 +50,80 @@ function groupCount<T extends string>(values: T[]) {
     acc[value] = (acc[value] || 0) + 1;
     return acc;
   }, {})).map(([key, count]) => ({ key, count }));
+}
+
+function addScopeValue(target: Set<string>, value: string | null | undefined) {
+  const normalized = String(value || "").trim();
+  if (normalized) {
+    target.add(normalized);
+  }
+}
+
+function collectScopedCollaborators(
+  allCollaborators: CollaboratorDirectoryItem[],
+  identityCandidates: string[]
+) {
+  return allCollaborators.filter((item) => (
+    matchesIdentityCandidate(identityCandidates, item.penName)
+    || matchesIdentityCandidate(identityCandidates, item.name)
+    || matchesIdentityCandidate(identityCandidates, item.email || "")
+  ));
+}
+
+function buildArticleScopeValues(
+  identityLabels: string[],
+  scopedCollaborators: CollaboratorDirectoryItem[]
+) {
+  const values = new Set<string>();
+  for (const label of identityLabels) {
+    addScopeValue(values, label);
+  }
+
+  for (const collaborator of scopedCollaborators) {
+    addScopeValue(values, collaborator.penName);
+    addScopeValue(values, collaborator.name);
+    addScopeValue(values, collaborator.email);
+    if (collaborator.email) {
+      addScopeValue(values, collaborator.email.split("@")[0]);
+    }
+  }
+
+  return Array.from(values);
+}
+
+function buildArticleScopeWhere(scopeValues: string[]): SQL | undefined {
+  if (scopeValues.length === 1) {
+    return eq(articles.penName, scopeValues[0]);
+  }
+
+  if (scopeValues.length > 1) {
+    return inArray(articles.penName, scopeValues);
+  }
+
+  return undefined;
+}
+
+async function loadStatisticsArticles(whereClause?: SQL) {
+  const baseQuery = db
+    .select({
+      id: articles.id,
+      articleId: articles.articleId,
+      title: articles.title,
+      penName: articles.penName,
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      status: articles.status,
+      category: articles.category,
+      date: articles.date,
+      createdAt: articles.createdAt,
+      updatedAt: articles.updatedAt,
+    })
+    .from(articles);
+
+  const query = whereClause ? baseQuery.where(whereClause) : baseQuery;
+  return await query
+    .orderBy(desc(articles.id))
+    .all() as StatisticsArticleRow[];
 }
 
 async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[]) {
@@ -149,6 +223,7 @@ export async function GET() {
         }
 
         const identityCandidates = getContextIdentityCandidates(context);
+        const identityLabels = getContextIdentityLabels(context);
         const allCollaborators = await db
             .select({
                 id: collaborators.id,
@@ -165,24 +240,34 @@ export async function GET() {
             });
         }
 
-        const allArticles = await db
-            .select({
-                id: articles.id,
-                articleId: articles.articleId,
-                title: articles.title,
-                penName: articles.penName,
-                articleType: articles.articleType,
-                contentType: articles.contentType,
-                status: articles.status,
-                category: articles.category,
-                date: articles.date,
-                createdAt: articles.createdAt,
-                updatedAt: articles.updatedAt,
-            })
-            .from(articles)
-            .orderBy(desc(articles.id))
-            .all() as StatisticsArticleRow[];
-        const scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
+        if (identityCandidates.length === 0) {
+            return NextResponse.json({
+                success: true,
+                data: {
+                    totalArticles: 0,
+                    totalCTVs: 0,
+                    articlesByStatus: [],
+                    articlesByCategory: [],
+                    articlesByWriter: [],
+                    articlesByType: [],
+                    articlesByMonth: [],
+                    latestArticles: [],
+                },
+            });
+        }
+
+        const scopedCollaborators = collectScopedCollaborators(allCollaborators, identityCandidates);
+        const articleScopeValues = buildArticleScopeValues(identityLabels, scopedCollaborators);
+        const scopeWhere = buildArticleScopeWhere(articleScopeValues);
+        const scopedArticleCandidates = scopeWhere ? await loadStatisticsArticles(scopeWhere) : [];
+        let scopedArticles = scopedArticleCandidates.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
+
+        if (scopedArticles.length === 0) {
+            const allArticles = await loadStatisticsArticles();
+            scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
+        }
+
+        const collaboratorDirectory = scopedCollaborators.length > 0 ? scopedCollaborators : allCollaborators;
 
         const totalArticles = scopedArticles.length;
         const totalCTVCount = identityCandidates.length > 0 ? 1 : 0;
@@ -196,7 +281,7 @@ export async function GET() {
             .map(({ key, count }) => ({ category: key, count }));
 
         const writerBuckets = scopedArticles.reduce<Record<string, { penName: string; displayName: string; count: number }>>((acc, article) => {
-            const resolvedCollaborator = resolveCollaborator(article.penName, allCollaborators);
+            const resolvedCollaborator = resolveCollaborator(article.penName, collaboratorDirectory);
             const key = resolvedCollaborator ? `collab:${resolvedCollaborator.id}` : `pen:${article.penName}`;
             const displayName = resolvedCollaborator?.name || resolvedCollaborator?.penName || article.penName;
             const penName = resolvedCollaborator?.penName || article.penName;
@@ -228,8 +313,8 @@ export async function GET() {
                 id: article.id,
                 articleId: article.articleId,
                 title: article.title,
-                penName: resolveCollaborator(article.penName, allCollaborators)?.penName || article.penName,
-                writerDisplayName: resolveCollaborator(article.penName, allCollaborators)?.name || article.penName,
+                penName: resolveCollaborator(article.penName, collaboratorDirectory)?.penName || article.penName,
+                writerDisplayName: resolveCollaborator(article.penName, collaboratorDirectory)?.name || article.penName,
                 articleType: article.articleType,
                 status: article.status,
                 date: article.date,
