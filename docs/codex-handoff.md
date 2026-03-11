@@ -19,7 +19,8 @@ Ngày cập nhật: `2026-03-11` (phiên chiều)
 - **Fix xóa bài bị chặn bởi Google Sheet sync**: `ensureGoogleSheetDeleteConsistency` trong `articles/route.ts` giờ trả **warnings** (non-blocking) thay vì failures (blocking). Bài xóa trên web luôn thành công, warnings ghi vào audit log + trả về response.
 - **Xóa `buildDeleteSyncFailureResponse`**: helper không còn dùng sau khi chuyển sang non-blocking.
 - **Xóa mô tả chi tiết trong modal đồng bộ**: loại bỏ đoạn text giải thích engine/mirror/scope CTV và link Google Sheet cứng — tránh lộ thông tin triển khai.
-- **Đã bỏ hẳn CMS Browser Panel**: theo yêu cầu mới, `ArticlesPage.tsx` không còn mở khung preview bên phải nữa. Click tiêu đề giờ là một anchor native mở tab mới (`target="_blank"`) với đúng URL gốc đang được ưu tiên (`review_link` trước, fallback `link`), không còn cơ chế copy link hay giữ tab CMS cố định.
+- **Đã bỏ hẳn CMS Browser Panel**: theo yêu cầu mới, `ArticlesPage.tsx` không còn mở khung preview bên phải nữa. Click tiêu đề giờ là một anchor native mở tab mới (`target="_blank"`) với đúng URL gốc đang được ưu tiên (`review_link` trước, fallback `link`).
+- **Chuẩn hóa `review_link` kiểu login redirect**: thêm helper `src/lib/review-link.ts` để bóc các URL dạng `.../admin/auth/login?redirectTo=...` về URL bài duyệt gốc. Helper này đang được dùng cả lúc hiển thị/mở link và lúc `POST`/`PUT` bài viết, nên dữ liệu cũ mở đúng hơn ngay lập tức và dữ liệu mới sẽ không còn lưu nhầm link login.
 - **Tách `directory view` cho `/api/collaborators`**: các màn `Articles`, `EditorialTasks`, `Notifications`, `Royalty` không còn lấy full hồ sơ cộng tác viên nữa mà dùng `?view=directory`. Route chỉ trả field nhẹ cần cho dropdown/search/list, còn `TeamPage` vẫn giữ bản đầy đủ. Nhánh admin cũng bỏ cách ghép `allUsers.find(...)` lặp nhiều lần, chuyển sang `Map` để giảm chi phí join trong memory.
 
 ### Phiên sáng 11/03 và trước đó

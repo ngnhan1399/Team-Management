@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { articles } from "@/db/schema";
 import { getCurrentUserContext, hasArticleManagerAccess } from "@/lib/auth";
+import { normalizeArticleReviewLink } from "@/lib/review-link";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
@@ -28,7 +29,7 @@ export async function GET() {
             "Số chữ": a.wordCountRange,
             "Trạng thái": a.status,
             Link: a.link,
-            "Link duyệt bài": a.reviewLink,
+            "Link duyệt bài": normalizeArticleReviewLink(a.reviewLink) || null,
             "Người duyệt": a.reviewerName,
             "Ghi chú": a.notes,
         }));

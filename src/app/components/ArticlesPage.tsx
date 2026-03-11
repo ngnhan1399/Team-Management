@@ -6,6 +6,7 @@ import CustomSelect from "./CustomSelect";
 import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
+import { getPreferredArticleNavigationLink } from "@/lib/review-link";
 import type {
   Article,
   ArticleComment,
@@ -98,10 +99,6 @@ function normalizeWordCountRangeValue(value: string | null | undefined) {
 
 function normalizeIdentityValue(value: unknown) {
   return foldSearchText(value);
-}
-
-function getArticleNavigationLink(article: Pick<Article, "reviewLink" | "link">) {
-  return String(article.reviewLink || "").trim() || String(article.link || "").trim() || "";
 }
 
 export default function ArticlesPage() {
@@ -1344,9 +1341,9 @@ export default function ArticlesPage() {
                     <td style={{ padding: "12px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
                     <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
                     <td style={{ padding: "12px 14px" }}>
-                      {getArticleNavigationLink(a) ? (
+                      {getPreferredArticleNavigationLink(a) ? (
                         <a
-                          href={getArticleNavigationLink(a)}
+                          href={getPreferredArticleNavigationLink(a)}
                           target="_blank"
                           rel="noopener noreferrer"
                           title={a.reviewLink ? `${a.title} (mở CMS duyệt bài)` : a.title}

@@ -13,6 +13,7 @@ import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
+import { normalizeArticleReviewLink } from "@/lib/review-link";
 import { handleServerError } from "@/lib/server-error";
 import { and, desc, eq, ilike, inArray, like, or, sql, type SQL } from "drizzle-orm";
 import { after, NextRequest, NextResponse } from "next/server";
@@ -132,7 +133,12 @@ async function loadArticleResponseRow(articleId: number, currentUserId: number, 
 
   if (!row) return null;
 
-  const [article] = await attachArticleResponseMetadata([row], currentUserId, canManageArticles);
+  const [article] = await attachArticleResponseMetadata([
+    {
+      ...row,
+      reviewLink: normalizeArticleReviewLink(row.reviewLink) || null,
+    },
+  ], currentUserId, canManageArticles);
   return article ?? null;
 }
 
@@ -723,7 +729,14 @@ export async function GET(request: NextRequest) {
         .all(),
     ]);
 
-    const data = await attachArticleResponseMetadata(pagedRows, context.user.id, canManageArticles);
+    const data = await attachArticleResponseMetadata(
+      pagedRows.map((row) => ({
+        ...row,
+        reviewLink: normalizeArticleReviewLink(row.reviewLink) || null,
+      })),
+      context.user.id,
+      canManageArticles
+    );
 
     return NextResponse.json({
       success: true,
@@ -781,7 +794,7 @@ export async function POST(request: NextRequest) {
         wordCountRange: (normalizeString(body.wordCountRange) || undefined) as never,
         status: (normalizeString(body.status) || "Submitted") as never,
         link: normalizeString(body.link) || undefined,
-        reviewLink: normalizeString(body.reviewLink) || undefined,
+        reviewLink: normalizeArticleReviewLink(normalizeString(body.reviewLink)) || undefined,
         reviewerName: normalizeString(body.reviewerName) || undefined,
         notes: normalizeString(body.notes) || undefined,
       })
@@ -895,7 +908,7 @@ export async function PUT(request: NextRequest) {
     if (typeof updateData.title === "string") updateData.title = updateData.title.trim();
     if (typeof updateData.articleId === "string") updateData.articleId = updateData.articleId.trim() || undefined;
     if (typeof updateData.link === "string") updateData.link = updateData.link.trim() || undefined;
-    if (typeof updateData.reviewLink === "string") updateData.reviewLink = updateData.reviewLink.trim() || undefined;
+    if (typeof updateData.reviewLink === "string") updateData.reviewLink = normalizeArticleReviewLink(updateData.reviewLink) || undefined;
     if (typeof updateData.notes === "string") updateData.notes = updateData.notes.trim() || undefined;
     if (typeof updateData.reviewerName === "string") updateData.reviewerName = updateData.reviewerName.trim() || undefined;
     if (typeof updateData.penName === "string") updateData.penName = updateData.penName.trim();
