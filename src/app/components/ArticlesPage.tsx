@@ -1630,31 +1630,8 @@ export default function ArticlesPage() {
             <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <div style={{ padding: 16, borderRadius: 16, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.14)" }}>
                 <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.7 }}>
-                  Hệ thống dùng chung một engine đồng bộ cho cả <strong>Đồng bộ ngay</strong> và <strong>Đồng bộ theo tháng</strong>.
-                  Nếu bộ lọc bài viết đang chọn đủ <strong>tháng/năm</strong>, nút <strong>Đồng bộ ngay</strong> sẽ ưu tiên sync đúng kỳ đó.
-                  Nếu để trống, hệ thống lấy tab tháng mới nhất. Nếu chọn tháng/năm trong modal, hệ thống sync đúng tab đó.
-                  {canManageArticles ? (
-                    <>
-                      {" "}Dữ liệu sẽ được <strong>mirror theo sheet gốc</strong>: bài có trong sheet thì giữ, bài trùng thì bỏ qua,
-                      bài không còn trong sheet sẽ bị xóa khỏi danh sách đã đồng bộ của tab đó.
-                    </>
-                  ) : (
-                    <>
-                      {" "}Với tài khoản CTV, hệ thống chỉ đồng bộ <strong>các dòng thuộc về {collaboratorLabel}</strong>, nên bạn có thể dùng
-                      cùng bộ công cụ của admin mà không chạm vào dữ liệu của người khác.
-                    </>
-                  )}{" "}
-                  Sau khi đồng bộ xong, danh sách bài viết sẽ tự chuyển sang đúng tháng vừa sync để bạn thấy ngay dữ liệu đã được lưu.
+                  Chọn <strong>tháng</strong> và <strong>năm</strong> để đồng bộ dữ liệu từ Google Sheet. Nếu để trống, hệ thống sẽ tự lấy tab mới nhất.
                 </div>
-                <a
-                  href="https://docs.google.com/spreadsheets/d/1Uj8iA0R5oWmONenkESHZ8i7Hc1D8UOk6ES6olZGTbH8/edit?gid=75835251#gid=75835251"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--accent-blue)", textDecoration: "none", fontSize: 13, fontWeight: 700 }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>open_in_new</span>
-                  Mở Google Sheet nguồn
-                </a>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
