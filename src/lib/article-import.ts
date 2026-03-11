@@ -717,12 +717,7 @@ function mapWordCountRange(value: string): "800-1000" | "1000-1500" | "1500-2000
 }
 
 function mapStatus(
-  value: string,
-  options: {
-    hasValidLink?: boolean;
-    reviewerName?: string;
-    articleId?: string;
-  } = {}
+  value: string
 ): "Draft" | "Submitted" | "Reviewing" | "NeedsFix" | "Approved" | "Published" | "Rejected" {
   const folded = foldText(value);
   if (["published", "approved", "da duyet", "hoan thanh", "xong", "done", "completed", "complete"].some((keyword) => folded.includes(keyword))) return "Published";
@@ -730,7 +725,6 @@ function mapStatus(
   if (["submitted", "pending", "cho duyet", "gui duyet"].some((keyword) => folded.includes(keyword))) return "Submitted";
   if (["needsfix", "sua loi", "can sua", "fix"].some((keyword) => folded.includes(keyword))) return "NeedsFix";
   if (["rejected", "tu choi"].some((keyword) => folded.includes(keyword))) return "Rejected";
-  if (!folded && options.hasValidLink && (normalizeArticleText(options.reviewerName) || normalizeArticleText(options.articleId))) return "Published";
   return "Draft";
 }
 
@@ -772,18 +766,6 @@ export function fuzzyMatchPenName(rawName: string, collaboratorPenNames: string[
   return rawName;
 }
 
-function deriveArticleIdFromLink(link: string): string | undefined {
-  if (!link) return undefined;
-
-  const slugMatch = link.match(/-(\d{5,})(?:[/?#]|$)/);
-  if (slugMatch?.[1]) return slugMatch[1];
-
-  const trailingMatch = link.match(/\/(\d{5,})(?:[/?#]|$)/);
-  if (trailingMatch?.[1]) return trailingMatch[1];
-
-  return undefined;
-}
-
 export function normalizeImportedArticleRow(
   row: PreparedArticleImportRow,
   mapping: Record<string, ImportFieldId>,
@@ -820,7 +802,7 @@ export function normalizeImportedArticleRow(
   const usedFallbackDate = Boolean(!parsedDate && !rawDateText && options.fallbackDate && rawTitle && rawPenName);
   const date = parsedDate || (usedFallbackDate ? options.fallbackDate! : null);
   const titleLooksLikeDate = parseDateValue(rawTitle) !== null;
-  const articleId = rawArticleId || deriveArticleIdFromLink(rawLink) || undefined;
+  const articleId = rawArticleId || undefined;
   const shouldSkip =
     (!rawTitle && !rawPenName && !rawDateText && !articleId && !validLink) ||
     (!rawTitle && (articleId || validLink || rawReviewerName || rawNotes)) ||
@@ -841,11 +823,7 @@ export function normalizeImportedArticleRow(
   const wordCountRange = mapWordCountRange(rawWordCountRange);
   const contentType = mapContentType(contentTypeSource);
   const articleType = mapArticleType(rawArticleType, category, wordCountRange);
-  const status = mapStatus(rawStatus, {
-    hasValidLink: validLink,
-    reviewerName: rawReviewerName,
-    articleId,
-  });
+  const status = mapStatus(rawStatus);
   const reviewerName = rawReviewerName ? fuzzyMatchPenName(rawReviewerName, collaboratorPenNames) : "";
 
   return {

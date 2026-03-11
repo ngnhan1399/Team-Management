@@ -1,5 +1,12 @@
 # Codex Handoff
 
+## Update 2026-03-12
+
+- Google Sheet sync khong con tu suy luan `Published` khi cot trang thai de trong.
+- Import sheet cung khong con tu suy `articleId` tu slug link neu o `ID bai viet` trong sheet dang trong.
+- Da reconcile production DB bang logic sync moi de keo du lieu web ve dung theo sheet goc.
+- Da kiem tra lai 5 bai SEO AI / Dinh Nhan o `Thang 022026` tung hien sai `Da duyet`; hien tai tat ca da ve `Draft`, `reviewer = null`, `article_id = null` va giu `link` theo sheet.
+
 ## Trạng thái hiện tại
 
 - Stack chính: `Next.js App Router` + `TypeScript` + `Drizzle ORM` + `PostgreSQL`.
