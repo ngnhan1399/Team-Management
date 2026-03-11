@@ -35,20 +35,29 @@ function statusLabel(status: string) {
   }
 }
 
+const CMS_POPUP_NAME = "cms_preview_persistent";
+
 export default function ArticlePreviewPanel({ article, onClose }: Props) {
   const url = getArticleUrl(article);
   const popupRef = useRef<Window | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupBlocked, setPopupBlocked] = useState(false);
-  const [needsLoginHint, setNeedsLoginHint] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevUrlRef = useRef("");
 
-  const openPopup = useCallback(() => {
+  const openOrNavigatePopup = useCallback(() => {
     if (!url) return;
 
     if (popupRef.current && !popupRef.current.closed) {
+      try {
+        popupRef.current.location.href = url;
+      } catch {
+        // cross-origin - reopen via window.open which will reuse the named window
+        popupRef.current = window.open(url, CMS_POPUP_NAME) || popupRef.current;
+      }
       popupRef.current.focus();
       setPopupOpen(true);
+      setPopupBlocked(false);
       return;
     }
 
@@ -57,12 +66,11 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
     const popupW = Math.min(Math.floor(screenW * 0.55), 1200);
     const popupH = screenH;
     const popupLeft = screenW - popupW;
-    const popupTop = 0;
 
     const win = window.open(
       url,
-      "cms_preview",
-      `width=${popupW},height=${popupH},left=${popupLeft},top=${popupTop},menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes`
+      CMS_POPUP_NAME,
+      `width=${popupW},height=${popupH},left=${popupLeft},top=0,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes`
     );
 
     if (!win) {
@@ -74,61 +82,46 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
     popupRef.current = win;
     setPopupOpen(true);
     setPopupBlocked(false);
-    setNeedsLoginHint(true);
   }, [url]);
 
-  const navigatePopupToArticle = useCallback(() => {
-    if (!url) return;
-
-    if (popupRef.current && !popupRef.current.closed) {
-      try {
-        popupRef.current.location.href = url;
-        popupRef.current.focus();
-      } catch {
-        popupRef.current.close();
-        popupRef.current = null;
-        openPopup();
-      }
-    } else {
-      openPopup();
-    }
-    setNeedsLoginHint(false);
-  }, [url, openPopup]);
-
+  // Auto-open or navigate on mount / article change
   useEffect(() => {
-    if (url) {
-      const timer = setTimeout(openPopup, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [url, openPopup]);
+    if (!url) return;
+    if (url === prevUrlRef.current) return;
+    prevUrlRef.current = url;
+    const timer = setTimeout(openOrNavigatePopup, 200);
+    return () => clearTimeout(timer);
+  }, [url, openOrNavigatePopup]);
 
+  // Poll popup status
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       if (popupRef.current && popupRef.current.closed) {
         setPopupOpen(false);
         popupRef.current = null;
+      } else if (popupRef.current && !popupRef.current.closed) {
+        setPopupOpen(true);
       }
     }, 800);
-
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (popupRef.current && !popupRef.current.closed) {
-        popupRef.current.close();
-      }
-    };
-  }, []);
+  // DO NOT close popup on unmount — keep CMS session alive
+  // The named window persists and will be reused next time
 
   const handleClose = () => {
+    // Only close the panel, NOT the popup
+    onClose();
+  };
+
+  const handleClosePopup = () => {
     if (popupRef.current && !popupRef.current.closed) {
       popupRef.current.close();
     }
     popupRef.current = null;
-    onClose();
+    setPopupOpen(false);
   };
 
   const handleOpenNewTab = () => {
@@ -211,8 +204,8 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
           {url && (
             <>
               <button
-                onClick={navigatePopupToArticle}
-                title={popupOpen ? "Chuyển đến bài duyệt" : "Mở lại CMS"}
+                onClick={openOrNavigatePopup}
+                title={popupOpen ? "Chuyển đến bài duyệt" : "Mở CMS"}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -228,7 +221,7 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
                 }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                  {popupOpen ? "refresh" : "open_in_new"}
+                  {popupOpen ? "arrow_forward" : "open_in_new"}
                 </span>
               </button>
               <button
@@ -255,7 +248,7 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
 
           <button
             onClick={handleClose}
-            title="Đóng"
+            title="Đóng panel"
             style={{
               display: "flex",
               alignItems: "center",
@@ -263,9 +256,9 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
               width: 32,
               height: 32,
               borderRadius: 8,
-              border: "1px solid rgba(239,68,68,0.2)",
-              background: "rgba(239,68,68,0.06)",
-              color: "var(--danger, #ef4444)",
+              border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
+              background: "rgba(255,255,255,0.04)",
+              color: "var(--text-muted)",
               cursor: "pointer",
               flexShrink: 0,
             }}
@@ -277,10 +270,10 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Navigate to article button - always prominent */}
+          {/* Navigate button */}
           {url && popupOpen && (
             <button
-              onClick={navigatePopupToArticle}
+              onClick={openOrNavigatePopup}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -294,36 +287,12 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: "pointer",
-                transition: "all 0.15s",
                 flexShrink: 0,
               }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
               Chuyển đến bài duyệt
             </button>
-          )}
-
-          {/* Login hint */}
-          {needsLoginHint && popupOpen && (
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: 12,
-                background: "rgba(245,158,11,0.06)",
-                border: "1px solid rgba(245,158,11,0.16)",
-                fontSize: 12,
-                color: "#f59e0b",
-                lineHeight: 1.7,
-              }}
-            >
-              <strong>💡 Nếu CMS yêu cầu đăng nhập:</strong>
-              <br />
-              1. Đăng nhập CMS trong cửa sổ popup
-              <br />
-              2. Quay lại panel này, bấm <strong>Chuyển đến bài duyệt</strong>
-              <br />
-              <span style={{ fontSize: 11, opacity: 0.8 }}>Phiên đăng nhập sẽ được trình duyệt ghi nhớ cho các lần sau.</span>
-            </div>
           )}
 
           {/* Status indicator */}
@@ -352,11 +321,11 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
               }}
             />
             <span style={{ fontSize: 12, fontWeight: 700, color: popupOpen ? "#22c55e" : "var(--danger, #ef4444)" }}>
-              {popupOpen ? "CMS đang mở" : "CMS chưa mở"}
+              {popupOpen ? "CMS đang mở — phiên đăng nhập được giữ" : "CMS chưa mở"}
             </span>
             {!popupOpen && url && (
               <button
-                onClick={openPopup}
+                onClick={openOrNavigatePopup}
                 style={{
                   marginLeft: "auto",
                   padding: "4px 12px",
@@ -370,6 +339,25 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
                 }}
               >
                 Mở CMS
+              </button>
+            )}
+            {popupOpen && (
+              <button
+                onClick={handleClosePopup}
+                title="Đóng cửa sổ CMS"
+                style={{
+                  marginLeft: "auto",
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  border: "1px solid rgba(239,68,68,0.2)",
+                  background: "rgba(239,68,68,0.06)",
+                  color: "var(--danger, #ef4444)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Đóng CMS
               </button>
             )}
           </div>
