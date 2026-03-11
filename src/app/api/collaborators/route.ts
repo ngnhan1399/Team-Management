@@ -11,14 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 type CollaboratorInsert = typeof collaborators.$inferInsert;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function normalizeString(value: unknown): string {
-    return String(value || "").trim();
-}
-
-function normalizeOptionalString(value: unknown): string | undefined {
-    const normalized = normalizeString(value);
-    return normalized || undefined;
-}
+import { normalizeString, normalizeOptionalString } from "@/lib/normalize";
 
 function normalizeOptionalEmail(value: unknown): string | undefined {
     const normalized = normalizeString(value).toLowerCase();

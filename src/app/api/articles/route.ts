@@ -69,9 +69,7 @@ type NonBlockingStepOptions<T> = {
   fallback: T;
 };
 
-function normalizeString(value: unknown): string {
-  return String(value || "").trim();
-}
+import { normalizeString } from "@/lib/normalize";
 
 async function runNonBlockingStep<T>(task: () => Promise<T>, options: NonBlockingStepOptions<T>): Promise<T> {
   try {
@@ -320,10 +318,10 @@ async function getDeletePreview(whereClause?: SQL) {
   const affectedPaymentWhere = buildAffectedPaymentWhere(targetRows);
   const paymentsCount = affectedPaymentWhere
     ? Number((await db
-        .select({ count: sql<number>`count(*)` })
-        .from(payments)
-        .where(affectedPaymentWhere)
-        .get())?.count || 0)
+      .select({ count: sql<number>`count(*)` })
+      .from(payments)
+      .where(affectedPaymentWhere)
+      .get())?.count || 0)
     : 0;
 
   return {
