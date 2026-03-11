@@ -1103,7 +1103,7 @@ export default function ArticlesPage() {
 
   return (
     <>
-      <div style={{ transition: "margin-right 0.2s ease", marginRight: previewArticle ? "min(380px, 50vw)" : 0 }}>
+      <div style={{ transition: "margin-right 0.22s ease", marginRight: previewArticle ? 60 : 0 }}>
       <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Quản lý bài viết</h2>
