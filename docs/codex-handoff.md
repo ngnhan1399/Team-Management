@@ -11,19 +11,40 @@
 
 ## Thay đổi quan trọng gần nhất
 
-Ngày cập nhật: `2026-03-11` (phiên chiều)
+Ngày cập nhật: `2026-03-11` (phiên chiều 2)
+
+### Phiên chiều 2 — 11/03 (đang thực hiện)
+
+**Mục tiêu:** Rebuild CMS Browser Panel với UI/UX nâng cao + session persistence.
+
+#### Đã hoàn thành
+- **Tạo lại `ArticlePreviewPanel.tsx`**: Panel sidebar bên phải, không chặn bảng bài viết. Dùng `window.open(url, "cms_review")` (regular tab, không popup) để giữ session CMS. Layout: Hero → CMS Bar → Meta Grid → Notes → Links.
+- **Tích hợp vào `ArticlesPage.tsx`**: Lazy-load component, click tiêu đề mở panel thay vì mở tab mới. State `previewArticle` quản lý bài đang xem.
+- **Layout responsive khi panel mở**: Thêm class `cms-panel-open` vào `<html>` khi panel mount. CSS mở rộng `max-width`, bỏ `margin: auto`, thêm `padding-right: 400px` cho `.app-shell-inner` để nội dung tự trải rộng thay vì bị panel đè.
+
+#### Lỗi TypeScript build đang sửa
+
+> **Nguyên nhân gốc:** TypeScript strict mode không nhận `filter(Boolean)` để loại `null` khỏi kiểu. Khi mảng SQL conditions chứa `null` (từ ternary) rồi spread vào `and()`, TS báo lỗi `Type 'null' is not assignable to 'SQLWrapper | undefined'`.
+
+| File | Dòng | Lỗi | Trạng thái |
+|------|------|------|------------|
+| `editorial-tasks/reminders/route.ts` | 35 | `filter(Boolean)` + `null` → `and()` | ✅ Đã fix |
+| `notifications/route.ts` | 104 | `filter(Boolean)` + `null` → `and()` | ✅ Đã fix |
+| `payments/route.ts` | 265 | `filter(Boolean)` + `null` → `and()` | ✅ Đã fix |
+| `payments/route.ts` | 315 | `filter(Boolean)` + `null` → `and()` | ✅ Đã fix |
+| `articles/review/route.ts` | 252 | `eq(users.teamId, article.teamId)` — `article.teamId` là `number \| null` | ⏳ Đang fix |
+| `payments/route.ts` | 195 | Object literal thiếu `teamId` property | ⏳ Đang fix |
+
+**Cách fix chung:**
+- Thay `null` → `undefined` trong ternary
+- Thay `filter(Boolean)` → `filter((c): c is NonNullable<typeof c> => c != null)` (type guard)
+- Với `eq()`: kiểm tra `!= null` trước khi gọi
+
+#### Bài học rút ra
+- **Luôn chạy `npx tsc --noEmit` local trước khi push** để bắt tất cả lỗi TS cùng lúc, tránh vòng lặp deploy-fail-fix-deploy.
+- Pattern `[..., condition ? value : null].filter(Boolean)` là anti-pattern với drizzle strict types.
 
 ### Phiên chiều 11/03
-
-- **Gom "Duyệt lỗi" vào "Bình luận"**: xóa nút "Duyệt lỗi", modal review, state `showReviewModal`/`reviewArticle`/`errorNotes`, hàm `handleReview` trong `ArticlesPage.tsx`. Phản hồi bài viết giờ chỉ qua comment.
-- **Fix xóa bài bị chặn bởi Google Sheet sync**: `ensureGoogleSheetDeleteConsistency` trong `articles/route.ts` giờ trả **warnings** (non-blocking) thay vì failures (blocking). Bài xóa trên web luôn thành công, warnings ghi vào audit log + trả về response.
-- **Xóa `buildDeleteSyncFailureResponse`**: helper không còn dùng sau khi chuyển sang non-blocking.
-- **Xóa mô tả chi tiết trong modal đồng bộ**: loại bỏ đoạn text giải thích engine/mirror/scope CTV và link Google Sheet cứng — tránh lộ thông tin triển khai.
-- **Đã bỏ hẳn CMS Browser Panel**: theo yêu cầu mới, `ArticlesPage.tsx` không còn mở khung preview bên phải nữa. Click tiêu đề giờ là một anchor native mở tab mới (`target="_blank"`) với đúng URL gốc đang được ưu tiên (`review_link` trước, fallback `link`).
-- **Chuẩn hóa `review_link` kiểu login redirect**: thêm helper `src/lib/review-link.ts` để bóc các URL dạng `.../admin/auth/login?redirectTo=...` về URL bài duyệt gốc. Helper này đang được dùng cả lúc hiển thị/mở link và lúc `POST`/`PUT` bài viết, nên dữ liệu cũ mở đúng hơn ngay lập tức và dữ liệu mới sẽ không còn lưu nhầm link login.
-- **Tách `directory view` cho `/api/collaborators`**: các màn `Articles`, `EditorialTasks`, `Notifications`, `Royalty` không còn lấy full hồ sơ cộng tác viên nữa mà dùng `?view=directory`. Route chỉ trả field nhẹ cần cho dropdown/search/list, còn `TeamPage` vẫn giữ bản đầy đủ. Nhánh admin cũng bỏ cách ghép `allUsers.find(...)` lặp nhiều lần, chuyển sang `Map` để giảm chi phí join trong memory.
-
-### Phiên sáng 11/03 và trước đó
 
 - Tối ưu route nóng: `GET /api/notifications`, `getDeletePreview` đếm song song, `GET /api/statistics` narrow query, SSE fallback poll nới lên 5s.
 - Luồng xóa bài tối ưu phản hồi: toast "đang xóa", spinner/disabled, audit+realtime chạy background.

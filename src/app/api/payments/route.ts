@@ -194,6 +194,7 @@ export async function GET(request: NextRequest) {
           const now = new Date().toISOString();
           data = [{
             id: -(year * 100 + month),
+            teamId: estimated.teamId ?? null,
             month,
             year,
             penName: estimated.penName,
