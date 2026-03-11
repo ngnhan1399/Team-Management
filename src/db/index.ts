@@ -368,7 +368,7 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "5";
+const BOOTSTRAP_SCHEMA_VERSION = "6";
 
 async function getOrCreateDefaultTeamId() {
   const existingDefault = await pool.query(
@@ -434,6 +434,28 @@ export async function initializeDatabase() {
   const defaultTeamId = await getOrCreateDefaultTeamId();
   await pool.query(`UPDATE users SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE collaborators SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`
+    WITH unique_pen_name_teams AS (
+      SELECT lower(pen_name) AS normalized_pen_name, MIN(team_id) AS team_id
+      FROM collaborators
+      WHERE team_id IS NOT NULL
+      GROUP BY lower(pen_name)
+      HAVING COUNT(DISTINCT team_id) = 1
+    )
+    UPDATE articles
+    SET team_id = unique_pen_name_teams.team_id
+    FROM unique_pen_name_teams
+    WHERE articles.team_id IS NULL
+      AND lower(articles.pen_name) = unique_pen_name_teams.normalized_pen_name
+  `);
+  await pool.query(`
+    UPDATE articles
+    SET team_id = users.team_id
+    FROM users
+    WHERE articles.team_id IS NULL
+      AND articles.created_by_user_id = users.id
+      AND users.team_id IS NOT NULL
+  `);
   await pool.query(`UPDATE articles SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE editorial_tasks SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE kpi_records SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
@@ -478,4 +500,3 @@ export function ensureDatabaseInitialized() {
 export function closeDatabaseConnection() {
   return pool.end();
 }
-

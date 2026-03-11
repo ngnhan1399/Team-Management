@@ -825,7 +825,7 @@ export async function GET(request: NextRequest) {
         .select()
         .from(articles)
         .where(scopedWhereClause)
-        .orderBy(desc(articles.date), desc(articles.updatedAt), desc(articles.id))
+        .orderBy(desc(articles.updatedAt), desc(articles.date), desc(articles.id))
         .limit(limit)
         .offset((page - 1) * limit)
         .all(),

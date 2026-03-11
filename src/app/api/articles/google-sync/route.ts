@@ -1,5 +1,5 @@
 import { ensureDatabaseInitialized } from "@/db";
-import { articles } from "@/db/schema";
+import { articles, collaborators } from "@/db/schema";
 import { db } from "@/db";
 import { getCurrentUserContext, getContextIdentityCandidates, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -7,7 +7,8 @@ import { executeGoogleSheetSync, executeGoogleSheetWorkbookSync, refreshScopedAr
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
-import { inArray } from "drizzle-orm";
+import { getContextTeamId, isLeader } from "@/lib/teams";
+import { eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 function normalizeText(value: unknown) {
@@ -72,6 +73,17 @@ export async function POST(request: NextRequest) {
     }
 
     const canManageArticles = hasArticleManagerAccess(context);
+    const contextTeamId = getContextTeamId(context);
+    const scopedSyncTeamId = canManageArticles
+      ? (isLeader(context) ? undefined : contextTeamId)
+      : contextTeamId;
+    const scopedTeamPenNames = canManageArticles && scopedSyncTeamId
+      ? (await db
+          .select({ penName: collaborators.penName })
+          .from(collaborators)
+          .where(eq(collaborators.teamId, scopedSyncTeamId))
+          .all()).map((item) => item.penName)
+      : [];
     const identityCandidates = canManageArticles ? [] : getContextIdentityCandidates(context);
 
     let authorizedArticleIds = articleIds;
@@ -110,12 +122,16 @@ export async function POST(request: NextRequest) {
         sourceUrl: sourceUrl || undefined,
         month,
         year,
+        teamId: scopedSyncTeamId,
+        allowedPenNames: scopedTeamPenNames,
         createdByUserId: context.user.id,
         articleIds: authorizedArticleIds,
       })
       : reconcileAllSheets && month === null && year === null
         ? await executeGoogleSheetWorkbookSync({
           sourceUrl: sourceUrl || undefined,
+          teamId: scopedSyncTeamId,
+          allowedPenNames: scopedTeamPenNames,
           createdByUserId: context.user.id,
           identityCandidates: canManageArticles ? undefined : identityCandidates,
         })
@@ -123,6 +139,8 @@ export async function POST(request: NextRequest) {
           sourceUrl: sourceUrl || undefined,
           month,
           year,
+          teamId: scopedSyncTeamId,
+          allowedPenNames: scopedTeamPenNames,
           createdByUserId: context.user.id,
           identityCandidates: canManageArticles ? undefined : identityCandidates,
         });

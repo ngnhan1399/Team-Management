@@ -17,6 +17,41 @@
 
 Ngày cập nhật: `2026-03-11`
 
+### Phiên khuya 6 - 11/03
+
+**Mục tiêu:** Sửa lỗi `Đồng bộ ngay` không ổn định với bài của `Biên tập/Admin`, nhất là trường hợp sync xong chỉ còn thấy khi đang lọc theo tháng rồi bỏ lọc thì bài biến mất.
+
+#### Đã hoàn thành
+
+- Bổ sung scope sync theo team đúng ngữ cảnh:
+  - `leader` vẫn sync toàn hệ thống
+  - `admin team` chỉ sync các pen name trong team của mình
+  - `writer` chỉ sync trong phạm vi team + identity của chính họ
+- Sửa backend Google Sheet sync để khi import bài từ sheet:
+  - cố gắng resolve `teamId` từ collaborator pen name
+  - lưu `teamId` vào bài mới ngay lúc insert
+  - giữ shared sync state theo đúng team/scope hiện tại
+- Thêm backfill bootstrap cho dữ liệu cũ có `articles.team_id IS NULL`:
+  - ưu tiên map theo `collaborators.pen_name -> team_id` nếu pen name chỉ thuộc một team
+  - fallback theo `users.team_id` của `created_by_user_id`
+  - cuối cùng mới đẩy về `Team mặc định`
+- Đổi thứ tự danh sách bài viết sang `updatedAt DESC` trước `date DESC` để bài vừa sync từ tháng cũ vẫn nổi lên đầu danh sách khi bỏ lọc.
+- Bổ sung nhánh tự sửa dữ liệu khi sync gặp bài cũ đã match nhưng còn thiếu `teamId`.
+
+#### File đã động vào
+
+- `src/app/api/articles/google-sync/route.ts`
+- `src/app/api/articles/route.ts`
+- `src/app/components/ArticlesPage.tsx`
+- `src/db/index.ts`
+- `src/lib/google-sheet-sync.ts`
+
+#### Kiểm tra đã chạy
+
+- `npx eslint src/lib/google-sheet-sync.ts src/app/api/articles/google-sync/route.ts src/app/api/articles/route.ts src/app/components/ArticlesPage.tsx src/db/index.ts` ✅
+- `npx tsc --noEmit --pretty false` ✅
+- `npm run build` ✅
+
 ### Phiên khuya 5 - 11/03
 
 **Mục tiêu:** Chia giao diện `Bài viết` thành 2 khu quản lý riêng cho `CTV` và `Biên tập/Admin` nhưng vẫn dùng chung nguồn dữ liệu + Google Sheet gốc.
@@ -175,7 +210,7 @@ Ngày cập nhật: `2026-03-11`
   - package: `ctv-management`
   - README: `Team Management`
   - app name env: `Workdocker`
-- Bootstrap schema version hiện tại trong code là `5`.
+- Bootstrap schema version hiện tại trong code là `6`.
 
 ## File nên mở đầu tiên
 

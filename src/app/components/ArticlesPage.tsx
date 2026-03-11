@@ -795,11 +795,11 @@ export default function ArticlesPage() {
 
 
   const compareArticleRows = useCallback((left: Article, right: Article) => {
-    const dateCompare = String(right.date || "").localeCompare(String(left.date || ""));
-    if (dateCompare !== 0) return dateCompare;
-
     const updatedCompare = String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""));
     if (updatedCompare !== 0) return updatedCompare;
+
+    const dateCompare = String(right.date || "").localeCompare(String(left.date || ""));
+    if (dateCompare !== 0) return dateCompare;
 
     return Number(right.id || 0) - Number(left.id || 0);
   }, []);

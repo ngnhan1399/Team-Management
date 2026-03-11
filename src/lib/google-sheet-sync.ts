@@ -17,6 +17,7 @@ export interface GoogleSheetTabInfo {
 
 type ExistingArticleRow = {
   id: number;
+  teamId: number | null;
   articleId: string | null;
   title: string;
   penName: string;
@@ -66,10 +67,13 @@ export interface ExecuteGoogleSheetSyncOptions {
   month?: number | null;
   year?: number | null;
   sheetName?: string;
+  teamId?: number | null;
+  allowedPenNames?: string[];
   createdByUserId?: number | null;
   identityCandidates?: string[];
   _workbook?: XLSX.WorkBook;
   _collaboratorPenNames?: string[];
+  _collaboratorDirectory?: CollaboratorDirectoryEntry[];
   _skipEnsureInitialized?: boolean;
   _sharedState?: GoogleSheetSyncSharedState;
 }
@@ -107,6 +111,11 @@ type GoogleSheetSyncSharedState = {
   titlePenNameMap: Map<string, ExistingArticleRow>;
   linkMap: Map<string, ExistingArticleRow>;
   syncLinksBySheet: Map<string, Map<string, SyncLinkRow>>;
+};
+
+type CollaboratorDirectoryEntry = {
+  penName: string;
+  teamId: number | null;
 };
 
 const REQUIRED_FIELDS: ImportFieldId[] = ["date", "title", "penName"];
@@ -499,18 +508,31 @@ function buildArticlePayload(
   return values;
 }
 
-async function getCollaboratorPenNames() {
+async function getCollaboratorPenNames(teamId?: number | null) {
   return (await db
     .select({ penName: collaborators.penName })
     .from(collaborators)
+    .where(teamId ? eq(collaborators.teamId, teamId) : undefined)
     .all())
     .map((item) => item.penName);
 }
 
-async function getAllExistingArticles() {
+async function getCollaboratorDirectory(teamId?: number | null) {
+  return db
+    .select({
+      penName: collaborators.penName,
+      teamId: collaborators.teamId,
+    })
+    .from(collaborators)
+    .where(teamId ? eq(collaborators.teamId, teamId) : undefined)
+    .all() as Promise<CollaboratorDirectoryEntry[]>;
+}
+
+async function getAllExistingArticles(teamId?: number | null) {
   return db
     .select({
       id: articles.id,
+      teamId: articles.teamId,
       articleId: articles.articleId,
       title: articles.title,
       penName: articles.penName,
@@ -525,7 +547,36 @@ async function getAllExistingArticles() {
       notes: articles.notes,
     })
     .from(articles)
+    .where(teamId ? eq(articles.teamId, teamId) : undefined)
     .all();
+}
+
+function resolveImportedArticleTeamId(
+  penName: string,
+  collaboratorDirectory: CollaboratorDirectoryEntry[],
+  fallbackTeamId?: number | null
+) {
+  const normalizedPenName = foldText(penName);
+  if (!normalizedPenName) return fallbackTeamId ?? null;
+
+  const exactMatches = collaboratorDirectory.filter((entry) => foldText(entry.penName) === normalizedPenName);
+  if (fallbackTeamId && exactMatches.some((entry) => Number(entry.teamId || 0) === Number(fallbackTeamId))) {
+    return fallbackTeamId;
+  }
+
+  const uniqueTeamIds = Array.from(
+    new Set(
+      exactMatches
+        .map((entry) => Number(entry.teamId || 0))
+        .filter((teamId) => Number.isInteger(teamId) && teamId > 0)
+    )
+  );
+
+  if (uniqueTeamIds.length === 1) {
+    return uniqueTeamIds[0];
+  }
+
+  return fallbackTeamId ?? null;
 }
 
 function getSharedSheetSyncLinkMap(sharedState: GoogleSheetSyncSharedState, sheetName: string) {
@@ -621,12 +672,25 @@ function removeSharedArticles(sharedState: GoogleSheetSyncSharedState, articleId
   }
 }
 
-async function createGoogleSheetSyncSharedState(sourceUrl: string, identityCandidates: string[]) {
+async function createGoogleSheetSyncSharedState(
+  sourceUrl: string,
+  identityCandidates: string[],
+  teamId?: number | null,
+  allowedPenNames: string[] = []
+) {
   const restrictToIdentityScope = identityCandidates.length > 0;
-  const allExistingArticles = await getAllExistingArticles();
-  const existingArticles = restrictToIdentityScope
-    ? allExistingArticles.filter((row) => matchesIdentityCandidate(identityCandidates, row.penName))
-    : allExistingArticles;
+  const allowedPenNameSet = new Set(allowedPenNames.map((value) => foldText(value)).filter(Boolean));
+  const restrictToAllowedPenNames = allowedPenNameSet.size > 0;
+  const allExistingArticles = await getAllExistingArticles(teamId);
+  const existingArticles = allExistingArticles.filter((row) => {
+    if (restrictToAllowedPenNames && !allowedPenNameSet.has(foldText(row.penName))) {
+      return false;
+    }
+    if (restrictToIdentityScope && !matchesIdentityCandidate(identityCandidates, row.penName)) {
+      return false;
+    }
+    return true;
+  });
 
   const articleRowsById = new Map<number, ExistingArticleRow>();
   const articleIdMap = new Map<string, ExistingArticleRow>();
@@ -654,7 +718,7 @@ async function createGoogleSheetSyncSharedState(sourceUrl: string, identityCandi
     .where(eq(articleSyncLinks.sourceUrl, sourceUrl))
     .all() as SyncLinkRow[];
 
-  const filteredSyncLinks = restrictToIdentityScope
+  const filteredSyncLinks = (restrictToIdentityScope || restrictToAllowedPenNames || Boolean(teamId))
     ? allSyncLinks.filter((link) => Number.isInteger(Number(link.articleIdRef || 0)) && existingArticleIds.has(Number(link.articleIdRef)))
     : allSyncLinks;
 
@@ -930,11 +994,12 @@ export async function refreshScopedArticlesFromGoogleSheet(
     throw new Error("Chưa có bài viết nào trong danh sách đang lọc để đồng bộ nhanh.");
   }
 
-  const collaboratorPenNames = await getCollaboratorPenNames();
+  const collaboratorPenNames = await getCollaboratorPenNames(options.teamId);
   const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
   const targetArticles = await db
     .select({
       id: articles.id,
+      teamId: articles.teamId,
       articleId: articles.articleId,
       title: articles.title,
       penName: articles.penName,
@@ -1197,7 +1262,10 @@ export async function executeGoogleSheetSync(
     await ensureDatabaseInitialized();
   }
 
-  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames();
+  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames(options.teamId);
+  const collaboratorDirectory = options._collaboratorDirectory ?? await getCollaboratorDirectory(options.teamId);
+  const allowedPenNameSet = new Set((options.allowedPenNames || []).map((value) => foldText(value)).filter(Boolean));
+  const restrictToAllowedPenNames = allowedPenNameSet.size > 0;
   const identityCandidates = Array.from(
     new Set((options.identityCandidates || []).map((value) => String(value || "").trim()).filter(Boolean))
   );
@@ -1217,7 +1285,12 @@ export async function executeGoogleSheetSync(
   }
 
   const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
-  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(sourceUrl, identityCandidates);
+  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(
+    sourceUrl,
+    identityCandidates,
+    options.teamId,
+    options.allowedPenNames || []
+  );
   const articleIdMap = sharedState.articleIdMap;
   const compositeMap = sharedState.compositeMap;
   const linkMap = sharedState.linkMap;
@@ -1267,6 +1340,11 @@ export async function executeGoogleSheetSync(
         continue;
       }
 
+      if (restrictToAllowedPenNames && !allowedPenNameSet.has(foldText(normalized.penName))) {
+        ignoredOutsideScope += 1;
+        continue;
+      }
+
       if (restrictToIdentityScope && !matchesIdentityCandidate(identityCandidates, normalized.penName)) {
         ignoredOutsideScope += 1;
         continue;
@@ -1277,6 +1355,7 @@ export async function executeGoogleSheetSync(
       const sourceRowKey = buildSourceRowKey({ ...normalized, articleId: articleId ?? undefined, link: link ?? undefined });
       seenSourceRowKeys.add(sourceRowKey);
       const compositeKey = normalizeCompositeKey(normalized.title, normalized.penName, normalized.date as string);
+      const resolvedTeamId = resolveImportedArticleTeamId(normalized.penName, collaboratorDirectory, options.teamId);
       const matchedByArticleId = articleId ? articleIdMap.get(articleId) : undefined;
       const matchedByComposite = compositeMap.get(compositeKey);
       const matchedByLink = link ? linkMap.get(normalizeLinkKey(link)) : undefined;
@@ -1287,11 +1366,14 @@ export async function executeGoogleSheetSync(
 
       if (target) {
         duplicates += 1;
-        if (doesArticlePayloadDiffer(target, nextPayload)) {
+        const nextTeamId = target.teamId ?? resolvedTeamId ?? null;
+        const shouldRepairTeamId = nextTeamId !== (target.teamId ?? null);
+        if (shouldRepairTeamId || doesArticlePayloadDiffer(target, nextPayload)) {
           await db
             .update(articles)
             .set({
               ...nextPayload,
+              teamId: nextTeamId,
               updatedAt: new Date().toISOString(),
             })
             .where(eq(articles.id, target.id))
@@ -1299,6 +1381,7 @@ export async function executeGoogleSheetSync(
 
           const finalArticleRow: ExistingArticleRow = {
             id: target.id,
+            teamId: nextTeamId,
             articleId: Object.prototype.hasOwnProperty.call(nextPayload, "articleId") ? (nextPayload.articleId ?? null) : (target.articleId ?? null),
             title: nextPayload.title as string,
             penName: nextPayload.penName as string,
@@ -1319,6 +1402,7 @@ export async function executeGoogleSheetSync(
       } else {
         const insertValues = {
           ...nextPayload,
+          teamId: resolvedTeamId ?? null,
           createdByUserId: options.createdByUserId ?? null,
         } as typeof articles.$inferInsert;
 
@@ -1330,6 +1414,7 @@ export async function executeGoogleSheetSync(
         resolvedArticleId = Number(insertedRow?.id);
         upsertSharedArticleRow(sharedState, {
           id: resolvedArticleId,
+          teamId: resolvedTeamId ?? null,
           articleId,
           title: normalized.title,
           penName: normalized.penName,
@@ -1463,12 +1548,18 @@ export async function executeGoogleSheetWorkbookSync(
 ): Promise<GoogleSheetSyncExecutionResult> {
   await ensureDatabaseInitialized();
 
-  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames();
+  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames(options.teamId);
+  const collaboratorDirectory = options._collaboratorDirectory ?? await getCollaboratorDirectory(options.teamId);
   const identityCandidates = Array.from(
     new Set((options.identityCandidates || []).map((value) => String(value || '').trim()).filter(Boolean))
   );
   const { sourceUrl, workbook } = await downloadGoogleSheetWorkbook(options.sourceUrl);
-  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(sourceUrl, identityCandidates);
+  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(
+    sourceUrl,
+    identityCandidates,
+    options.teamId,
+    options.allowedPenNames || []
+  );
   const tabs = listMonthlySheetTabs(workbook.SheetNames);
 
   if (tabs.length === 0) {
@@ -1503,6 +1594,7 @@ export async function executeGoogleSheetWorkbookSync(
       year: tab.year,
       _workbook: workbook,
       _collaboratorPenNames: collaboratorPenNames,
+      _collaboratorDirectory: collaboratorDirectory,
       _skipEnsureInitialized: true,
       _sharedState: sharedState,
     });
