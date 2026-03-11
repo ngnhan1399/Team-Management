@@ -35,87 +35,75 @@ function statusLabel(status: string) {
   }
 }
 
-const CMS_POPUP_NAME = "cms_preview_persistent";
+/**
+ * Opens the CMS URL in a regular named browser tab (NOT a popup with custom features).
+ * Regular tabs share the same cookie/localStorage session as the user's normal browsing,
+ * so the CMS session will persist across browser restarts.
+ *
+ * Using a named tab (`cms_review`) means:
+ * - First call: opens a new tab
+ * - Subsequent calls: navigates the SAME tab to the new article URL
+ * - No duplicate tabs
+ */
+const CMS_TAB_NAME = "cms_review";
 
 export default function ArticlePreviewPanel({ article, onClose }: Props) {
   const url = getArticleUrl(article);
-  const popupRef = useRef<Window | null>(null);
-  const [popupOpen, setPopupOpen] = useState(false);
-  const [popupBlocked, setPopupBlocked] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tabRef = useRef<Window | null>(null);
+  const [tabOpen, setTabOpen] = useState(false);
   const prevUrlRef = useRef("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const openOrNavigatePopup = useCallback(() => {
+  const openOrNavigateTab = useCallback(() => {
     if (!url) return;
 
-    if (popupRef.current && !popupRef.current.closed) {
+    // Try to reuse existing tab
+    if (tabRef.current && !tabRef.current.closed) {
       try {
-        popupRef.current.location.href = url;
+        tabRef.current.location.href = url;
       } catch {
-        popupRef.current = window.open(url, CMS_POPUP_NAME) || popupRef.current;
+        // Cross-origin error — reopen via named tab
+        tabRef.current = window.open(url, CMS_TAB_NAME) || tabRef.current;
       }
-      popupRef.current.focus();
-      setPopupOpen(true);
-      setPopupBlocked(false);
+      tabRef.current.focus();
+      setTabOpen(true);
       return;
     }
 
-    const screenW = window.screen.availWidth;
-    const screenH = window.screen.availHeight;
-    const popupW = Math.min(Math.floor(screenW * 0.55), 1200);
-    const popupH = screenH;
-    const popupLeft = screenW - popupW;
-
-    const win = window.open(
-      url,
-      CMS_POPUP_NAME,
-      `width=${popupW},height=${popupH},left=${popupLeft},top=0,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes`
-    );
+    // Open as a REGULAR TAB — NO features string = regular tab with full session
+    const win = window.open(url, CMS_TAB_NAME);
 
     if (!win) {
-      setPopupBlocked(true);
-      setPopupOpen(false);
+      setTabOpen(false);
       return;
     }
 
-    popupRef.current = win;
-    setPopupOpen(true);
-    setPopupBlocked(false);
+    tabRef.current = win;
+    setTabOpen(true);
   }, [url]);
 
+  // Auto-open on article change
   useEffect(() => {
-    if (!url) return;
-    if (url === prevUrlRef.current) return;
+    if (!url || url === prevUrlRef.current) return;
     prevUrlRef.current = url;
-    const timer = setTimeout(openOrNavigatePopup, 200);
+    const timer = setTimeout(openOrNavigateTab, 200);
     return () => clearTimeout(timer);
-  }, [url, openOrNavigatePopup]);
+  }, [url, openOrNavigateTab]);
 
+  // Poll tab status
   useEffect(() => {
     intervalRef.current = setInterval(() => {
-      if (popupRef.current && popupRef.current.closed) {
-        setPopupOpen(false);
-        popupRef.current = null;
-      } else if (popupRef.current && !popupRef.current.closed) {
-        setPopupOpen(true);
+      if (tabRef.current && tabRef.current.closed) {
+        setTabOpen(false);
+        tabRef.current = null;
+      } else if (tabRef.current && !tabRef.current.closed) {
+        setTabOpen(true);
       }
-    }, 800);
+    }, 1000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
-
-  const handleClosePopup = () => {
-    if (popupRef.current && !popupRef.current.closed) {
-      popupRef.current.close();
-    }
-    popupRef.current = null;
-    setPopupOpen(false);
-  };
-
-  const handleOpenNewTab = () => {
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
 
   return (
     <div
@@ -164,8 +152,8 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
               width: 7,
               height: 7,
               borderRadius: 999,
-              background: popupOpen ? "#22c55e" : "#ef4444",
-              boxShadow: popupOpen ? "0 0 6px rgba(34,197,94,0.4)" : "none",
+              background: tabOpen ? "#22c55e" : "#6b7280",
+              boxShadow: tabOpen ? "0 0 6px rgba(34,197,94,0.4)" : "none",
               flexShrink: 0,
             }}
           />
@@ -185,20 +173,15 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
         </div>
 
         {url && (
-          <>
-            <button
-              onClick={openOrNavigatePopup}
-              title={popupOpen ? "Chuyển đến bài" : "Mở CMS"}
-              style={toolbarBtnStyle}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-                {popupOpen ? "arrow_forward" : "open_in_new"}
-              </span>
-            </button>
-            <button onClick={handleOpenNewTab} title="Mở tab mới" style={toolbarBtnStyle}>
-              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>tab</span>
-            </button>
-          </>
+          <button
+            onClick={openOrNavigateTab}
+            title={tabOpen ? "Chuyển đến bài duyệt" : "Mở CMS"}
+            style={toolbarBtnStyle}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+              {tabOpen ? "arrow_forward" : "open_in_new"}
+            </span>
+          </button>
         )}
 
         <button
@@ -213,69 +196,37 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
       {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
 
-        {url && popupOpen && (
-          <button
-            onClick={openOrNavigatePopup}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid rgba(59,130,246,0.3)",
-              background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.06))",
-              color: "#3b82f6",
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
-            Chuyển đến bài duyệt
-          </button>
-        )}
+        {/* Action button */}
+        <button
+          onClick={openOrNavigateTab}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: `1px solid ${tabOpen ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.3)"}`,
+            background: tabOpen
+              ? "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.06))"
+              : "linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.06))",
+            color: tabOpen ? "#3b82f6" : "#22c55e",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+            {tabOpen ? "arrow_forward" : "open_in_new"}
+          </span>
+          {tabOpen ? "Chuyển đến bài duyệt" : "Mở CMS"}
+        </button>
 
-        {!popupOpen && url && (
-          <button
-            onClick={openOrNavigatePopup}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid rgba(34,197,94,0.3)",
-              background: "linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.06))",
-              color: "#22c55e",
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>open_in_new</span>
-            Mở CMS
-          </button>
-        )}
-
-        {popupOpen && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 700 }}>● CMS đang mở</span>
-            <button
-              onClick={handleClosePopup}
-              style={{ marginLeft: "auto", padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.06)", color: "var(--danger, #ef4444)", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-            >
-              Đóng CMS
-            </button>
-          </div>
-        )}
-
-        {popupBlocked && (
-          <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.16)", fontSize: 12, color: "#f59e0b", lineHeight: 1.6 }}>
-            ⚠️ Cho phép popup cho trang này rồi bấm <strong>Mở CMS</strong>.
+        {tabOpen && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 700 }}>● Tab CMS đang mở</span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>— phiên đăng nhập được giữ</span>
           </div>
         )}
 
