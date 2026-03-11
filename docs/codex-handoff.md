@@ -3,6 +3,9 @@
 ## Trạng thái hiện tại
 
 - Stack chính: `Next.js App Router` + `TypeScript` + `Drizzle ORM` + `PostgreSQL`.
+- Phân quyền đã được mở rộng sang mô hình `leader -> team admin -> writer/reviewer`.
+- Dữ liệu lõi đã có `teams`, `users.isLeader`, và `teamId` cho các bảng chính để scope theo team.
+- Leader xem và bàn giao mọi team; admin thường chỉ thấy dữ liệu thuộc team của mình; audit log và cập nhật ngân sách toàn cục là leader-only.
 - Nghiệp vụ nhạy cảm nhất hiện tại là đồng bộ bài viết hai chiều với Google Sheet.
 - Luồng xóa `web -> Google Sheet` giờ là **non-blocking**: bài xóa trên web luôn thành công, nếu Google Sheet sync thất bại thì chỉ ghi warning vào audit log và trả về response.
 - Luồng phân quyền bài viết đã được chỉnh lại theo mô hình `admin` / `reviewer` / `writer`; reviewer giờ xem được hàng chờ duyệt và bài đã nhận duyệt.
@@ -14,6 +17,85 @@
 Ngày cập nhật: `2026-03-11` (phiên chiều 2)
 
 ### Phiên chiều 2 — 11/03 (đang thực hiện)
+
+### Phiên tối — 11/03
+
+**Mục tiêu:** Nâng app từ `admin toàn cục` sang `leader + team admin`, kèm UI quản lý team và bàn giao owner.
+
+#### Đã hoàn thành
+- **Schema + bootstrap migration**:
+  - Thêm bảng `teams`
+  - Thêm `users.isLeader`, `users.teamId`
+  - Thêm `teamId` cho `collaborators`, `articles`, `editorial_tasks`, `kpi_records`, `payments`, `feedback_entries`
+  - Bootstrap schema version tăng lên `5`
+  - Dữ liệu cũ được backfill vào `Team mặc định`; admin cũ được đánh dấu `isLeader = true`
+- **Auth + team context**:
+  - JWT / `/api/auth/*` trả thêm `isLeader`, `teamId`, `team`
+  - Thêm helper `src/lib/teams.ts` để resolve scope và check quyền team
+- **Scope lại API theo team**:
+  - `collaborators`, `statistics`, `search`, `export`
+  - `editorial-tasks` + reminders
+  - `payments`, `royalty`, `feedback`, `notifications`
+  - `articles/comments`, `articles/review`
+  - `audit-logs` chuyển thành leader-only
+- **API team mới**:
+  - `GET /api/teams`: leader xem tất cả, team admin chỉ xem team của mình
+  - `POST /api/teams`: leader tạo team và có thể tạo luôn owner admin
+  - `PUT /api/teams` với `action = transfer-owner`: leader bàn giao owner cho tài khoản khác trong team
+- **UI quản trị**:
+  - `MainApp.tsx` phân biệt `LEADER HỆ THỐNG` và `ADMIN TEAM`
+  - `TeamPage.tsx` có selector team cho leader, modal tạo team, modal bàn giao owner, và roster scope theo team đang chọn
+  - `RoyaltyPage.tsx` chỉ cho leader chỉnh ngân sách toàn cục
+- **Seed/dev data**:
+  - Seed mặc định tạo `team` đầu tiên và admin seed là leader
+
+#### Kiểm tra đã chạy
+- `npm run lint` ✅
+  - Còn 2 warning từ `.next_stale_build/*` chứ không phải mã nguồn app
+- `npm run build` ✅
+
+### Phiên khuya — 11/03
+
+**Mục tiêu:** Chẩn đoán lỗi không đăng nhập được sau khi user báo màn hình login trả "Hệ thống đang gặp lỗi".
+
+#### Kết luận
+- `auth/login` đang rơi vào nhánh `500`, không phải sai email/mật khẩu.
+- Nguyên nhân môi trường local: [.env.local] chỉ còn cấu hình sai kiểu cũ `DATABASE_URL=file:...` trong khi app hiện chỉ dùng PostgreSQL/Neon.
+- Máy local không có PostgreSQL ở `127.0.0.1:5432`, Vercel CLI cũng chưa được đăng nhập, repo không có `.vercel`, nên chưa thể tự kéo env production về máy.
+- Sau khi nối lại Neon, phát hiện **nguyên nhân gốc của lỗi login trên DB thật** là bootstrap migration `v5` bị lỗi thứ tự:
+  - code tạo index `team_id` trước khi `ALTER TABLE ... ADD COLUMN team_id`
+  - trên DB cũ `bootstrap_schema_version = 4`, request login đầu tiên sẽ crash trong `ensureDatabaseInitialized()`
+  - promise lỗi lại bị cache trong `initializationPromise`, nên app tiếp tục fail cho tới khi restart/redeploy
+
+#### Đã làm
+- Dọn lại [.env.local] theo format local hiện tại:
+  - tạo `JWT_SECRET` local hợp lệ
+  - thêm `APP_ORIGIN=http://localhost:3000`
+  - bỏ `DATABASE_URL=file:...`
+  - sau đó đã gắn `DATABASE_URL` Neon thật vào local env
+- Thêm chẩn đoán cấu hình DB trong:
+  - `src/lib/runtime-diagnostics.ts`
+  - `src/app/api/health/route.ts`
+- `/api/health` giờ sẽ báo rõ:
+  - thiếu `DATABASE_URL`
+  - `DATABASE_URL` đang là SQLite/file URL
+  - `DATABASE_URL` sai format PostgreSQL
+- Đã test kết nối driver `pg` tới Neon thành công (`select current_database()` trả về `neondb`)
+- Đã vá code:
+  - `src/db/index.ts`: tách index `team_id` ra chạy sau `ensureColumnExists`
+  - `src/db/index.ts`: reset `initializationPromise` về `null` nếu bootstrap fail để request sau có thể retry
+- Đã chạy migration cứu hộ trực tiếp trên Neon:
+  - thêm `users.is_leader`, `users.team_id`
+  - thêm `team_id` cho các bảng liên quan
+  - tạo/backfill `Team mặc định`
+  - set `bootstrap_schema_version = 5`
+- Đã kiểm tra account `khaidinh.seo@gmail.com`:
+  - user tồn tại
+  - có `password_hash`
+  - `bcrypt.compare` hoạt động bình thường với hash hiện tại
+
+#### Việc còn dở
+- Restart app local hoặc redeploy để xóa instance đang giữ cache lỗi bootstrap cũ, rồi test lại login
 
 **Mục tiêu:** Rebuild CMS Browser Panel với UI/UX nâng cao + session persistence.
 
@@ -64,13 +146,19 @@ Ngày cập nhật: `2026-03-11` (phiên chiều 2)
 - Route `statistics` fallback legacy vẫn đọc full bảng nếu narrow query trượt.
 - `ArticlesPage` và `DashboardPage` vẫn là hai chunk client lớn nhất; bước tối ưu client kế tiếp nên ưu tiên các modal/import flow còn nằm chung trong `ArticlesPage.tsx`.
 - `TeamPage` hiện vẫn là nơi duy nhất cần full payload của `/api/collaborators`; nếu tối ưu sâu hơn route này, có thể tách riêng một endpoint admin-detail để không phải giữ backward-compat trong cùng handler.
-- Bootstrap schema version là `4`; cần restart app để cột `articles.review_link` được tạo.
+- Bootstrap schema version hiện là `5`; cần restart app hoặc để bootstrap chạy lại để tạo đủ cột/bảng team mới trên môi trường đang dùng DB cũ.
+- Toàn bộ dữ liệu legacy hiện sẽ được gom vào `Team mặc định`; nếu muốn tách team thật sự sau migrate thì cần thao tác dữ liệu hoặc thêm màn hình chuyển người giữa team.
+- `npm run lint` hiện vẫn quét `.next_stale_build`; nếu muốn sạch warning hoàn toàn có thể thêm ignore sau.
 - Từ khóa `editor` còn lại chỉ dùng để map dữ liệu legacy.
 
 ## File nên mở đầu tiên
 
 - `AGENTS.md`
 - `docs/codex-thread-safety.md`
+- `src/db/schema.ts`
+- `src/lib/teams.ts`
+- `src/app/api/teams/route.ts`
+- `src/app/components/TeamPage.tsx`
 - `src/app/api/articles/route.ts`
 - `src/lib/google-sheet-sync.ts`
 - `src/lib/google-sheet-mutation.ts`

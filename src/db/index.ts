@@ -322,14 +322,6 @@ const bootstrapStatements = [
     toast_variant TEXT DEFAULT 'info',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_teams_status ON teams(status)",
-  "CREATE INDEX IF NOT EXISTS idx_users_team_id ON users(team_id)",
-  "CREATE INDEX IF NOT EXISTS idx_collaborators_team_id ON collaborators(team_id)",
-  "CREATE INDEX IF NOT EXISTS idx_articles_team_id ON articles(team_id)",
-  "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_team_id ON editorial_tasks(team_id)",
-  "CREATE INDEX IF NOT EXISTS idx_kpi_team_id ON kpi_records(team_id)",
-  "CREATE INDEX IF NOT EXISTS idx_payments_team_id ON payments(team_id)",
-  "CREATE INDEX IF NOT EXISTS idx_feedback_entries_team_id ON feedback_entries(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_articles_pen_name ON articles(pen_name)",
   "CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(date)",
   "CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status)",
@@ -354,6 +346,17 @@ const bootstrapStatements = [
   "CREATE INDEX IF NOT EXISTS idx_feedback_entries_created_at ON feedback_entries(created_at)",
   "CREATE INDEX IF NOT EXISTS idx_realtime_events_created_at ON realtime_events(created_at)",
   "CREATE INDEX IF NOT EXISTS idx_realtime_events_user_scope ON realtime_events(user_scope)",
+];
+
+const teamScopedIndexStatements = [
+  "CREATE INDEX IF NOT EXISTS idx_teams_status ON teams(status)",
+  "CREATE INDEX IF NOT EXISTS idx_users_team_id ON users(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_collaborators_team_id ON collaborators(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_articles_team_id ON articles(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_team_id ON editorial_tasks(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_team_id ON kpi_records(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_payments_team_id ON payments(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_feedback_entries_team_id ON feedback_entries(team_id)",
 ];
 
 const RUNTIME_META_TABLE_SQL = `
@@ -419,6 +422,11 @@ export async function initializeDatabase() {
   await ensureColumnExists("kpi_records", "team_id", "INTEGER");
   await ensureColumnExists("payments", "team_id", "INTEGER");
   await ensureColumnExists("feedback_entries", "team_id", "INTEGER");
+
+  for (const statement of teamScopedIndexStatements) {
+    await pool.query(statement);
+  }
+
   await pool.query(`ALTER TABLE articles ALTER COLUMN status SET DEFAULT 'Submitted'`);
   await pool.query(`UPDATE collaborators SET role = 'reviewer' WHERE role = 'editor'`);
   await pool.query(`UPDATE users SET is_leader = true WHERE role = 'admin' AND is_leader = false`);
@@ -459,7 +467,10 @@ export async function initializeDatabase() {
 
 export function ensureDatabaseInitialized() {
   if (!initializationPromise) {
-    initializationPromise = initializeDatabase();
+    initializationPromise = initializeDatabase().catch((error) => {
+      initializationPromise = null;
+      throw error;
+    });
   }
   return initializationPromise;
 }
