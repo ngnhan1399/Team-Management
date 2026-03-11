@@ -100,6 +100,10 @@ function normalizeIdentityValue(value: unknown) {
   return foldSearchText(value);
 }
 
+function getArticleNavigationLink(article: Pick<Article, "reviewLink" | "link">) {
+  return String(article.reviewLink || "").trim() || String(article.link || "").trim() || "";
+}
+
 export default function ArticlesPage() {
   type LinkHealthStatus = "ok" | "broken" | "unknown";
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
@@ -1299,12 +1303,12 @@ export default function ArticlesPage() {
                     <td style={{ padding: "12px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
                     <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
                     <td style={{ padding: "12px 14px" }}>
-                      {a.link ? (
+                      {getArticleNavigationLink(a) ? (
                         <a
-                          href={a.link}
+                          href={getArticleNavigationLink(a)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title={a.title}
+                          title={a.reviewLink ? `${a.title} (mở link duyệt bài)` : a.title}
                           style={{
                             color: "var(--accent-blue)",
                             textDecoration: "none",
@@ -1407,7 +1411,11 @@ export default function ArticlesPage() {
                             <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
                           </button>
                         )}
-
+                        {canReviewArticles && a.status === "Submitted" && (
+                          <button onClick={() => { setReviewArticle(a); setShowReviewModal(true); }} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(168, 85, 247, 0.1)", color: "#a855f7", border: "1px solid rgba(168, 85, 247, 0.2)" }} title="Duyệt lỗi">
+                            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>rule</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1506,9 +1514,16 @@ export default function ArticlesPage() {
                 <label className="form-label">Mã ID hệ thống</label>
                 <input className="form-input" value={formData.articleId || ""} onChange={e => setFormData({ ...formData, articleId: e.target.value })} placeholder="VD: post-123" />
               </div>
-              <div className="form-group">
+                      <div className="form-group">
                 <label className="form-label">Đường dẫn bài viết (URL)</label>
                 <input className="form-input" value={formData.link || ""} onChange={e => setFormData({ ...formData, link: e.target.value })} placeholder="https://domain.com/bai-viet" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Đường dẫn duyệt bài</label>
+                <input className="form-input" value={formData.reviewLink || ""} onChange={e => setFormData({ ...formData, reviewLink: e.target.value })} placeholder="https://docs.google.com/... hoặc link CMS duyệt bài" />
+                <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Khi bấm vào tiêu đề bài trong danh sách, hệ thống sẽ ưu tiên mở link duyệt bài này trước.
+                </div>
               </div>
             </div>
             <div className="modal-footer">

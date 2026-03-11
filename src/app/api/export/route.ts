@@ -28,6 +28,7 @@ export async function GET() {
             "Số chữ": a.wordCountRange,
             "Trạng thái": a.status,
             Link: a.link,
+            "Link duyệt bài": a.reviewLink,
             "Người duyệt": a.reviewerName,
             "Ghi chú": a.notes,
         }));
@@ -46,6 +47,7 @@ export async function GET() {
             { wch: 12 },
             { wch: 15 },
             { wch: 12 },
+            { wch: 50 },
             { wch: 50 },
             { wch: 15 },
             { wch: 30 },

@@ -72,6 +72,7 @@ type ArticleResponseRow = {
   wordCountRange: string | null;
   status: string;
   link: string | null;
+  reviewLink: string | null;
   reviewerName: string | null;
   notes: string | null;
   canDelete: boolean;
@@ -121,6 +122,7 @@ async function loadArticleResponseRow(articleId: number, currentUserId: number, 
       wordCountRange: articles.wordCountRange,
       status: articles.status,
       link: articles.link,
+      reviewLink: articles.reviewLink,
       reviewerName: articles.reviewerName,
       notes: articles.notes,
     })
@@ -227,6 +229,7 @@ async function loadArticleDeleteSyncTargets(articleIds: number[]): Promise<Artic
       reviewerName: articles.reviewerName,
       notes: articles.notes,
       link: articles.link,
+      reviewLink: articles.reviewLink,
       articleType: articles.articleType,
       contentType: articles.contentType,
       wordCountRange: articles.wordCountRange,
@@ -757,6 +760,7 @@ export async function POST(request: NextRequest) {
         wordCountRange: (normalizeString(body.wordCountRange) || undefined) as never,
         status: (normalizeString(body.status) || "Submitted") as never,
         link: normalizeString(body.link) || undefined,
+        reviewLink: normalizeString(body.reviewLink) || undefined,
         reviewerName: normalizeString(body.reviewerName) || undefined,
         notes: normalizeString(body.notes) || undefined,
       })
@@ -870,6 +874,7 @@ export async function PUT(request: NextRequest) {
     if (typeof updateData.title === "string") updateData.title = updateData.title.trim();
     if (typeof updateData.articleId === "string") updateData.articleId = updateData.articleId.trim() || undefined;
     if (typeof updateData.link === "string") updateData.link = updateData.link.trim() || undefined;
+    if (typeof updateData.reviewLink === "string") updateData.reviewLink = updateData.reviewLink.trim() || undefined;
     if (typeof updateData.notes === "string") updateData.notes = updateData.notes.trim() || undefined;
     if (typeof updateData.reviewerName === "string") updateData.reviewerName = updateData.reviewerName.trim() || undefined;
     if (typeof updateData.penName === "string") updateData.penName = updateData.penName.trim();

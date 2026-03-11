@@ -19,6 +19,7 @@ Ngày cập nhật: `2026-03-11`
 - `POST /api/articles/review` giờ lưu cả `reviewerName` và `notes` vào DB để reviewer không bị mất bài sau khi gửi yêu cầu sửa.
 - Đã dọn mô hình 3 quyền ở `src/app/components/TeamPage.tsx`, `src/app/api/collaborators/route.ts`, `src/db/schema.ts`, `src/db/index.ts`, `src/db/seed.ts`, `src/app/components/MainApp.tsx`.
 - Bootstrap DB tự migrate `collaborators.role = 'editor'` cũ sang `reviewer` khi app khởi động.
+- Đã thêm trường `review_link` cho bài viết; form bài viết có ô `Đường dẫn duyệt bài` và tiêu đề trong danh sách giờ ưu tiên mở link này.
 
 ## Việc còn cần nhớ
 
@@ -26,6 +27,7 @@ Ngày cập nhật: `2026-03-11`
 - Nếu chưa redeploy, thao tác xóa từ web có thể bị chặn để tránh lệch dữ liệu.
 - UI đã hiện chi tiết lỗi xóa rõ hơn nếu Google Sheet chưa xác nhận được dòng gốc.
 - Từ khóa `editor` còn lại chỉ dùng để map dữ liệu legacy hoặc nhận diện cột import cũ, không còn là role nghiệp vụ hiển thị cho người dùng.
+- Bootstrap schema version hiện là `4`; cần restart app để cột `articles.review_link` được tạo trên DB hiện tại.
 
 ## File nên mở đầu tiên
 

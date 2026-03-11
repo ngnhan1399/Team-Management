@@ -63,6 +63,7 @@ export const articles = pgTable("articles", {
     enum: ["Draft", "Submitted", "Reviewing", "NeedsFix", "Approved", "Published", "Rejected"],
   }).notNull().default("Submitted"),
   link: text("link"),
+  reviewLink: text("review_link"),
   reviewerName: text("reviewer_name"),
   notes: text("notes"),
   createdAt: text("created_at").notNull().default(timestampTextDefault),

@@ -40,6 +40,7 @@ export interface Article {
   wordCountRange: string;
   status: string;
   link: string;
+  reviewLink?: string | null;
   reviewerName: string;
   notes: string;
   canDelete?: boolean;

@@ -166,6 +166,7 @@ const bootstrapStatements = [
     word_count_range TEXT,
     status TEXT NOT NULL DEFAULT 'Submitted',
     link TEXT,
+    review_link TEXT,
     reviewer_name TEXT,
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
@@ -338,7 +339,7 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "3";
+const BOOTSTRAP_SCHEMA_VERSION = "4";
 
 export async function initializeDatabase() {
   await pool.query(RUNTIME_META_TABLE_SQL);
@@ -361,6 +362,7 @@ export async function initializeDatabase() {
   await ensureColumnExists("payments", "paid_at", "TEXT");
   await ensureColumnExists("payments", "updated_at", "TEXT DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists("articles", "created_by_user_id", "INTEGER");
+  await ensureColumnExists("articles", "review_link", "TEXT");
   await pool.query(`ALTER TABLE articles ALTER COLUMN status SET DEFAULT 'Submitted'`);
   await pool.query(`UPDATE collaborators SET role = 'reviewer' WHERE role = 'editor'`);
 
