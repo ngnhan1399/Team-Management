@@ -1,5 +1,5 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articleComments, articles, collaborators, editorialTasks, kpiRecords, notifications, payments, users } from "@/db/schema";
+import { articleComments, articles, collaborators, editorialTasks, notifications, payments, users } from "@/db/schema";
 import { getCurrentUserContext, hashPassword, generatePassword } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { publishRealtimeEvent } from "@/lib/realtime";
@@ -298,11 +298,6 @@ export async function PUT(request: NextRequest) {
                     .where(eq(editorialTasks.assigneePenName, previousPenName))
                     .run();
 
-                await tx.update(kpiRecords)
-                    .set({ penName: nextPenName })
-                    .where(eq(kpiRecords.penName, previousPenName))
-                    .run();
-
                 await tx.update(payments)
                     .set({ penName: nextPenName, updatedAt: articleTimestamp })
                     .where(eq(payments.penName, previousPenName))
@@ -455,7 +450,6 @@ export async function DELETE(request: NextRequest) {
                 await tx.update(articles).set({ createdByUserId: null }).where(eq(articles.createdByUserId, deletedUserId)).run();
                 await tx.delete(users).where(eq(users.id, deletedUserId)).run();
             }
-            await tx.delete(kpiRecords).where(eq(kpiRecords.collaboratorId, collaboratorId)).run();
             await tx.delete(collaborators).where(eq(collaborators.id, collaboratorId)).run();
         });
 
