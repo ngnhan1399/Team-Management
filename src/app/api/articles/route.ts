@@ -280,24 +280,28 @@ async function ensureGoogleSheetDeleteConsistency(
   actorDisplayName: string,
   reason: string
 ) {
-  const failures: string[] = [];
+  const warnings: string[] = [];
 
   for (const target of targets) {
-    const result = await mirrorArticleDeleteToGoogleSheet({
-      articleId: target.article.id,
-      actorUserId,
-      actorDisplayName,
-      reason,
-      snapshot: target.article,
-      syncLink: target.syncLink,
-    });
+    try {
+      const result = await mirrorArticleDeleteToGoogleSheet({
+        articleId: target.article.id,
+        actorUserId,
+        actorDisplayName,
+        reason,
+        snapshot: target.article,
+        syncLink: target.syncLink,
+      });
 
-    if (result.skipped || !result.success) {
-      failures.push(`${target.article.title}: ${result.message}`);
+      if (!result.success && !result.skipped) {
+        warnings.push(`${target.article.title}: ${result.message}`);
+      }
+    } catch {
+      warnings.push(`${target.article.title}: Lỗi kết nối Google Sheet`);
     }
   }
 
-  return failures;
+  return warnings;
 }
 
 function buildDeleteSyncFailureResponse(failures: string[]) {
@@ -980,15 +984,12 @@ export async function DELETE(request: NextRequest) {
         }
       }
 
-      const deleteMirrorFailures = await ensureGoogleSheetDeleteConsistency(
+      const sheetSyncWarnings = await ensureGoogleSheetDeleteConsistency(
         [deleteTarget],
         context.user.id,
         actorDisplayName,
         "article_delete"
       );
-      if (deleteMirrorFailures.length > 0) {
-        return buildDeleteSyncFailureResponse(deleteMirrorFailures);
-      }
 
       const deleted = await deleteArticlesByIds([articleId]);
 
@@ -1001,13 +1002,14 @@ export async function DELETE(request: NextRequest) {
           title: existing.title,
           penName: existing.penName,
           date: existing.date,
+          sheetSyncWarnings,
           ...deleted,
         },
       });
 
       await publishRealtimeEvent(["articles", "dashboard", "royalty", "notifications"]);
 
-      return NextResponse.json({ success: true, deletedCount: deleted.deletedArticles, ...deleted });
+      return NextResponse.json({ success: true, deletedCount: deleted.deletedArticles, sheetSyncWarnings, ...deleted });
     }
 
     if (!canManageArticles) {
@@ -1045,15 +1047,12 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const deleteMirrorFailures = await ensureGoogleSheetDeleteConsistency(
+    const sheetSyncWarnings = await ensureGoogleSheetDeleteConsistency(
       deleteTargets,
       context.user.id,
       actorDisplayName,
       "articles_bulk_delete"
     );
-    if (deleteMirrorFailures.length > 0) {
-      return buildDeleteSyncFailureResponse(deleteMirrorFailures);
-    }
 
     const deleted = await deleteArticlesByIds(deleteTargets.map((target) => target.article.id));
 
@@ -1065,6 +1064,7 @@ export async function DELETE(request: NextRequest) {
         scope,
         criteria,
         deletedCount: deleted.deletedArticles,
+        sheetSyncWarnings,
         ...deleted,
       },
     });
@@ -1076,6 +1076,7 @@ export async function DELETE(request: NextRequest) {
       scope,
       criteria,
       deletedCount: deleted.deletedArticles,
+      sheetSyncWarnings,
       ...deleted,
     });
   } catch (error) {
