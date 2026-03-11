@@ -986,22 +986,30 @@ export async function DELETE(request: NextRequest) {
       );
 
       const deleted = await deleteArticlesByIds([articleId]);
+      scheduleBackgroundWork(async () => {
+        await runNonBlockingStep(
+          () =>
+            writeAuditLog({
+              userId: context.user.id,
+              action: "article_deleted",
+              entity: "article",
+              entityId: articleId,
+              payload: {
+                title: existing.title,
+                penName: existing.penName,
+                date: existing.date,
+                sheetSyncWarnings,
+                ...deleted,
+              },
+            }),
+          { scope: "articles.delete.audit.single", fallback: null }
+        );
 
-      await writeAuditLog({
-        userId: context.user.id,
-        action: "article_deleted",
-        entity: "article",
-        entityId: articleId,
-        payload: {
-          title: existing.title,
-          penName: existing.penName,
-          date: existing.date,
-          sheetSyncWarnings,
-          ...deleted,
-        },
+        await runNonBlockingStep(
+          () => publishRealtimeEvent(["articles", "dashboard", "royalty", "notifications"]),
+          { scope: "articles.delete.realtime.single", fallback: null }
+        );
       });
-
-      await publishRealtimeEvent(["articles", "dashboard", "royalty", "notifications"]);
 
       return NextResponse.json({ success: true, deletedCount: deleted.deletedArticles, sheetSyncWarnings, ...deleted });
     }
@@ -1049,21 +1057,29 @@ export async function DELETE(request: NextRequest) {
     );
 
     const deleted = await deleteArticlesByIds(deleteTargets.map((target) => target.article.id));
+    scheduleBackgroundWork(async () => {
+      await runNonBlockingStep(
+        () =>
+          writeAuditLog({
+            userId: context.user.id,
+            action: "articles_bulk_deleted",
+            entity: "article",
+            payload: {
+              scope,
+              criteria,
+              deletedCount: deleted.deletedArticles,
+              sheetSyncWarnings,
+              ...deleted,
+            },
+          }),
+        { scope: "articles.delete.audit.bulk", fallback: null }
+      );
 
-    await writeAuditLog({
-      userId: context.user.id,
-      action: "articles_bulk_deleted",
-      entity: "article",
-      payload: {
-        scope,
-        criteria,
-        deletedCount: deleted.deletedArticles,
-        sheetSyncWarnings,
-        ...deleted,
-      },
+      await runNonBlockingStep(
+        () => publishRealtimeEvent(["articles", "dashboard", "royalty", "notifications"]),
+        { scope: "articles.delete.realtime.bulk", fallback: null }
+      );
     });
-
-    await publishRealtimeEvent(["articles", "dashboard", "royalty", "notifications"]);
 
     return NextResponse.json({
       success: true,

@@ -12,6 +12,7 @@
 
 Ngày cập nhật: `2026-03-11`
 
+- Luồng xóa bài đã được tối ưu cảm giác phản hồi: UI phát toast "đang xóa" ngay khi xác nhận, nút xóa đổi sang spinner/disabled, và API dời `writeAuditLog` + `publishRealtimeEvent` sang background để trả kết quả sớm hơn.
 - Đã gỡ đoạn nút reviewer dang dở trong `src/app/components/ArticlesPage.tsx` còn gọi `setReviewArticle` / `setShowReviewModal` nhưng không còn state tương ứng; đây là nguyên nhân build production fail nên web chưa nhận được trường `review_link`.
 - Dọn helper xóa không còn dùng trong `src/app/api/articles/route.ts` để giữ `npm run lint` sạch.
 - Đã thêm mutation `deleteArticle` trong `src/lib/google-sheet-mutation.ts`.
@@ -25,6 +26,7 @@ Ngày cập nhật: `2026-03-11`
 
 ## Việc còn cần nhớ
 
+- Luồng xóa vẫn chờ xác nhận từ Google Sheet trước khi xóa DB; nếu còn chậm bất thường thì cần đo riêng Apps Script/webhook vì timeout web app hiện là 8 giây.
 - Nếu production chưa thấy ô `Đường dẫn duyệt bài` trong modal thêm/sửa bài, kiểm tra xem commit gỡ lỗi build reviewer đã được push và redeploy hay chưa.
 - Cần redeploy Apps Script bằng file `output/google-sheets-webhook.workdocker.gs` mới nhất.
 - Nếu chưa redeploy, thao tác xóa từ web có thể bị chặn để tránh lệch dữ liệu.

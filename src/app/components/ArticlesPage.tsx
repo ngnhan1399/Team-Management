@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
 import CustomSelect from "./CustomSelect";
-import { useRealtimeRefresh } from "./realtime";
+import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
 import type {
@@ -143,6 +143,7 @@ export default function ArticlesPage() {
   const [deletePreview, setDeletePreview] = useState<ArticleDeletePreview | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteExecuting, setDeleteExecuting] = useState(false);
+  const [deletingArticleIds, setDeletingArticleIds] = useState<number[]>([]);
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" });
@@ -464,6 +465,17 @@ export default function ArticlesPage() {
     }
   };
 
+  const showUiToast = useCallback((title: string, message: string, variant: "info" | "success" | "warning" | "error" = "info") => {
+    emitRealtimePayload({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      channels: ["ui-feedback"],
+      at: new Date().toISOString(),
+      toastTitle: title,
+      toastMessage: message,
+      toastVariant: variant,
+    });
+  }, []);
+
   const executeDelete = async () => {
     if (!deletePreview) {
       setDeleteError("Hãy xem trước dữ liệu trước khi xóa.");
@@ -484,6 +496,7 @@ export default function ArticlesPage() {
 
     setDeleteExecuting(true);
     setDeleteError("");
+    showUiToast("Dang xoa du lieu", `He thong dang xu ly ${deletePreview.total} bai viet.`, "info");
     try {
       const criteria = deleteMode === "current_filters" ? currentFilterDeleteCriteria : deleteCriteria;
       const res = await fetch("/api/articles", {
@@ -499,36 +512,65 @@ export default function ArticlesPage() {
       if (!res.ok || !data.success) {
         throw new Error(buildApiErrorMessage(data, "Không thể xóa dữ liệu"));
       }
-      alert(`✅ Đã xóa ${data.deletedCount} bài viết. Nhuận bút đã được reset để tránh lệch dữ liệu.`);
       setShowDeleteModal(false);
       setDeletePreview(null);
+      showUiToast(
+        "Da xoa bai viet",
+        data.sheetSyncWarnings?.length
+          ? `Da xoa ${data.deletedCount} bai viet. Co ${data.sheetSyncWarnings.length} canh bao dong bo Google Sheet.`
+          : `Da xoa ${data.deletedCount} bai viet va reset du lieu nhuận but lien quan.`,
+        data.sheetSyncWarnings?.length ? "warning" : "success"
+      );
       fetchArticles(1, search, filters);
     } catch (error) {
-      setDeleteError(String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setDeleteError(message);
+      showUiToast("Xoa that bai", message, "error");
     } finally {
       setDeleteExecuting(false);
     }
   };
 
   const deleteSingleArticle = async (article: Article) => {
-      if (!article.canDelete && !canManageArticles) {
-      alert("❌ Bạn chỉ có thể xóa bài do chính mình tạo.");
+    if (deletingArticleIds.includes(article.id)) return;
+
+    if (!article.canDelete && !canManageArticles) {
+      showUiToast("Khong the xoa bai", "Ban chi co the xoa bai do chinh minh tao.", "error");
       return;
     }
 
     const confirmed = window.confirm(`Xóa bài "${article.title}"?\n\nHệ thống cũng sẽ xóa comment/review liên quan và reset các dòng nhuận bút bị ảnh hưởng để tránh lệch dữ liệu.`);
     if (!confirmed) return;
 
+    setDeletingArticleIds((prev) => (prev.includes(article.id) ? prev : [...prev, article.id]));
+    showUiToast("Dang xoa bai viet", `Dang xu ly "${article.title}".`, "info");
     try {
       const res = await fetch(`/api/articles?id=${article.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(buildApiErrorMessage(data, "Không thể xóa bài viết"));
       }
-      fetchArticles(1, search, filters);
-      alert(`✅ Đã xóa bài "${article.title}".`);
+      setArticles((prev) => prev.filter((item) => item.id !== article.id));
+      setPagination((prev) => {
+        const nextTotal = Math.max(0, Number(prev.total || 0) - 1);
+        return {
+          ...prev,
+          total: nextTotal,
+          totalPages: Math.max(1, Math.ceil(nextTotal / ARTICLE_PAGE_SIZE)),
+        };
+      });
+      showUiToast(
+        "Da xoa bai viet",
+        data.sheetSyncWarnings?.length
+          ? `Da xoa "${article.title}". Google Sheet con ${data.sheetSyncWarnings.length} canh bao can kiem tra.`
+          : `Da xoa "${article.title}".`,
+        data.sheetSyncWarnings?.length ? "warning" : "success"
+      );
+      fetchArticles(pagination.page, search, filters);
     } catch (error) {
-      alert("❌ " + String(error));
+      showUiToast("Xoa bai that bai", error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setDeletingArticleIds((prev) => prev.filter((id) => id !== article.id));
     }
   };
 
@@ -1406,8 +1448,17 @@ export default function ArticlesPage() {
                           </button>
                         )}
                         {(canManageArticles || a.canDelete) && (
-                          <button data-testid={`article-delete-${a.id}`} onClick={() => deleteSingleArticle(a)} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} title="Xóa bài">
-                            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
+                          <button
+                            data-testid={`article-delete-${a.id}`}
+                            onClick={() => deleteSingleArticle(a)}
+                            disabled={deletingArticleIds.includes(a.id)}
+                            className="btn-ios-pill"
+                            style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)", opacity: deletingArticleIds.includes(a.id) ? 0.7 : 1 }}
+                            title={deletingArticleIds.includes(a.id) ? "Đang xóa bài" : "Xóa bài"}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 17, animation: deletingArticleIds.includes(a.id) ? "spin 1s linear infinite" : undefined }}>
+                              {deletingArticleIds.includes(a.id) ? "sync" : "delete"}
+                            </span>
                           </button>
                         )}
                       </div>
