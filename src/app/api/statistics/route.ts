@@ -137,12 +137,120 @@ async function loadStatisticsArticles(whereClause?: SQL) {
     .all() as StatisticsArticleRow[];
 }
 
+function mapArticlesByCategory(rows: StatisticsCategoryRow[]) {
+  const buckets = new Map<string, number>();
+  for (const row of rows) {
+    const category = resolveArticleCategory(row.category, row.articleType);
+    buckets.set(category, (buckets.get(category) || 0) + Number(row.count || 0));
+  }
+
+  return Array.from(buckets.entries()).map(([category, count]) => ({ category, count }));
+}
+
+function mapArticlesByWriter(rows: StatisticsWriterCountRow[], collaboratorDirectory: CollaboratorDirectoryItem[]) {
+  return rows
+    .map((row) => {
+      const resolvedCollaborator = resolveCollaborator(row.penName, collaboratorDirectory);
+      return {
+        penName: resolvedCollaborator?.penName || row.penName,
+        displayName: resolvedCollaborator?.name || resolvedCollaborator?.penName || row.penName,
+        count: Number(row.count || 0),
+      };
+    })
+    .sort((left, right) => right.count - left.count || left.displayName.localeCompare(right.displayName, "vi"));
+}
+
+function mapLatestArticles(rows: StatisticsArticleRow[], collaboratorDirectory: CollaboratorDirectoryItem[]) {
+  return rows.map((article) => {
+    const resolvedCollaborator = resolveCollaborator(article.penName, collaboratorDirectory);
+    return {
+      id: article.id,
+      articleId: article.articleId,
+      title: article.title,
+      penName: resolvedCollaborator?.penName || article.penName,
+      writerDisplayName: resolvedCollaborator?.name || article.penName,
+      articleType: article.articleType,
+      status: article.status,
+      date: article.date,
+      updatedAt: article.updatedAt || article.createdAt || article.date,
+    };
+  });
+}
+
+async function getScopedStatistics(
+  whereClause: SQL,
+  totalCTVCount: number,
+  collaboratorDirectory: CollaboratorDirectoryItem[]
+) {
+  const [
+    totalArticlesRow,
+    statusRows,
+    categoryRows,
+    typeRows,
+    monthRows,
+    writerRows,
+    latestArticlesRows,
+  ] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(articles).where(whereClause).get(),
+    db.select({
+      status: articles.status,
+      count: sql<number>`count(*)`,
+    }).from(articles).where(whereClause).groupBy(articles.status).all(),
+    db.select({
+      category: articles.category,
+      articleType: articles.articleType,
+      count: sql<number>`count(*)`,
+    }).from(articles).where(whereClause).groupBy(articles.category, articles.articleType).all() as Promise<StatisticsCategoryRow[]>,
+    db.select({
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      count: sql<number>`count(*)`,
+    }).from(articles).where(whereClause).groupBy(articles.articleType, articles.contentType).all(),
+    db.select({
+      date: articles.date,
+      count: sql<number>`count(*)`,
+    }).from(articles).where(whereClause).groupBy(articles.date).all(),
+    db.select({
+      penName: articles.penName,
+      count: sql<number>`count(*)`,
+    }).from(articles).where(whereClause).groupBy(articles.penName).all() as Promise<StatisticsWriterCountRow[]>,
+    db.select({
+      id: articles.id,
+      articleId: articles.articleId,
+      title: articles.title,
+      penName: articles.penName,
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      status: articles.status,
+      category: articles.category,
+      date: articles.date,
+      createdAt: articles.createdAt,
+      updatedAt: articles.updatedAt,
+    }).from(articles).where(whereClause).orderBy(desc(articles.updatedAt), desc(articles.id)).limit(8).all() as Promise<StatisticsArticleRow[]>,
+  ]);
+
+  return {
+    totalArticles: Number(totalArticlesRow?.count || 0),
+    totalCTVs: totalCTVCount,
+    articlesByStatus: statusRows.map((row) => ({ status: row.status, count: Number(row.count || 0) })),
+    articlesByCategory: mapArticlesByCategory(categoryRows),
+    articlesByWriter: mapArticlesByWriter(writerRows, collaboratorDirectory),
+    articlesByType: typeRows.map((row) => ({
+      articleType: row.articleType,
+      contentType: row.contentType,
+      count: Number(row.count || 0),
+    })),
+    articlesByMonth: monthRows.map((row) => ({ date: row.date, count: Number(row.count || 0) })),
+    latestArticles: mapLatestArticles(latestArticlesRows, collaboratorDirectory),
+  };
+}
+
 async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[]) {
   const [
     totalArticlesRow,
     totalCTVRow,
     statusRows,
-    categorySourceRows,
+    categoryRows,
     typeRows,
     monthRows,
     writerRows,
@@ -157,7 +265,8 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[])
     db.select({
       category: articles.category,
       articleType: articles.articleType,
-    }).from(articles).all(),
+      count: sql<number>`count(*)`,
+    }).from(articles).groupBy(articles.category, articles.articleType).all() as Promise<StatisticsCategoryRow[]>,
     db.select({
       articleType: articles.articleType,
       contentType: articles.contentType,
@@ -181,47 +290,24 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[])
       date: articles.date,
       createdAt: articles.createdAt,
       updatedAt: articles.updatedAt,
-    }).from(articles).orderBy(desc(articles.updatedAt), desc(articles.id)).limit(8).all(),
+      contentType: articles.contentType,
+      category: articles.category,
+    }).from(articles).orderBy(desc(articles.updatedAt), desc(articles.id)).limit(8).all() as Promise<StatisticsArticleRow[]>,
   ]);
-
-  const articlesByWriter = writerRows
-    .map((row) => {
-      const resolvedCollaborator = resolveCollaborator(row.penName, allCollaborators);
-      return {
-        penName: resolvedCollaborator?.penName || row.penName,
-        displayName: resolvedCollaborator?.name || resolvedCollaborator?.penName || row.penName,
-        count: Number(row.count || 0),
-      };
-    })
-    .sort((left, right) => right.count - left.count || left.displayName.localeCompare(right.displayName, "vi"));
-
-  const latestArticles = latestArticlesRows.map((article) => ({
-    id: article.id,
-    articleId: article.articleId,
-    title: article.title,
-    penName: resolveCollaborator(article.penName, allCollaborators)?.penName || article.penName,
-    writerDisplayName: resolveCollaborator(article.penName, allCollaborators)?.name || article.penName,
-    articleType: article.articleType,
-    status: article.status,
-    date: article.date,
-    updatedAt: article.updatedAt || article.createdAt || article.date,
-  }));
 
   return {
     totalArticles: Number(totalArticlesRow?.count || 0),
     totalCTVs: Number(totalCTVRow?.count || 0),
     articlesByStatus: statusRows.map((row) => ({ status: row.status, count: Number(row.count || 0) })),
-    articlesByCategory: groupCount(
-      categorySourceRows.map((row) => resolveArticleCategory(row.category, row.articleType))
-    ).map(({ key, count }) => ({ category: key, count })),
-    articlesByWriter,
+    articlesByCategory: mapArticlesByCategory(categoryRows),
+    articlesByWriter: mapArticlesByWriter(writerRows as StatisticsWriterCountRow[], allCollaborators),
     articlesByType: typeRows.map((row) => ({
       articleType: row.articleType,
       contentType: row.contentType,
       count: Number(row.count || 0),
     })),
     articlesByMonth: monthRows.map((row) => ({ date: row.date, count: Number(row.count || 0) })),
-    latestArticles,
+    latestArticles: mapLatestArticles(latestArticlesRows, allCollaborators),
   };
 }
 
@@ -268,20 +354,24 @@ export async function GET() {
         }
 
         const scopedCollaborators = collectScopedCollaborators(allCollaborators, identityCandidates);
+        const collaboratorDirectory = scopedCollaborators.length > 0 ? scopedCollaborators : allCollaborators;
         const articleScopeValues = buildArticleScopeValues(identityLabels, scopedCollaborators);
         const scopeWhere = buildArticleScopeWhere(articleScopeValues);
-        const scopedArticleCandidates = scopeWhere ? await loadStatisticsArticles(scopeWhere) : [];
-        let scopedArticles = scopedArticleCandidates.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
+        const totalCTVCount = identityCandidates.length > 0 ? 1 : 0;
 
-        if (scopedArticles.length === 0) {
-            const allArticles = await loadStatisticsArticles();
-            scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
+        if (scopeWhere) {
+            const scopedStatistics = await getScopedStatistics(scopeWhere, totalCTVCount, collaboratorDirectory);
+            if (scopedStatistics.totalArticles > 0) {
+                return NextResponse.json({
+                    success: true,
+                    data: scopedStatistics,
+                });
+            }
         }
 
-        const collaboratorDirectory = scopedCollaborators.length > 0 ? scopedCollaborators : allCollaborators;
-
+        const allArticles = await loadStatisticsArticles();
+        const scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
         const totalArticles = scopedArticles.length;
-        const totalCTVCount = identityCandidates.length > 0 ? 1 : 0;
 
         const articlesByStatus = groupCount(scopedArticles.map((article) => article.status))
             .map(({ key, count }) => ({ status: key, count }));

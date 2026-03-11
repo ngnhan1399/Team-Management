@@ -16,7 +16,8 @@ Ngày cập nhật: `2026-03-11`
 - Luồng xóa bài đã được tối ưu cảm giác phản hồi: UI phát toast "đang xóa" ngay khi xác nhận, nút xóa đổi sang spinner/disabled, và API dời `writeAuditLog` + `publishRealtimeEvent` sang background để trả kết quả sớm hơn.
 - `src/app/components/MainApp.tsx` đã được tách bundle theo tab: giữ `DashboardPage` eager vì là màn mặc định, còn các page nặng như `Articles`, `Team`, `Royalty`, `Audit`, `Notifications`... được `next/dynamic` lazy-load. Điều hướng còn preload chunk theo hover/focus/touch và chỉ commit chuyển trang sau khi chunk sẵn sàng để giảm cảm giác khựng khi đổi tab.
 - `findMatchingCollaboratorPenNames` trong `src/app/api/articles/route.ts` giờ không đọc full bảng `collaborators` mặc định nữa; route sẽ thử narrow bằng `ILIKE` theo cụm search/token trước, chỉ fallback về full scan khi không tìm được candidate nào. Nhờ vậy các màn danh sách bài/xóa theo bộ lọc giảm khá nhiều tải ở case tìm kiếm phổ biến.
-- `GET /api/statistics` cho user thường giờ build tập nhãn identity từ context + collaborator match rồi query `articles.pen_name` theo exact scope trước; chỉ fallback về đọc toàn bộ bảng khi narrow query không ra dữ liệu. Điều này giảm đáng kể trường hợp dashboard của CTV phải kéo cả bảng bài viết lên chỉ để lọc lấy bài của chính họ.
+- `GET /api/statistics` cho user thường giờ build tập nhãn identity từ context + collaborator match rồi query `articles.pen_name` theo exact scope trước; ở case phổ biến route còn đẩy luôn các phần `count/group` (`status`, `category`, `type`, `month`, `writer`, `latest`) xuống SQL thay vì gom toàn bộ row lên JS. Chỉ khi narrow query không ra dữ liệu mới fallback sang full scan để giữ đúng hành vi với dữ liệu legacy.
+- `GET /api/statistics` cho admin cũng đã giảm payload phần danh mục: thay vì kéo toàn bộ `category/articleType` của từng bài, route chỉ lấy các cặp đã `GROUP BY` rồi map lại category chuẩn trong JS.
 - Đã gỡ đoạn nút reviewer dang dở trong `src/app/components/ArticlesPage.tsx` còn gọi `setReviewArticle` / `setShowReviewModal` nhưng không còn state tương ứng; đây là nguyên nhân build production fail nên web chưa nhận được trường `review_link`.
 - Dọn helper xóa không còn dùng trong `src/app/api/articles/route.ts` để giữ `npm run lint` sạch.
 - Đã thêm mutation `deleteArticle` trong `src/lib/google-sheet-mutation.ts`.
@@ -31,7 +32,7 @@ Ngày cập nhật: `2026-03-11`
 ## Việc còn cần nhớ
 
 - `findMatchingCollaboratorPenNames` vẫn còn fallback full-scan để giữ đúng hành vi accent-insensitive/legacy matching; nếu bảng `collaborators` lớn thêm, bước tối ưu tiếp theo nên là cột search-normalized hoặc `pg_trgm`/`unaccent` thay vì chỉ dựa vào JS fallback.
-- Route `statistics` cho user thường đã giảm mạnh lượng row phải tải ở case phổ biến, nhưng phần aggregate (`status`, `category`, `type`, `month`) vẫn tính trong JS sau khi query scope; nếu một user có rất nhiều bài thì nên đẩy thêm group/count xuống SQL.
+- Route `statistics` đã tối ưu mạnh ở nhánh scope phổ biến, nhưng fallback legacy vẫn còn đọc full bảng `articles` nếu narrow query trượt; nếu muốn bỏ hẳn fallback này thì cần một chiến lược identity/search canonical hơn ở DB.
 - Luồng xóa vẫn chờ xác nhận từ Google Sheet trước khi xóa DB; nếu còn chậm bất thường thì cần đo riêng Apps Script/webhook vì timeout web app hiện là 8 giây.
 - `MainApp` đã bớt nặng bundle đầu, nhưng nếu còn cảm giác chậm khi mở lần đầu từng tab thì nên đo tiếp chunk size của `ArticlesPage` và `DashboardPage`; đây nhiều khả năng là hai page client lớn nhất hiện tại.
 - Nếu production chưa thấy ô `Đường dẫn duyệt bài` trong modal thêm/sửa bài, kiểm tra xem commit gỡ lỗi build reviewer đã được push và redeploy hay chưa.
