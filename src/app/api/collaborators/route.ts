@@ -405,6 +405,90 @@ export async function PUT(request: NextRequest) {
     }
 }
 
+export async function DELETE(request: NextRequest) {
+    try {
+        await ensureDatabaseInitialized();
+        const originError = enforceTrustedOrigin(request);
+        if (originError) return originError;
+
+        const context = await getCurrentUserContext();
+        if (!context) {
+            return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
+        }
+        if (context.user.role !== "admin") {
+            return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+        }
+
+        const body = (await request.json()) as Record<string, unknown>;
+        const collaboratorId = Number(body.id);
+        if (!Number.isInteger(collaboratorId) || collaboratorId <= 0) {
+            return NextResponse.json({ success: false, error: "Invalid collaborator ID" }, { status: 400 });
+        }
+
+        const collaborator = await db.select().from(collaborators).where(eq(collaborators.id, collaboratorId)).get();
+        if (!collaborator) {
+            return NextResponse.json({ success: false, error: "Không tìm thấy thành viên" }, { status: 404 });
+        }
+
+        const linkedUser = await db
+            .select({ id: users.id, role: users.role, email: users.email })
+            .from(users)
+            .where(eq(users.collaboratorId, collaboratorId))
+            .get();
+
+        if (linkedUser?.role === "admin") {
+            return NextResponse.json({ success: false, error: "Không thể xóa tài khoản admin" }, { status: 403 });
+        }
+
+        if (linkedUser?.id === context.user.id) {
+            return NextResponse.json({ success: false, error: "Không thể tự xóa chính mình" }, { status: 403 });
+        }
+
+        const deletedUserId = linkedUser?.id ?? null;
+        const deletedUserEmail = linkedUser?.email ?? null;
+
+        await db.transaction(async (tx) => {
+            if (deletedUserId) {
+                await tx.delete(notifications).where(eq(notifications.toUserId, deletedUserId)).run();
+                await tx.delete(notifications).where(eq(notifications.fromUserId, deletedUserId)).run();
+                await tx.delete(articleComments).where(eq(articleComments.userId, deletedUserId)).run();
+                await tx.update(articles).set({ createdByUserId: null }).where(eq(articles.createdByUserId, deletedUserId)).run();
+                await tx.delete(users).where(eq(users.id, deletedUserId)).run();
+            }
+            await tx.delete(kpiRecords).where(eq(kpiRecords.collaboratorId, collaboratorId)).run();
+            await tx.delete(collaborators).where(eq(collaborators.id, collaboratorId)).run();
+        });
+
+        await writeAuditLog({
+            userId: context.user.id,
+            action: "collaborator_deleted",
+            entity: "collaborator",
+            entityId: String(collaboratorId),
+            payload: {
+                deletedName: collaborator.name,
+                deletedPenName: collaborator.penName,
+                deletedUserId,
+                deletedUserEmail,
+            },
+        });
+
+        await publishRealtimeEvent({
+            channels: ["team", "dashboard"],
+            toastTitle: "Thành viên đã bị xóa",
+            toastMessage: `${collaborator.name} (${collaborator.penName}) đã bị xóa khỏi hệ thống.`,
+            toastVariant: "warning",
+        });
+
+        return NextResponse.json({
+            success: true,
+            deletedCollaborator: { id: collaboratorId, name: collaborator.name, penName: collaborator.penName },
+            deletedUserAccount: deletedUserId ? { id: deletedUserId, email: deletedUserEmail } : null,
+        });
+    } catch (error) {
+        return handleServerError("collaborators.delete", error);
+    }
+}
+
 
 
 

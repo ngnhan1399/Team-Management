@@ -46,6 +46,41 @@ export default function TeamPage() {
     setShowModal(true);
   };
 
+  const handleDelete = async (collaborator: Collaborator) => {
+    const confirmed = window.confirm(
+      `⚠️ Xác nhận xóa thành viên "${collaborator.name}" (${collaborator.penName})?\n\n` +
+      `Hành động này sẽ:\n` +
+      `• Xóa tài khoản đăng nhập (nếu có)\n` +
+      `• Xóa thông báo và bình luận liên quan\n` +
+      `• Xóa dữ liệu KPI\n\n` +
+      `Bài viết sẽ được giữ lại nhưng không còn liên kết với tài khoản.\n\n` +
+      `Thao tác KHÔNG THỂ HOÀN TÁC!`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch("/api/collaborators", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: collaborator.id }),
+      });
+      const data = await res.json().catch(() => ({ success: false, error: "Không thể đọc phản hồi" }));
+      if (!res.ok || !data.success) {
+        alert("❌ " + (data.error || "Không thể xóa thành viên"));
+        return;
+      }
+
+      let message = `✅ Đã xóa ${collaborator.name} (${collaborator.penName}) khỏi hệ thống.`;
+      if (data.deletedUserAccount) {
+        message += `\n\n🔒 Tài khoản ${data.deletedUserAccount.email} đã bị vô hiệu hóa.`;
+      }
+      alert(message);
+      fetchCTVs();
+    } catch {
+      alert("❌ Không thể kết nối tới máy chủ.");
+    }
+  };
+
   const handleSave = async () => {
     const name = formData.name?.trim() || "";
     const penName = formData.penName?.trim() || "";
@@ -200,9 +235,14 @@ export default function TeamPage() {
                     </span>
                   </td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                    </button>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                      </button>
+                      <button className="btn-ios-pill" style={{ padding: "6px 12px", background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} onClick={() => handleDelete(c)} title="Xóa thành viên">
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -249,9 +289,14 @@ export default function TeamPage() {
                     </span>
                   </td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                    </button>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                      </button>
+                      <button className="btn-ios-pill" style={{ padding: "6px 12px", background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} onClick={() => handleDelete(c)} title="Xóa thành viên">
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -298,9 +343,14 @@ export default function TeamPage() {
                     </span>
                   </td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                    </button>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                      </button>
+                      <button className="btn-ios-pill" style={{ padding: "6px 12px", background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} onClick={() => handleDelete(c)} title="Xóa thành viên">
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
