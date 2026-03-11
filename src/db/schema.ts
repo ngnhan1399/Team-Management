@@ -186,6 +186,23 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: text("created_at").notNull().default(timestampTextDefault),
 });
 
+export const feedbackEntries = pgTable("feedback_entries", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  collaboratorId: integer("collaborator_id"),
+  submitterName: text("submitter_name").notNull(),
+  submitterEmail: text("submitter_email").notNull(),
+  category: text("category", { enum: ["bug", "feature", "improvement", "other"] }).notNull().default("improvement"),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  pageContext: text("page_context"),
+  rating: integer("rating"),
+  status: text("status", { enum: ["new", "reviewing", "planned", "resolved"] }).notNull().default("new"),
+  adminNotes: text("admin_notes"),
+  createdAt: text("created_at").notNull().default(timestampTextDefault),
+  updatedAt: text("updated_at").notNull().default(timestampTextDefault),
+});
+
 export const realtimeEvents = pgTable("realtime_events", {
   id: serial("id").primaryKey(),
   channels: text("channels").notNull(),
@@ -211,4 +228,5 @@ export type Notification = typeof notifications.$inferSelect;
 export type ArticleReview = typeof articleReviews.$inferSelect;
 export type MonthlyBudget = typeof monthlyBudgets.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type FeedbackEntry = typeof feedbackEntries.$inferSelect;
 export type RealtimeEventRow = typeof realtimeEvents.$inferSelect;

@@ -68,6 +68,11 @@ export interface CurrentUserContext {
     collaborator: Collaborator | null;
 }
 
+export function hasArticleManagerAccess(context: CurrentUserContext | null | undefined): boolean {
+    if (!context) return false;
+    return context.user.role === "admin" || context.collaborator?.role === "editor";
+}
+
 function normalizeIdentityValue(value: unknown): string {
     return String(value || "")
         .normalize("NFD")

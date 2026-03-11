@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, notifications, payments } from "@/db/schema";
-import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
 import { createArticleInGoogleSheet, mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
 import { resolveArticleCategory } from "@/lib/article-category";
 import { publishRealtimeEvent } from "@/lib/realtime";
@@ -92,7 +92,7 @@ function scheduleBackgroundWork(task: () => Promise<void>) {
   });
 }
 
-async function loadArticleResponseRow(articleId: number, currentUserId: number, isAdmin: boolean): Promise<ArticleResponseRow | null> {
+async function loadArticleResponseRow(articleId: number, currentUserId: number, canManageArticles: boolean): Promise<ArticleResponseRow | null> {
   const row = await db
     .select({
       id: articles.id,
@@ -119,7 +119,7 @@ async function loadArticleResponseRow(articleId: number, currentUserId: number, 
 
   return {
     ...row,
-    canDelete: isAdmin || row.createdByUserId === currentUserId,
+    canDelete: canManageArticles || row.createdByUserId === currentUserId,
   };
 }
 
@@ -413,10 +413,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const mode = normalizeString(searchParams.get("mode"));
     const criteria = readCriteriaFromSearchParams(searchParams);
-    const whereClause = buildArticleWhere(criteria, context.user.role === "admin");
+    const canManageArticles = hasArticleManagerAccess(context);
+    const whereClause = buildArticleWhere(criteria, canManageArticles);
 
     if (mode === "delete-preview") {
-      if (context.user.role !== "admin") {
+      if (!canManageArticles) {
         return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
       }
 
@@ -428,7 +429,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 200);
     const ownerCandidates = getContextArticleOwnerCandidates(context);
 
-    if (context.user.role !== "admin" && ownerCandidates.length === 0) {
+    if (!canManageArticles && ownerCandidates.length === 0) {
       return NextResponse.json({
         success: true,
         data: [],
@@ -436,7 +437,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const scopedWhereClause = context.user.role === "admin"
+    const scopedWhereClause = canManageArticles
       ? whereClause
       : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
 
@@ -460,7 +461,7 @@ export async function GET(request: NextRequest) {
     const data = pagedRows
       .map((article) => ({
         ...article,
-        canDelete: context.user.role === "admin" || article.createdByUserId === context.user.id,
+        canDelete: canManageArticles || article.createdByUserId === context.user.id,
       }));
 
     return NextResponse.json({
@@ -491,7 +492,8 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as Partial<ArticleInsert>;
     const ownPenName = getContextPenName(context);
-    const finalPenName = context.user.role === "admin" ? normalizeString(body.penName) : ownPenName || "";
+    const canManageArticles = hasArticleManagerAccess(context);
+    const finalPenName = canManageArticles ? normalizeString(body.penName) : ownPenName || "";
     const title = normalizeString(body.title);
     const date = normalizeString(body.date);
     const normalizedArticleType = normalizeString(body.articleType) || "Bài SEO ICT";
@@ -568,7 +570,7 @@ export async function POST(request: NextRequest) {
     }
 
     const article = createdArticleId > 0
-      ? await loadArticleResponseRow(createdArticleId, context.user.id, context.user.role === "admin")
+      ? await loadArticleResponseRow(createdArticleId, context.user.id, canManageArticles)
       : null;
 
     return NextResponse.json({
@@ -608,7 +610,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
     }
 
-    if (context.user.role !== "admin") {
+    const canManageArticles = hasArticleManagerAccess(context);
+    if (!canManageArticles) {
       const identityCandidates = getContextIdentityCandidates(context);
       if (!matchesIdentityCandidate(identityCandidates, existing.penName)) {
         return NextResponse.json(
@@ -621,7 +624,7 @@ export async function PUT(request: NextRequest) {
     const updateData: Partial<ArticleInsert> = { ...body };
     delete (updateData as ArticleUpdateInput).id;
 
-    if (context.user.role !== "admin") {
+    if (!canManageArticles) {
       delete updateData.penName;
       delete updateData.reviewerName;
       delete updateData.createdByUserId;
@@ -696,7 +699,7 @@ export async function PUT(request: NextRequest) {
       );
     });
 
-    const article = await loadArticleResponseRow(id, context.user.id, context.user.role === "admin");
+    const article = await loadArticleResponseRow(id, context.user.id, canManageArticles);
 
     return NextResponse.json({ success: true, backgroundSyncQueued: true, article });
   } catch (error) {
@@ -717,6 +720,7 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = normalizeString(searchParams.get("id"));
+    const canManageArticles = hasArticleManagerAccess(context);
 
     if (id) {
       const articleId = parseInt(id, 10);
@@ -736,7 +740,7 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
       }
 
-      if (context.user.role !== "admin") {
+      if (!canManageArticles) {
         const identityCandidates = getContextIdentityCandidates(context);
         const canDeleteOwnArticle =
           matchesIdentityCandidate(identityCandidates, existing.penName)
@@ -770,7 +774,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true, deletedCount: deleted.deletedArticles, ...deleted });
     }
 
-    if (context.user.role !== "admin") {
+    if (!canManageArticles) {
       return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
     }
 

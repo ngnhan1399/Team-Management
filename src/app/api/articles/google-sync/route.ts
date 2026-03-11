@@ -1,7 +1,7 @@
 import { ensureDatabaseInitialized } from "@/db";
 import { articles } from "@/db/schema";
 import { db } from "@/db";
-import { getCurrentUserContext, getContextIdentityCandidates, matchesIdentityCandidate } from "@/lib/auth";
+import { getCurrentUserContext, getContextIdentityCandidates, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { executeGoogleSheetSync, executeGoogleSheetWorkbookSync, refreshScopedArticlesFromGoogleSheet } from "@/lib/google-sheet-sync";
 import { publishRealtimeEvent } from "@/lib/realtime";
@@ -71,11 +71,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Năm không hợp lệ." }, { status: 400 });
     }
 
-    const isAdmin = context.user.role === "admin";
-    const identityCandidates = isAdmin ? [] : getContextIdentityCandidates(context);
+    const canManageArticles = hasArticleManagerAccess(context);
+    const identityCandidates = canManageArticles ? [] : getContextIdentityCandidates(context);
 
     let authorizedArticleIds = articleIds;
-    if (!isAdmin && articleIds.length > 0) {
+    if (!canManageArticles && articleIds.length > 0) {
       const targetArticles = await db
         .select({
           id: articles.id,
@@ -117,14 +117,14 @@ export async function POST(request: NextRequest) {
         ? await executeGoogleSheetWorkbookSync({
           sourceUrl: sourceUrl || undefined,
           createdByUserId: context.user.id,
-          identityCandidates: isAdmin ? undefined : identityCandidates,
+          identityCandidates: canManageArticles ? undefined : identityCandidates,
         })
         : await executeGoogleSheetSync({
           sourceUrl: sourceUrl || undefined,
           month,
           year,
           createdByUserId: context.user.id,
-          identityCandidates: isAdmin ? undefined : identityCandidates,
+          identityCandidates: canManageArticles ? undefined : identityCandidates,
         });
 
     await writeAuditLog({
@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
         articleIds: authorizedArticleIds,
         triggeredBy: "manual",
         actorRole: context.user.role,
+        actorCollaboratorRole: context.collaborator?.role ?? null,
       },
     });
 

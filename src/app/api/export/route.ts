@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { articles } from "@/db/schema";
-import { getCurrentUserContext } from "@/lib/auth";
+import { getCurrentUserContext, hasArticleManagerAccess } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
@@ -10,7 +10,7 @@ export async function GET() {
         if (!context) {
             return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
         }
-        if (context.user.role !== "admin") {
+        if (!hasArticleManagerAccess(context)) {
             return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
         }
 

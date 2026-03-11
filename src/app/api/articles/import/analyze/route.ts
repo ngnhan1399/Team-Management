@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { collaborators } from "@/db/schema";
-import { getCurrentUserContext } from "@/lib/auth";
+import { getCurrentUserContext, hasArticleManagerAccess } from "@/lib/auth";
 import { prepareArticleImport } from "@/lib/article-import";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     if (!context) {
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
     }
-    if (context.user.role !== "admin") {
+    if (!hasArticleManagerAccess(context)) {
       return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
     }
 

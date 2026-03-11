@@ -149,6 +149,7 @@ export default function ArticlesPage() {
   const [commentAttachment, setCommentAttachment] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
   const isAdmin = user?.role === "admin";
+  const canManageArticles = isAdmin || user?.collaborator?.role === "editor";
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
   const mappedFields = Object.values(importMapping).filter(Boolean);
   const duplicateMappedFields = mappedFields.filter((field, index) => mappedFields.indexOf(field) !== index);
@@ -158,7 +159,7 @@ export default function ArticlesPage() {
     setLoading(true);
     const params = new URLSearchParams({ page: String(p), limit: "30" });
     if (s) params.set("search", s);
-    if (!isAdmin && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
+    if (!canManageArticles && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
     else if (f.penName) params.set("penName", f.penName);
     if (f.status) params.set("status", f.status);
     if (f.category) params.set("category", f.category);
@@ -167,7 +168,7 @@ export default function ArticlesPage() {
     if (f.month) params.set("month", f.month);
     if (f.year) params.set("year", f.year);
     fetch(`/api/articles?${params}`, { cache: "no-store" }).then(r => r.json()).then(d => { setArticles(d.data || []); setPagination(d.pagination || {}); setLoading(false); }).catch(() => setLoading(false));
-  }, [isAdmin, user]);
+  }, [canManageArticles, user]);
 
   useEffect(() => {
     fetchArticles();
@@ -468,7 +469,7 @@ export default function ArticlesPage() {
   };
 
   const deleteSingleArticle = async (article: Article) => {
-    if (!article.canDelete && !isAdmin) {
+      if (!article.canDelete && !canManageArticles) {
       alert("❌ Bạn chỉ có thể xóa bài do chính mình tạo.");
       return;
     }
@@ -727,10 +728,10 @@ export default function ArticlesPage() {
       }
     }
 
-    if (!isAdmin && user?.collaborator?.penName && article.penName !== user.collaborator.penName) {
+    if (!canManageArticles && user?.collaborator?.penName && article.penName !== user.collaborator.penName) {
       return false;
     }
-    if (isAdmin && filters.penName && article.penName !== filters.penName) {
+    if (canManageArticles && filters.penName && article.penName !== filters.penName) {
       return false;
     }
     if (filters.status) {
@@ -761,7 +762,7 @@ export default function ArticlesPage() {
     }
 
     return true;
-  }, [filters, isAdmin, search, user]);
+  }, [canManageArticles, filters, search, user]);
 
   const mergeSavedArticleIntoList = useCallback((savedArticle: Article, isEditing: boolean) => {
     const shouldBeVisible = doesArticleMatchCurrentView(savedArticle);
@@ -990,11 +991,11 @@ export default function ArticlesPage() {
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Quản lý bài viết</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
-            {isAdmin ? "Quản lý và theo dõi toàn bộ bài viết của đội ngũ." : `Theo dõi bài viết thuộc tài khoản ${collaboratorLabel}.`}
+            {canManageArticles ? "Quản lý và theo dõi toàn bộ bài viết của đội ngũ." : `Theo dõi bài viết thuộc tài khoản ${collaboratorLabel}.`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {isAdmin && (
+          {canManageArticles && (
             <>
               <input
                 ref={importInputRef}
@@ -1033,7 +1034,7 @@ export default function ArticlesPage() {
             className="btn-ios-pill btn-ios-primary"
             onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true })}
             disabled={googleSyncLoading}
-            title={isAdmin
+            title={canManageArticles
               ? "Đồng bộ tab tháng mới nhất trên Google Sheet"
               : `Đồng bộ tab tháng mới nhất trên Google Sheet trong phạm vi dữ liệu của ${collaboratorLabel}`}
             style={{ minWidth: 170, justifyContent: "center" }}
@@ -1050,19 +1051,19 @@ export default function ArticlesPage() {
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
             Chọn tháng để đồng bộ
           </button>
-          {isAdmin && (
+          {canManageArticles && (
             <button data-testid="articles-open-delete-tool" className="btn-ios-pill" onClick={openDeleteTool} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_sweep</span>
               Xóa dữ liệu
             </button>
           )}
-          {isAdmin && (
+          {canManageArticles && (
             <a href="/api/export" className="btn-ios-pill btn-ios-secondary" style={{ textDecoration: "none" }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>upload</span>
               Xuất
             </a>
           )}
-          <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: isAdmin ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" }); setShowModal(true); }}>
+          <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" }); setShowModal(true); }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
             Thêm bài viết
           </button>
@@ -1103,7 +1104,7 @@ export default function ArticlesPage() {
 
         {showFilters && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, borderTop: "1px solid var(--glass-border)", paddingTop: 24, animation: "modalFadeIn 0.2s ease" }}>
-            {isAdmin && (
+            {canManageArticles && (
               <div className="form-group">
                 <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Cộng tác viên</label>
                 <CustomSelect
@@ -1211,7 +1212,7 @@ export default function ArticlesPage() {
               {loading ? (
                 <tr><td colSpan={8} style={{ textAlign: "center", padding: 60, color: "var(--accent-blue)", fontWeight: 600 }}>⏳ Đang tải bài viết...</td></tr>
               ) : articles.length === 0 ? (
-                <tr><td colSpan={8}><div style={{ padding: 80, textAlign: "center", color: "var(--text-muted)" }}><div style={{ fontSize: 40, marginBottom: 16 }}>📄</div><div style={{ fontWeight: 600 }}>Chưa có bài viết nào</div>{!isAdmin && <div style={{ marginTop: 8, fontSize: 13 }}>Tài khoản này đang hiển thị dữ liệu của {collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.</div>}</div></td></tr>
+                <tr><td colSpan={8}><div style={{ padding: 80, textAlign: "center", color: "var(--text-muted)" }}><div style={{ fontSize: 40, marginBottom: 16 }}>📄</div><div style={{ fontWeight: 600 }}>Chưa có bài viết nào</div>{!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>Tài khoản này đang hiển thị dữ liệu của {collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.</div>}</div></td></tr>
               ) : (
                 articles.map((a) => (
                   <tr key={a.id} data-testid={`article-row-${a.id}`} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.02)", transition: "background 0.2s" }} className="hover:bg-white/[0.02]">
@@ -1272,12 +1273,12 @@ export default function ArticlesPage() {
                         <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                         </button>
-                        {(isAdmin || a.canDelete) && (
+                        {(canManageArticles || a.canDelete) && (
                           <button data-testid={`article-delete-${a.id}`} onClick={() => deleteSingleArticle(a)} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} title="Xóa bài">
                             <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
                           </button>
                         )}
-                        {isAdmin && a.status === "Submitted" && (
+                        {canManageArticles && a.status === "Submitted" && (
                           <button onClick={() => { setReviewArticle(a); setShowReviewModal(true); }} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(168, 85, 247, 0.1)", color: "#a855f7", border: "1px solid rgba(168, 85, 247, 0.2)" }} title="Duyệt lỗi">
                             <span className="material-symbols-outlined" style={{ fontSize: 17 }}>rule</span>
                           </button>
@@ -1315,7 +1316,7 @@ export default function ArticlesPage() {
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Bút danh tác giả</label>
-                  {isAdmin ? (
+                  {canManageArticles ? (
                     <CustomSelect
                       value={formData.penName || ""}
                       onChange={v => setFormData({ ...formData, penName: v })}
@@ -1366,7 +1367,7 @@ export default function ArticlesPage() {
                     options={[
                       { value: "Submitted", label: "Chờ duyệt" },
                       { value: "Draft", label: "Bản nháp" },
-                      ...(isAdmin ? [
+                      ...(canManageArticles ? [
                         { value: "Reviewing", label: "Đang duyệt" },
                         { value: "Published", label: "Đã duyệt" },
                         { value: "NeedsFix", label: "Sửa lỗi" },
@@ -1534,7 +1535,7 @@ export default function ArticlesPage() {
                   Hệ thống dùng chung một engine đồng bộ cho cả <strong>Đồng bộ ngay</strong> và <strong>Đồng bộ theo tháng</strong>.
                   Nếu bộ lọc bài viết đang chọn đủ <strong>tháng/năm</strong>, nút <strong>Đồng bộ ngay</strong> sẽ ưu tiên sync đúng kỳ đó.
                   Nếu để trống, hệ thống lấy tab tháng mới nhất. Nếu chọn tháng/năm trong modal, hệ thống sync đúng tab đó.
-                  {isAdmin ? (
+                  {canManageArticles ? (
                     <>
                       {" "}Dữ liệu sẽ được <strong>mirror theo sheet gốc</strong>: bài có trong sheet thì giữ, bài trùng thì bỏ qua,
                       bài không còn trong sheet sẽ bị xóa khỏi danh sách đã đồng bộ của tab đó.
@@ -1685,7 +1686,7 @@ export default function ArticlesPage() {
         </div>
       )}
 
-      {showDeleteModal && isAdmin && (
+      {showDeleteModal && canManageArticles && (
         <div className="modal-overlay" onClick={() => !deleteLoading && !deleteExecuting && setShowDeleteModal(false)}>
           <div data-testid="article-delete-modal" className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 1080, width: "94vw" }}>
             <div className="modal-header">
@@ -2495,4 +2496,3 @@ export default function ArticlesPage() {
 }
 
 /* ══════════════════════════ TEAM ══════════════════════════ */
-

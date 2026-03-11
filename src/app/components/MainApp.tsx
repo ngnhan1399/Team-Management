@@ -6,6 +6,7 @@ import ArticlesPage from "./ArticlesPage";
 import AuditLogsPage from "./AuditLogsPage";
 import DashboardPage from "./DashboardPage";
 import EditorialTasksPage from "./EditorialTasksPage";
+import FeedbackPage from "./FeedbackPage";
 import NotificationsPage from "./NotificationsPage";
 import ProfilePage from "./ProfilePage";
 import RealtimeToastLayer from "./RealtimeToastLayer";
@@ -128,6 +129,7 @@ export default function MainApp() {
   const navItems = [
     { id: "dashboard", label: "Tổng quan", icon: "dashboard", section: "Tổng quan" },
     { id: "notifications", label: "Thông báo", icon: "notifications", section: "Tổng quan", count: unreadCount },
+    { id: "feedback", label: "Feedback", icon: "feedback", section: "Tổng quan" },
     { id: "articles", label: "Bài viết", icon: "description", section: "Quản lý" },
     { id: "tasks", label: "Lịch biên tập", icon: "task_alt", section: "Quản lý" },
     { id: "team", label: "Đội ngũ", icon: "group", section: "Quản lý", adminOnly: true },
@@ -219,6 +221,7 @@ export default function MainApp() {
             </button>
           </div>
           {page === "dashboard" && <DashboardPage onNavigate={navigateToPage} />}
+          {page === "feedback" && <FeedbackPage />}
           {page === "articles" && <ArticlesPage />}
           {page === "tasks" && <EditorialTasksPage />}
           {page === "team" && isAdmin && <TeamPage />}

@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articles, collaborators, users } from "@/db/schema";
-import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
 import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
     }
 
-    if (context.user.role !== "admin") {
+    if (!hasArticleManagerAccess(context)) {
       const identityCandidates = getContextIdentityCandidates(context);
       if (!matchesIdentityCandidate(identityCandidates, article.penName)) {
         return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     const ownPenName = getContextPenName(context);
-    if (context.user.role !== "admin" && !matchesIdentityCandidate(getContextIdentityCandidates(context), article.penName)) {
+    if (!hasArticleManagerAccess(context) && !matchesIdentityCandidate(getContextIdentityCandidates(context), article.penName)) {
       return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
     }
 

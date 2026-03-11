@@ -6,6 +6,7 @@ export interface AuthCollaborator {
   id?: number;
   name?: string;
   penName?: string;
+  role?: "writer" | "reviewer" | "editor";
   avatar?: string | null;
   [key: string]: unknown;
 }
@@ -23,16 +24,20 @@ type AuthLoginResult =
   | { success: true; user: AuthUser }
   | { success: false; error: string };
 
+type AuthRegisterResult = AuthLoginResult;
+
 const AuthContext = createContext<{
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<AuthLoginResult>;
+  register: (email: string, password: string) => Promise<AuthRegisterResult>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }>({
   user: null,
   loading: true,
   login: async () => ({ success: false, error: "Auth context not initialized" }),
+  register: async () => ({ success: false, error: "Auth context not initialized" }),
   logout: async () => { },
   refreshUser: async () => { },
 });
@@ -73,6 +78,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data as AuthLoginResult;
   }, [refreshUser]);
 
+  const register = useCallback(async (email: string, password: string) => {
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      await refreshUser();
+    }
+    return data as AuthRegisterResult;
+  }, [refreshUser]);
+
   const logout = useCallback(async () => {
     await fetch("/api/auth/me", { method: "DELETE", cache: "no-store" });
     setUser(null);
@@ -82,9 +101,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     login,
+    register,
     logout,
     refreshUser,
-  }), [user, loading, login, logout, refreshUser]);
+  }), [user, loading, login, register, logout, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

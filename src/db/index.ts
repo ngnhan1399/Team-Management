@@ -278,6 +278,22 @@ const bootstrapStatements = [
     payload TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
+  `CREATE TABLE IF NOT EXISTS feedback_entries (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    collaborator_id INTEGER,
+    submitter_name TEXT NOT NULL,
+    submitter_email TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'improvement',
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    page_context TEXT,
+    rating INTEGER,
+    status TEXT NOT NULL DEFAULT 'new',
+    admin_notes TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
   `CREATE TABLE IF NOT EXISTS realtime_events (
     id SERIAL PRIMARY KEY,
     channels TEXT NOT NULL,
@@ -306,6 +322,9 @@ const bootstrapStatements = [
   "CREATE INDEX IF NOT EXISTS idx_monthly_budgets_month_year ON monthly_budgets(month, year)",
   "CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)",
   "CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)",
+  "CREATE INDEX IF NOT EXISTS idx_feedback_entries_status ON feedback_entries(status)",
+  "CREATE INDEX IF NOT EXISTS idx_feedback_entries_user_id ON feedback_entries(user_id)",
+  "CREATE INDEX IF NOT EXISTS idx_feedback_entries_created_at ON feedback_entries(created_at)",
   "CREATE INDEX IF NOT EXISTS idx_realtime_events_created_at ON realtime_events(created_at)",
   "CREATE INDEX IF NOT EXISTS idx_realtime_events_user_scope ON realtime_events(user_scope)",
 ];
@@ -319,7 +338,7 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "1";
+const BOOTSTRAP_SCHEMA_VERSION = "2";
 
 export async function initializeDatabase() {
   await pool.query(RUNTIME_META_TABLE_SQL);

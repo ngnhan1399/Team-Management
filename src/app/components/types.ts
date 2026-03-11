@@ -1,4 +1,4 @@
-export type Page = "dashboard" | "articles" | "tasks" | "team" | "royalty" | "notifications" | "audit" | "profile";
+export type Page = "dashboard" | "articles" | "tasks" | "team" | "royalty" | "notifications" | "feedback" | "audit" | "profile";
 
 export interface Collaborator {
   id: number;
@@ -100,6 +100,23 @@ export interface PaymentItem {
   createdAt: string;
   updatedAt: string;
   isEstimated?: boolean;
+}
+
+export interface FeedbackItem {
+  id: number;
+  userId: number;
+  collaboratorId: number | null;
+  submitterName: string;
+  submitterEmail: string;
+  category: "bug" | "feature" | "improvement" | "other";
+  title: string;
+  message: string;
+  pageContext: string | null;
+  rating: number | null;
+  status: "new" | "reviewing" | "planned" | "resolved";
+  adminNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardStatusRow {

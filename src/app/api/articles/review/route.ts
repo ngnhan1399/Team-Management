@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleReviews, articles, users, collaborators } from "@/db/schema";
-import { getContextDisplayName, getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextDisplayName, getContextIdentityCandidates, getCurrentUserContext, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
 import { mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
 import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
         }
 
-        if (context.user.role !== "admin") {
+        if (!hasArticleManagerAccess(context)) {
             const identityCandidates = getContextIdentityCandidates(context);
             if (!matchesIdentityCandidate(identityCandidates, article.penName)) {
                 return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         if (!context) {
             return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
         }
-        if (context.user.role !== "admin") {
+        if (!hasArticleManagerAccess(context)) {
             return NextResponse.json({ success: false, error: "Admin required" }, { status: 403 });
         }
 
@@ -168,7 +168,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
         }
 
-        if (context.user.role !== "admin") {
+        if (!hasArticleManagerAccess(context)) {
             const identityCandidates = getContextIdentityCandidates(context);
             if (!matchesIdentityCandidate(identityCandidates, article.penName)) {
                 return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
