@@ -85,7 +85,7 @@ export default function EditorialTasksPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    fetch("/api/collaborators", { cache: "no-store" })
+    fetch("/api/collaborators?view=directory", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setCollaborators(d.data || []))
       .catch(() => { });

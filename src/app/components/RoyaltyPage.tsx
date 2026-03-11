@@ -119,7 +119,7 @@ export default function RoyaltyPage() {
     fetchDashboard();
     fetchRates();
     if (isAdmin) {
-      fetch("/api/collaborators", { cache: "no-store" }).then(r => r.json()).then(d => setCollaborators(d.data || [])).catch(() => { });
+      fetch("/api/collaborators?view=directory", { cache: "no-store" }).then(r => r.json()).then(d => setCollaborators(d.data || [])).catch(() => { });
     }
   }, [fetchDashboard, fetchRates, isAdmin]);
 

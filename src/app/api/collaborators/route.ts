@@ -13,6 +13,23 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 import { normalizeString, normalizeOptionalString } from "@/lib/normalize";
 
+const collaboratorDirectorySelect = {
+    id: collaborators.id,
+    name: collaborators.name,
+    penName: collaborators.penName,
+    role: collaborators.role,
+    kpiStandard: collaborators.kpiStandard,
+    email: collaborators.email,
+    status: collaborators.status,
+};
+
+type LinkedUserSummary = {
+    id: number;
+    email: string;
+    role: "admin" | "ctv";
+    collaboratorId: number | null;
+};
+
 function normalizeCollaboratorRole(value: unknown): "writer" | "reviewer" | undefined {
     const normalized = normalizeString(value);
     if (!normalized) return undefined;
@@ -26,6 +43,30 @@ function mapCollaboratorForResponse<T extends { role?: string | null }>(collabor
         return { ...collaborator, role: "reviewer" };
     }
     return collaborator;
+}
+
+function attachLinkedUsers<T extends { id: number; role?: string | null }>(
+    collaboratorRows: T[],
+    userRows: LinkedUserSummary[],
+) {
+    const usersByCollaboratorId = new Map<number, LinkedUserSummary>();
+
+    for (const user of userRows) {
+        if (typeof user.collaboratorId === "number" && !usersByCollaboratorId.has(user.collaboratorId)) {
+            usersByCollaboratorId.set(user.collaboratorId, user);
+        }
+    }
+
+    return collaboratorRows.map((item) => {
+        const collaborator = mapCollaboratorForResponse(item);
+        const linkedUser = usersByCollaboratorId.get(collaborator.id) || null;
+        return {
+            ...collaborator,
+            linkedUserId: linkedUser?.id ?? null,
+            linkedUserEmail: linkedUser?.email ?? null,
+            linkedUserRole: linkedUser?.role ?? null,
+        };
+    });
 }
 
 function normalizeOptionalEmail(value: unknown): string | undefined {
@@ -72,7 +113,7 @@ function buildCollaboratorValues(body: Record<string, unknown>, email: string | 
     return values;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         await ensureDatabaseInitialized();
         const context = await getCurrentUserContext();
@@ -80,8 +121,10 @@ export async function GET() {
             return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
         }
 
+        const view = request.nextUrl.searchParams.get("view");
+        const useDirectoryView = view === "directory";
+
         if (context.user.role === "admin") {
-            const allCollaborators = await db.select().from(collaborators).all();
             const allUsers = await db
                 .select({
                     id: users.id,
@@ -92,16 +135,15 @@ export async function GET() {
                 .from(users)
                 .all();
 
-            const data = allCollaborators.map((item) => {
-                const collaborator = mapCollaboratorForResponse(item);
-                const linkedUser = allUsers.find((user) => user.collaboratorId === collaborator.id) || null;
-                return {
-                    ...collaborator,
-                    linkedUserId: linkedUser?.id ?? null,
-                    linkedUserEmail: linkedUser?.email ?? null,
-                    linkedUserRole: linkedUser?.role ?? null,
-                };
-            });
+            const allCollaborators = useDirectoryView
+                ? await db.select(collaboratorDirectorySelect).from(collaborators).all()
+                : await db.select().from(collaborators).all();
+
+            const data = attachLinkedUsers(allCollaborators, allUsers);
+
+            if (useDirectoryView) {
+                return NextResponse.json({ success: true, data });
+            }
 
             return NextResponse.json({ success: true, data, users: allUsers });
         }
@@ -111,7 +153,9 @@ export async function GET() {
             return NextResponse.json({ success: true, data: [] });
         }
 
-        const own = await db.select().from(collaborators).where(eq(collaborators.id, collaboratorId)).all();
+        const own = useDirectoryView
+            ? await db.select(collaboratorDirectorySelect).from(collaborators).where(eq(collaborators.id, collaboratorId)).all()
+            : await db.select().from(collaborators).where(eq(collaborators.id, collaboratorId)).all();
         return NextResponse.json({ success: true, data: own.map(mapCollaboratorForResponse) });
     } catch (error) {
         return handleServerError("collaborators.get", error);
@@ -499,6 +543,5 @@ export async function DELETE(request: NextRequest) {
         return handleServerError("collaborators.delete", error);
     }
 }
-
 
 

@@ -248,7 +248,7 @@ export default function ArticlesPage() {
 
   useEffect(() => {
     fetchArticles();
-    fetch("/api/collaborators", { cache: "no-store" }).then(r => r.json()).then(d => setCollaborators(d.data || []));
+    fetch("/api/collaborators?view=directory", { cache: "no-store" }).then(r => r.json()).then(d => setCollaborators(d.data || []));
   }, [fetchArticles]);
 
   useEffect(() => {

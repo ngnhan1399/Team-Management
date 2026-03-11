@@ -36,7 +36,7 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (user?.role !== "admin") return;
-    fetch("/api/collaborators", { cache: "no-store" })
+    fetch("/api/collaborators?view=directory", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setRecipients((d.data || []).filter((collaborator: Collaborator) => collaborator.status === "active")))
       .catch(() => setRecipients([]));

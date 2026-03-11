@@ -22,6 +22,7 @@ Ngày cập nhật: `2026-03-11` (phiên chiều)
 - **Thêm CMS Browser Panel** (`ArticlePreviewPanel.tsx`): click tiêu đề bài viết mở panel trượt phải + popup window hiển thị CMS. Có toolbar (URL bar, refresh, mở tab mới, đóng), thông tin bài viết, đèn trạng thái, nút **"Chuyển đến bài duyệt"** để re-navigate popup sau khi đăng nhập CMS, và hướng dẫn login flow. CMS FPT Shop chặn iframe nên dùng `window.open` thay thế.
 - **Lazy-load CMS Browser Panel**: `ArticlesPage.tsx` không còn kéo `ArticlePreviewPanel.tsx` vào bundle chính. Preview panel giờ được `next/dynamic` lazy-load và preload chunk theo `hover` / `focus` / `touch` trên tiêu đề bài, nên lần mở tab Bài viết đầu nhẹ hơn nhưng lúc người dùng chuẩn bị mở preview vẫn phản hồi nhanh.
 - **Dọn sạch warning lint của preview panel**: `ArticlePreviewPanel.tsx` đã sửa dependency cho `useEffect` mở popup theo đúng hooks rule. `npm run lint` hiện sạch hoàn toàn.
+- **Tách `directory view` cho `/api/collaborators`**: các màn `Articles`, `EditorialTasks`, `Notifications`, `Royalty` không còn lấy full hồ sơ cộng tác viên nữa mà dùng `?view=directory`. Route chỉ trả field nhẹ cần cho dropdown/search/list, còn `TeamPage` vẫn giữ bản đầy đủ. Nhánh admin cũng bỏ cách ghép `allUsers.find(...)` lặp nhiều lần, chuyển sang `Map` để giảm chi phí join trong memory.
 
 ### Phiên sáng 11/03 và trước đó
 
@@ -42,6 +43,7 @@ Ngày cập nhật: `2026-03-11` (phiên chiều)
 - `findMatchingCollaboratorPenNames` vẫn còn fallback full-scan; nếu bảng lớn thêm nên dùng `pg_trgm`/`unaccent`.
 - Route `statistics` fallback legacy vẫn đọc full bảng nếu narrow query trượt.
 - `ArticlesPage` và `DashboardPage` vẫn là hai chunk client lớn nhất; `ArticlePreviewPanel` đã được tách khỏi bundle chính, nên bước tối ưu client kế tiếp nên ưu tiên các modal/import flow còn nằm chung trong `ArticlesPage.tsx`.
+- `TeamPage` hiện vẫn là nơi duy nhất cần full payload của `/api/collaborators`; nếu tối ưu sâu hơn route này, có thể tách riêng một endpoint admin-detail để không phải giữ backward-compat trong cùng handler.
 - Bootstrap schema version là `4`; cần restart app để cột `articles.review_link` được tạo.
 - Từ khóa `editor` còn lại chỉ dùng để map dữ liệu legacy.
 
