@@ -6,7 +6,7 @@ export interface AuthCollaborator {
   id?: number;
   name?: string;
   penName?: string;
-  role?: "writer" | "reviewer" | "editor";
+  role?: "writer" | "reviewer";
   avatar?: string | null;
   [key: string]: unknown;
 }

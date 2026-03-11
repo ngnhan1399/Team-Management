@@ -14,7 +14,7 @@ type UserDirectoryEntry = {
   id: number;
   email: string;
   userRole: "admin" | "ctv";
-  collaboratorRole: "writer" | "reviewer" | "editor" | null;
+  collaboratorRole: "writer" | "reviewer" | null;
   penName: string | null;
   name: string | null;
   collaboratorEmail: string | null;
@@ -119,7 +119,7 @@ function resolveManagerRecipients(
   directory: UserDirectoryEntry[]
 ): NotificationRecipient[] {
   const managerDirectory = directory.filter(
-    (entry) => entry.userRole === "admin" || entry.collaboratorRole === "reviewer" || entry.collaboratorRole === "editor"
+    (entry) => entry.userRole === "admin" || entry.collaboratorRole === "reviewer"
   );
 
   const assignedManagers = article.reviewerName

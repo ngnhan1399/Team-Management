@@ -4,7 +4,7 @@ export interface Collaborator {
   id: number;
   name: string;
   penName: string;
-  role: string;
+  role: "writer" | "reviewer";
   kpiStandard: number;
   status: string;
   email?: string;

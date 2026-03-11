@@ -5,6 +5,7 @@
 - Stack chính: `Next.js App Router` + `TypeScript` + `Drizzle ORM` + `PostgreSQL`.
 - Nghiệp vụ nhạy cảm nhất hiện tại là đồng bộ bài viết hai chiều với Google Sheet.
 - Luồng xóa `web -> Google Sheet -> DB` đã được vá để không còn xóa lệch dữ liệu âm thầm.
+- Luồng phân quyền bài viết đã được chỉnh lại theo mô hình `admin` / `reviewer` / `writer`; reviewer giờ xem được hàng chờ duyệt và bài đã nhận duyệt.
 - Repo đã có `AGENTS.md` và bộ tài liệu Codex để giảm nguy cơ kẹt thread do context quá dài.
 
 ## Thay đổi quan trọng gần nhất
@@ -14,12 +15,17 @@ Ngày cập nhật: `2026-03-11`
 - Đã thêm mutation `deleteArticle` trong `src/lib/google-sheet-mutation.ts`.
 - `DELETE /api/articles` giờ xác nhận xóa được trên Google Sheet rồi mới xóa DB.
 - Apps Script xuất ra ở `output/google-sheets-webhook.workdocker.gs` giờ dò xóa trên toàn workbook để tránh báo thành công giả khi tìm nhầm tab.
+- Đã vá quyền reviewer trong `src/lib/auth.ts`, `src/app/api/articles/route.ts`, `src/app/api/articles/review/route.ts`, `src/app/api/articles/comments/route.ts`, `src/app/components/ArticlesPage.tsx`.
+- `POST /api/articles/review` giờ lưu cả `reviewerName` và `notes` vào DB để reviewer không bị mất bài sau khi gửi yêu cầu sửa.
+- Đã dọn mô hình 3 quyền ở `src/app/components/TeamPage.tsx`, `src/app/api/collaborators/route.ts`, `src/db/schema.ts`, `src/db/index.ts`, `src/db/seed.ts`, `src/app/components/MainApp.tsx`.
+- Bootstrap DB tự migrate `collaborators.role = 'editor'` cũ sang `reviewer` khi app khởi động.
 
 ## Việc còn cần nhớ
 
 - Cần redeploy Apps Script bằng file `output/google-sheets-webhook.workdocker.gs` mới nhất.
 - Nếu chưa redeploy, thao tác xóa từ web có thể bị chặn để tránh lệch dữ liệu.
 - UI đã hiện chi tiết lỗi xóa rõ hơn nếu Google Sheet chưa xác nhận được dòng gốc.
+- Từ khóa `editor` còn lại chỉ dùng để map dữ liệu legacy hoặc nhận diện cột import cũ, không còn là role nghiệp vụ hiển thị cho người dùng.
 
 ## File nên mở đầu tiên
 

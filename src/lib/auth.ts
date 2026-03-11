@@ -75,7 +75,7 @@ export function hasArticleManagerAccess(context: CurrentUserContext | null | und
 
 export function hasArticleReviewAccess(context: CurrentUserContext | null | undefined): boolean {
     if (!context) return false;
-    return context.user.role === "admin" || context.collaborator?.role === "reviewer" || context.collaborator?.role === "editor";
+    return context.user.role === "admin" || context.collaborator?.role === "reviewer";
 }
 
 function normalizeIdentityValue(value: unknown): string {

@@ -13,6 +13,21 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 import { normalizeString, normalizeOptionalString } from "@/lib/normalize";
 
+function normalizeCollaboratorRole(value: unknown): "writer" | "reviewer" | undefined {
+    const normalized = normalizeString(value);
+    if (!normalized) return undefined;
+    if (normalized === "editor") return "reviewer";
+    if (normalized === "writer" || normalized === "reviewer") return normalized;
+    throw new Error("Vai trò cộng tác viên không hợp lệ");
+}
+
+function mapCollaboratorForResponse<T extends { role?: string | null }>(collaborator: T): T {
+    if (collaborator.role === "editor") {
+        return { ...collaborator, role: "reviewer" };
+    }
+    return collaborator;
+}
+
 function normalizeOptionalEmail(value: unknown): string | undefined {
     const normalized = normalizeString(value).toLowerCase();
     if (!normalized) return undefined;
@@ -27,7 +42,7 @@ function buildCollaboratorValues(body: Record<string, unknown>, email: string | 
 
     const name = normalizeOptionalString(body.name);
     const penName = normalizeOptionalString(body.penName);
-    const role = normalizeOptionalString(body.role);
+    const role = normalizeCollaboratorRole(body.role);
     const status = normalizeOptionalString(body.status);
     const kpiStandard = body.kpiStandard;
 
@@ -77,7 +92,8 @@ export async function GET() {
                 .from(users)
                 .all();
 
-            const data = allCollaborators.map((collaborator) => {
+            const data = allCollaborators.map((item) => {
+                const collaborator = mapCollaboratorForResponse(item);
                 const linkedUser = allUsers.find((user) => user.collaboratorId === collaborator.id) || null;
                 return {
                     ...collaborator,
@@ -96,7 +112,7 @@ export async function GET() {
         }
 
         const own = await db.select().from(collaborators).where(eq(collaborators.id, collaboratorId)).all();
-        return NextResponse.json({ success: true, data: own });
+        return NextResponse.json({ success: true, data: own.map(mapCollaboratorForResponse) });
     } catch (error) {
         return handleServerError("collaborators.get", error);
     }
@@ -145,7 +161,7 @@ export async function POST(request: NextRequest) {
             ...buildCollaboratorValues(body, email),
             name,
             penName,
-            role: (normalizeString(body.role) || "writer") as never,
+            role: (normalizeCollaboratorRole(body.role) || "writer") as never,
             status: (normalizeString(body.status) || "active") as never,
             kpiStandard: typeof body.kpiStandard === "number" && Number.isFinite(body.kpiStandard)
                 ? Math.max(0, Math.trunc(body.kpiStandard))
@@ -199,7 +215,7 @@ export async function POST(request: NextRequest) {
             message: generatedPassword ? `CTV tạo thành công! Mật khẩu tạm: ${generatedPassword}` : undefined,
         });
     } catch (error) {
-        if (error instanceof Error && error.message.includes("Email")) {
+        if (error instanceof Error && (error.message.includes("Email") || error.message.includes("Vai trò"))) {
             return NextResponse.json({ success: false, error: error.message }, { status: 400 });
         }
         return handleServerError("collaborators.post", error);
@@ -391,6 +407,7 @@ export async function PUT(request: NextRequest) {
     } catch (error) {
         if (error instanceof Error && (
             error.message.includes("Email")
+            || error.message.includes("Vai trò")
             || error.message.includes("liên kết")
             || error.message.includes("tài khoản")
         )) {
@@ -482,7 +499,6 @@ export async function DELETE(request: NextRequest) {
         return handleServerError("collaborators.delete", error);
     }
 }
-
 
 
 

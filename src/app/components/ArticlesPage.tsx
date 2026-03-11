@@ -1069,7 +1069,11 @@ export default function ArticlesPage() {
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Quản lý bài viết</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
-            {canManageArticles ? "Quản lý và theo dõi toàn bộ bài viết của đội ngũ." : `Theo dõi bài viết thuộc tài khoản ${collaboratorLabel}.`}
+            {canManageArticles
+              ? "Quản lý và theo dõi toàn bộ bài viết của đội ngũ."
+              : isReviewer
+                ? `Theo dõi bài đang chờ duyệt hoặc đã giao cho ${collaboratorLabel}.`
+                : `Theo dõi bài viết thuộc tài khoản ${collaboratorLabel}.`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -1108,27 +1112,31 @@ export default function ArticlesPage() {
               </label>
             </>
           )}
-          <button
-            className="btn-ios-pill btn-ios-primary"
-            onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true })}
-            disabled={googleSyncLoading}
-            title={canManageArticles
-              ? "Đồng bộ tab tháng mới nhất trên Google Sheet"
-              : `Đồng bộ tab tháng mới nhất trên Google Sheet trong phạm vi dữ liệu của ${collaboratorLabel}`}
-            style={{ minWidth: 170, justifyContent: "center" }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
-            {googleSyncLoading ? "Đang đồng bộ..." : "Đồng bộ ngay"}
-          </button>
-          <button
-            className="btn-ios-pill btn-ios-secondary"
-            onClick={openGoogleSyncModal}
-            disabled={googleSyncLoading}
-            style={{ minWidth: 210, justifyContent: "center" }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
-            Chọn tháng để đồng bộ
-          </button>
+          {canSyncArticles && (
+            <>
+              <button
+                className="btn-ios-pill btn-ios-primary"
+                onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true })}
+                disabled={googleSyncLoading}
+                title={canManageArticles
+                  ? "Đồng bộ tab tháng mới nhất trên Google Sheet"
+                  : `Đồng bộ tab tháng mới nhất trên Google Sheet trong phạm vi dữ liệu của ${collaboratorLabel}`}
+                style={{ minWidth: 170, justifyContent: "center" }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
+                {googleSyncLoading ? "Đang đồng bộ..." : "Đồng bộ ngay"}
+              </button>
+              <button
+                className="btn-ios-pill btn-ios-secondary"
+                onClick={openGoogleSyncModal}
+                disabled={googleSyncLoading}
+                style={{ minWidth: 210, justifyContent: "center" }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
+                Chọn tháng để đồng bộ
+              </button>
+            </>
+          )}
           {canManageArticles && (
             <button data-testid="articles-open-delete-tool" className="btn-ios-pill" onClick={openDeleteTool} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_sweep</span>
@@ -1141,10 +1149,12 @@ export default function ArticlesPage() {
               Xuất
             </a>
           )}
-          <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" }); setShowModal(true); }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
-            Thêm bài viết
-          </button>
+          {canCreateArticles && (
+            <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" }); setShowModal(true); }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+              Thêm bài viết
+            </button>
+          )}
         </div>
       </header>
 
@@ -1290,7 +1300,7 @@ export default function ArticlesPage() {
               {loading ? (
                 <tr><td colSpan={8} style={{ textAlign: "center", padding: 60, color: "var(--accent-blue)", fontWeight: 600 }}>⏳ Đang tải bài viết...</td></tr>
               ) : articles.length === 0 ? (
-                <tr><td colSpan={8}><div style={{ padding: 80, textAlign: "center", color: "var(--text-muted)" }}><div style={{ fontSize: 40, marginBottom: 16 }}>📄</div><div style={{ fontWeight: 600 }}>Chưa có bài viết nào</div>{!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>Tài khoản này đang hiển thị dữ liệu của {collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.</div>}</div></td></tr>
+                <tr><td colSpan={8}><div style={{ padding: 80, textAlign: "center", color: "var(--text-muted)" }}><div style={{ fontSize: 40, marginBottom: 16 }}>📄</div><div style={{ fontWeight: 600 }}>Chưa có bài viết nào</div>{!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>{isReviewer ? "Tài khoản duyệt bài chỉ hiển thị bài chờ duyệt hoặc bài đã được giao cho bạn." : `Tài khoản này đang hiển thị dữ liệu của ${collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.`}</div>}</div></td></tr>
               ) : (
                 articles.map((a) => (
                   <tr key={a.id} data-testid={`article-row-${a.id}`} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.02)", transition: "background 0.2s" }} className="hover:bg-white/[0.02]">
@@ -1395,15 +1405,17 @@ export default function ArticlesPage() {
                             />
                           )}
                         </div>
-                        <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
-                          <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
-                        </button>
+                        {canEditArticle(a) && (
+                          <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
+                            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
+                          </button>
+                        )}
                         {(canManageArticles || a.canDelete) && (
                           <button data-testid={`article-delete-${a.id}`} onClick={() => deleteSingleArticle(a)} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} title="Xóa bài">
                             <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
                           </button>
                         )}
-                        {canManageArticles && a.status === "Submitted" && (
+                        {canReviewArticles && a.status === "Submitted" && (
                           <button onClick={() => { setReviewArticle(a); setShowReviewModal(true); }} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(168, 85, 247, 0.1)", color: "#a855f7", border: "1px solid rgba(168, 85, 247, 0.2)" }} title="Duyệt lỗi">
                             <span className="material-symbols-outlined" style={{ fontSize: 17 }}>rule</span>
                           </button>

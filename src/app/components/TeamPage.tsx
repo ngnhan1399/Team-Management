@@ -151,9 +151,22 @@ export default function TeamPage() {
     }
   };
 
-  const writers = collaborators.filter(c => c.role === "writer");
-  const reviewers = collaborators.filter(c => c.role === "reviewer");
-  const editors = collaborators.filter(c => c.role === "editor");
+  const adminProfiles = userAccounts
+    .filter((user) => user.role === "admin")
+    .map((user) => {
+      const linkedCollaborator = collaborators.find((collaborator) => collaborator.linkedUserId === user.id || collaborator.linkedUserRole === "admin" && collaborator.linkedUserEmail === user.email) || null;
+      return {
+        id: linkedCollaborator ? `collaborator-${linkedCollaborator.id}` : `user-${user.id}`,
+        collaboratorId: linkedCollaborator?.id ?? null,
+        name: linkedCollaborator?.name || "Biên tập viên chính",
+        penName: linkedCollaborator?.penName || "Admin",
+        email: linkedCollaborator?.email || user.email,
+        status: linkedCollaborator?.status || "active",
+        kpiStandard: linkedCollaborator?.kpiStandard ?? null,
+      };
+    });
+  const writers = collaborators.filter(c => c.linkedUserRole !== "admin" && c.role === "writer");
+  const reviewers = collaborators.filter(c => c.linkedUserRole !== "admin" && c.role === "reviewer");
   const currentLinkedUser = formData.linkedUserId ? userAccounts.find((user) => user.id === formData.linkedUserId) : null;
   const currentLinkedUserIsAdmin = currentLinkedUser?.role === "admin" || formData.linkedUserRole === "admin";
   const assignableUsers = userAccounts.filter((user) =>
@@ -162,7 +175,6 @@ export default function TeamPage() {
   const roleOptions = [
     { value: "writer", label: "Người viết bài" },
     { value: "reviewer", label: "Người duyệt bài" },
-    { value: "editor", label: "Biên tập viên" },
   ];
   const assignableUserOptions = [
     { value: "", label: "Không gán tài khoản" },
@@ -206,7 +218,7 @@ export default function TeamPage() {
           { label: "Tổng thành viên", value: collaborators.length, icon: "groups", color: "var(--accent-blue)" },
           { label: "Cộng tác viên", value: writers.length, icon: "edit_note", color: "var(--accent-teal)" },
           { label: "Người duyệt", value: reviewers.length, icon: "verified", color: "var(--accent-purple)" },
-          { label: "Biên tập viên", value: editors.length, icon: "shield_person", color: "var(--accent-orange)" }
+          { label: "Biên tập viên chính", value: adminProfiles.length, icon: "shield_person", color: "var(--accent-orange)" }
         ].map((s, i) => (
           <div key={i} className="glass-card" style={{ display: "flex", alignItems: "center", gap: 20 }}>
             <div style={{ width: 48, height: 48, borderRadius: 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -318,7 +330,7 @@ export default function TeamPage() {
 
       <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)" }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>📋 Biên tập viên ({editors.length})</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>📋 Biên tập viên chính ({adminProfiles.length})</h3>
         </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
@@ -337,26 +349,33 @@ export default function TeamPage() {
               </tr>
             </thead>
             <tbody>
-              {editors.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>Chưa có biên tập viên</td></tr>
-              ) : editors.map((c, i) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
+              {adminProfiles.length === 0 ? (
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>Chưa có tài khoản admin hiển thị trong hệ thống.</td></tr>
+              ) : adminProfiles.map((admin, i) => (
+                <tr key={admin.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
                   <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)" }}>{i + 1}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{c.name}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-orange)", fontWeight: 600 }}>{c.penName}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{c.email || "—"}</td>
+                  <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{admin.name}</td>
+                  <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-orange)", fontWeight: 600 }}>{admin.penName}</td>
+                  <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{admin.email || "—"}</td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(249, 115, 22, 0.1)", color: "var(--accent-orange)", fontSize: 11, fontWeight: 800 }}>{c.kpiStandard}</span>
+                    <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(249, 115, 22, 0.1)", color: "var(--accent-orange)", fontSize: 11, fontWeight: 800 }}>{admin.kpiStandard ?? "ADMIN"}</span>
                   </td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <span style={statusBadgeStyle(c.status)}>
-                      {c.status === "active" ? "Hoạt động" : "Tạm nghỉ"}
+                    <span style={statusBadgeStyle(admin.status)}>
+                      {admin.status === "active" ? "Hoạt động" : "Tạm nghỉ"}
                     </span>
                   </td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                    </button>
+                    {admin.collaboratorId ? (
+                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => {
+                        const collaborator = collaborators.find((item) => item.id === admin.collaboratorId);
+                        if (collaborator) openEditModal(collaborator);
+                      }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Quản lý ở tài khoản hệ thống</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -410,7 +429,20 @@ export default function TeamPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Vai trò hệ thống</label>
-                  <CustomSelect value={formData.role || "writer"} onChange={(value) => setFormData({ ...formData, role: value })} options={roleOptions} />
+                  {currentLinkedUserIsAdmin ? (
+                    <>
+                      <input className="form-input" value="Biên tập viên chính (admin)" readOnly style={{ background: "rgba(255,255,255,0.01)", opacity: 0.75 }} />
+                      <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        Quyền admin được quản lý ở bảng tài khoản đăng nhập, không chỉnh tại trường vai trò cộng tác viên.
+                      </div>
+                    </>
+                  ) : (
+                    <CustomSelect
+                      value={(formData.role || "writer") as Collaborator["role"]}
+                      onChange={(value) => setFormData({ ...formData, role: value as Collaborator["role"] })}
+                      options={roleOptions}
+                    />
+                  )}
                 </div>
               </div>
               {formData.id && (
@@ -499,7 +531,7 @@ export default function TeamPage() {
                     { value: "", label: "— Chọn thành viên —" },
                     ...deletableMembers.map((c) => ({
                       value: String(c.id),
-                      label: `${c.name} (${c.penName}) — ${c.role === "writer" ? "CTV" : c.role === "reviewer" ? "Duyệt" : "BTV"}`,
+                      label: `${c.name} (${c.penName}) — ${c.linkedUserRole === "admin" ? "Admin" : c.role === "reviewer" ? "Duyệt" : "CTV"}`,
                     })),
                   ]}
                   placeholder="Chọn thành viên"

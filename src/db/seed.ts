@@ -33,7 +33,7 @@ const CTV_DATA = [
     { name: "CTV Demo 06", penName: "Bút Danh 06", role: "writer" as const, kpiStandard: 25, email: "writer06@demo.local", phone: "0900000006", bankName: "Demo Bank" },
     { name: "CTV Demo 07", penName: "Bút Danh 07", role: "writer" as const, kpiStandard: 25, email: "writer07@demo.local", phone: "0900000007", bankName: "Demo Bank" },
     { name: "CTV Demo 08", penName: "Bút Danh 08", role: "writer" as const, kpiStandard: 25, email: "writer08@demo.local", phone: "0900000008", bankName: "Demo Bank" },
-    { name: "Admin Demo", penName: "Quản trị Demo", role: "editor" as const, kpiStandard: 100, email: "admin@demo.local", phone: "" },
+    { name: "Admin Demo", penName: "Quản trị Demo", role: "reviewer" as const, kpiStandard: 100, email: "admin@demo.local", phone: "" },
 ];
 
 export async function seedDatabase() {

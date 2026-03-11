@@ -107,7 +107,7 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
 
 const REQUIRED_FIELDS = FIELD_DEFINITIONS.filter((field) => field.required).map((field) => field.id);
 const CATEGORY_VALUES = ["ict", "gia dung", "thu thuat", "giai tri", "danh gia", "khac"];
-const STATUS_VALUES = ["draft", "submitted", "reviewing", "needsfix", "approved", "published", "rejected", "done", "completed", "đã duyệt", "cho duyet", "chờ duyệt", "sửa lỗi", "từ chối", "hoàn thành"];
+const STATUS_VALUES = ["draft", "submitted", "pending", "reviewing", "needsfix", "approved", "published", "rejected", "done", "completed", "đã duyệt", "cho duyet", "chờ duyệt", "sửa lỗi", "từ chối", "hoàn thành"];
 const CONTENT_TYPE_VALUES = ["viết mới", "viet moi", "viết lại", "viet lai", "rewrite", "new"];
 const ARTICLE_TYPE_HINTS = [
   "mô tả",
@@ -720,7 +720,7 @@ function mapStatus(value: string): "Draft" | "Submitted" | "Reviewing" | "NeedsF
   const folded = foldText(value);
   if (["published", "approved", "da duyet", "hoan thanh", "xong", "done", "completed", "complete"].some((keyword) => folded.includes(keyword))) return "Published";
   if (["reviewing", "dang duyet"].some((keyword) => folded.includes(keyword))) return "Reviewing";
-  if (["submitted", "cho duyet", "gui duyet"].some((keyword) => folded.includes(keyword))) return "Submitted";
+  if (["submitted", "pending", "cho duyet", "gui duyet"].some((keyword) => folded.includes(keyword))) return "Submitted";
   if (["needsfix", "sua loi", "can sua", "fix"].some((keyword) => folded.includes(keyword))) return "NeedsFix";
   if (["rejected", "tu choi"].some((keyword) => folded.includes(keyword))) return "Rejected";
   return "Draft";

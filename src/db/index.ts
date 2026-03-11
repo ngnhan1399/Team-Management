@@ -338,7 +338,7 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "2";
+const BOOTSTRAP_SCHEMA_VERSION = "3";
 
 export async function initializeDatabase() {
   await pool.query(RUNTIME_META_TABLE_SQL);
@@ -362,6 +362,7 @@ export async function initializeDatabase() {
   await ensureColumnExists("payments", "updated_at", "TEXT DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists("articles", "created_by_user_id", "INTEGER");
   await pool.query(`ALTER TABLE articles ALTER COLUMN status SET DEFAULT 'Submitted'`);
+  await pool.query(`UPDATE collaborators SET role = 'reviewer' WHERE role = 'editor'`);
 
   await pool.query(`
     UPDATE articles

@@ -18,7 +18,7 @@ export const collaborators = pgTable("collaborators", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   penName: text("pen_name").notNull(),
-  role: text("role", { enum: ["writer", "reviewer", "editor"] }).notNull().default("writer"),
+  role: text("role", { enum: ["writer", "reviewer"] }).notNull().default("writer"),
   kpiStandard: integer("kpi_standard").notNull().default(25),
   email: text("email"),
   phone: text("phone"),

@@ -30,6 +30,17 @@ export default function MainApp() {
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
     || "Người dùng";
+  const collaboratorRole = typeof user?.collaborator?.role === "string" ? user.collaborator.role : "";
+  const roleSubtitle = user?.role === "admin"
+    ? "BIÊN TẬP VIÊN CHÍNH"
+    : collaboratorRole === "reviewer"
+      ? "CTV DUYỆT BÀI"
+      : "CỘNG TÁC VIÊN";
+  const mobileRoleLabel = user?.role === "admin"
+    ? "Biên tập viên chính"
+    : collaboratorRole === "reviewer"
+      ? "CTV duyệt bài"
+      : "Cộng tác viên";
 
   const refreshUnreadCount = useCallback((announceNew = false) => {
     fetch("/api/notifications?unread=true", { cache: "no-store" })
@@ -147,7 +158,7 @@ export default function MainApp() {
           <BrandLogo 
             markSize={42} 
             titleSize={18} 
-            subtitle={isAdmin ? "QUẢN TRỊ VIÊN" : "CỘNG TÁC VIÊN"} 
+            subtitle={roleSubtitle} 
           />
         </div>
 
@@ -198,7 +209,7 @@ export default function MainApp() {
             </button>
             <div style={{ minWidth: 0, flex: 1 }}>
               <p style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>
-                {isAdmin ? "Quản trị viên" : "Cộng tác viên"}
+                {mobileRoleLabel}
               </p>
               <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {displayName}

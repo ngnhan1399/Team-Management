@@ -118,8 +118,14 @@ export async function POST(request: NextRequest) {
             })
             .run();
 
+        const reviewerDisplayName = getContextDisplayName(context);
         await db.update(articles)
-            .set({ status: "NeedsFix", updatedAt: new Date().toISOString() })
+            .set({
+                status: "NeedsFix",
+                reviewerName: reviewerDisplayName,
+                notes: String(errorNotes || "").trim(),
+                updatedAt: new Date().toISOString(),
+            })
             .where(eq(articles.id, articleId))
             .run();
 
@@ -161,11 +167,11 @@ export async function POST(request: NextRequest) {
         const sheetSync = await mirrorArticleUpdateToGoogleSheet({
             articleId,
             actorUserId: context.user.id,
-            actorDisplayName: getContextDisplayName(context),
+            actorDisplayName: reviewerDisplayName,
             reason: "article_review_created",
             overrides: {
                 status: "NeedsFix",
-                reviewerName: getContextDisplayName(context),
+                reviewerName: reviewerDisplayName,
                 notes: String(errorNotes || "").trim(),
             },
         });
