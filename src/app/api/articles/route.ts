@@ -1,5 +1,5 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments } from "@/db/schema";
+import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments, users } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextIdentityLabels, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, hasArticleReviewAccess, matchesIdentityCandidate } from "@/lib/auth";
 import {
   createArticleInGoogleSheet,
@@ -64,6 +64,7 @@ type ArticleDeleteSyncTarget = {
 type ArticleResponseRow = {
   id: number;
   articleId: string | null;
+  teamId: number | null;
   date: string;
   title: string;
   penName: string;
@@ -81,6 +82,10 @@ type ArticleResponseRow = {
   canDelete: boolean;
   commentCount: number;
   unreadCommentCount: number;
+  authorBucket: "ctv" | "editorial";
+  authorBucketLabel: string;
+  authorRole: "writer" | "reviewer" | null;
+  authorUserRole: "admin" | "ctv" | null;
 };
 
 type NonBlockingStepOptions<T> = {
@@ -114,6 +119,7 @@ async function loadArticleResponseRow(articleId: number, currentUserId: number, 
     .select({
       id: articles.id,
       articleId: articles.articleId,
+      teamId: articles.teamId,
       date: articles.date,
       title: articles.title,
       penName: articles.penName,
@@ -189,21 +195,100 @@ async function loadArticleCommentMetadata(articleIds: number[], currentUserId: n
 async function attachArticleResponseMetadata<
   T extends {
     id: number;
+    teamId?: number | null;
+    penName: string;
     createdByUserId: number | null;
   },
 >(
   rows: T[],
   currentUserId: number,
   canManageArticles: boolean
-): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount">>> {
+): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount" | "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole">>> {
   const articleIds = rows.map((row) => row.id).filter((id) => Number.isInteger(id) && id > 0);
-  const { commentCounts, unreadCommentCounts } = await loadArticleCommentMetadata(articleIds, currentUserId);
+  const penNames = Array.from(new Set(rows.map((row) => normalizeString(row.penName)).filter(Boolean)));
+  const teamIds = Array.from(new Set(rows.map((row) => Number(row.teamId)).filter((teamId) => Number.isInteger(teamId) && teamId > 0)));
+  const creatorIds = Array.from(new Set(rows.map((row) => Number(row.createdByUserId)).filter((userId) => Number.isInteger(userId) && userId > 0)));
+
+  const [commentMeta, collaboratorProfiles, creatorProfiles] = await Promise.all([
+    loadArticleCommentMetadata(articleIds, currentUserId),
+    penNames.length > 0
+      ? db
+          .select({
+            teamId: collaborators.teamId,
+            penName: collaborators.penName,
+            role: collaborators.role,
+            linkedUserRole: users.role,
+          })
+          .from(collaborators)
+          .leftJoin(users, eq(users.collaboratorId, collaborators.id))
+          .where(
+            teamIds.length > 0
+              ? and(
+                  inArray(collaborators.penName, penNames as never[]),
+                  inArray(collaborators.teamId, teamIds as never[]),
+                )
+              : inArray(collaborators.penName, penNames as never[])
+          )
+          .all()
+      : Promise.resolve([]),
+    creatorIds.length > 0
+      ? db
+          .select({
+            id: users.id,
+            role: users.role,
+          })
+          .from(users)
+          .where(inArray(users.id, creatorIds))
+          .all()
+      : Promise.resolve([]),
+  ]);
+  const { commentCounts, unreadCommentCounts } = commentMeta;
+  const collaboratorProfileByKey = new Map(
+    collaboratorProfiles.map((profile) => [
+      `${Number(profile.teamId || 0)}::${normalizeString(profile.penName).toLowerCase()}`,
+      profile,
+    ])
+  );
+  const creatorRoleById = new Map(
+    creatorProfiles.map((profile) => [Number(profile.id), profile.role])
+  );
 
   return rows.map((row) => ({
     ...row,
     canDelete: canManageArticles || row.createdByUserId === currentUserId,
     commentCount: commentCounts.get(row.id) || 0,
     unreadCommentCount: unreadCommentCounts.get(row.id) || 0,
+    ...(() => {
+      const normalizedPenName = normalizeString(row.penName).toLowerCase();
+      const collaboratorProfile = collaboratorProfileByKey.get(
+        `${Number(row.teamId || 0)}::${normalizedPenName}`
+      );
+
+      if (collaboratorProfile) {
+        const authorBucket = collaboratorProfile.role === "reviewer" || collaboratorProfile.linkedUserRole === "admin"
+          ? "editorial"
+          : "ctv";
+        return {
+          authorBucket,
+          authorBucketLabel: authorBucket === "editorial" ? "Biên tập/Admin" : "CTV",
+          authorRole: collaboratorProfile.role === "writer" || collaboratorProfile.role === "reviewer"
+            ? collaboratorProfile.role
+            : null,
+          authorUserRole: collaboratorProfile.linkedUserRole === "admin" || collaboratorProfile.linkedUserRole === "ctv"
+            ? collaboratorProfile.linkedUserRole
+            : null,
+        } satisfies Pick<ArticleResponseRow, "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole">;
+      }
+
+      const creatorRole = creatorRoleById.get(Number(row.createdByUserId || 0)) || null;
+      const authorBucket = creatorRole === "admin" ? "editorial" : "ctv";
+      return {
+        authorBucket,
+        authorBucketLabel: authorBucket === "editorial" ? "Biên tập/Admin" : "CTV",
+        authorRole: null,
+        authorUserRole: creatorRole === "admin" || creatorRole === "ctv" ? creatorRole : null,
+      } satisfies Pick<ArticleResponseRow, "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole">;
+    })(),
   }));
 }
 

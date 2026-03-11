@@ -17,6 +17,43 @@
 
 Ngày cập nhật: `2026-03-11`
 
+### Phiên khuya 5 - 11/03
+
+**Mục tiêu:** Chia giao diện `Bài viết` thành 2 khu quản lý riêng cho `CTV` và `Biên tập/Admin` nhưng vẫn dùng chung nguồn dữ liệu + Google Sheet gốc.
+
+#### Đã hoàn thành
+
+- Mở rộng response của `GET /api/articles` để mỗi bài có thêm metadata phân loại tác giả:
+  - `authorBucket`: `ctv | editorial`
+  - `authorBucketLabel`
+  - `authorRole`
+  - `authorUserRole`
+- Backend phân loại theo collaborator/team/link user:
+  - `writer` => `CTV`
+  - `reviewer` hoặc collaborator được gắn `admin` => `Biên tập/Admin`
+  - fallback theo `createdByUserId` nếu không map được collaborator
+- `ArticlesPage.tsx` đã chuyển từ 1 bảng dài sang layout 2 khối:
+  - `Bài của CTV`
+  - `Bài của Biên tập/Admin`
+- Thêm summary cards ở đầu danh sách bài viết để nhìn nhanh:
+  - tổng bài trên trang hiện tại
+  - số bài của CTV
+  - số bài của Biên tập/Admin
+- Trong bảng, cột `Bút danh` đã có badge hiển thị nhóm tác giả ngay trên từng dòng.
+- Filter `Bút danh` ở admin không còn chỉ lấy `writer`; giờ lấy tất cả pen name trong team để quét được cả bài của biên tập/admin.
+
+#### File đã động vào
+
+- `src/app/api/articles/route.ts`
+- `src/app/components/ArticlesPage.tsx`
+- `src/app/components/types.ts`
+
+#### Kiểm tra đã chạy
+
+- `npx eslint src/app/api/articles/route.ts src/app/components/ArticlesPage.tsx src/app/components/types.ts` ✅
+- `npx tsc --noEmit --pretty false` ✅
+- `npm run build` ✅
+
 ### Phiên khuya 4 - 11/03
 
 **Mục tiêu:** Dọn microcopy giải thích thừa trên giao diện hệ thống.

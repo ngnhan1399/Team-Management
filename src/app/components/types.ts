@@ -52,6 +52,10 @@ export interface Article {
   date: string;
   title: string;
   penName: string;
+  authorBucket?: "ctv" | "editorial";
+  authorBucketLabel?: string;
+  authorRole?: "writer" | "reviewer" | null;
+  authorUserRole?: "admin" | "ctv" | null;
   createdByUserId?: number | null;
   updatedAt?: string;
   category: string;

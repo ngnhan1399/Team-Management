@@ -1101,6 +1101,235 @@ export default function ArticlesPage() {
     );
   };
 
+  const authorBucketBadge = (article: Article) => {
+    const isEditorialArticle = article.authorBucket === "editorial";
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          width: "fit-content",
+          padding: "4px 8px",
+          borderRadius: 999,
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          color: isEditorialArticle ? "#c2410c" : "#1d4ed8",
+          background: isEditorialArticle ? "rgba(249, 115, 22, 0.12)" : "rgba(59, 130, 246, 0.12)",
+          border: isEditorialArticle ? "1px solid rgba(249, 115, 22, 0.18)" : "1px solid rgba(59, 130, 246, 0.18)",
+        }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+          {isEditorialArticle ? "shield_person" : "groups"}
+        </span>
+        {article.authorBucketLabel || (isEditorialArticle ? "Biên tập/Admin" : "CTV")}
+      </span>
+    );
+  };
+
+  const showSplitArticleSections = canManageArticles || isReviewer;
+  const ctvArticles = articles.filter((article) => article.authorBucket !== "editorial");
+  const editorialArticles = articles.filter((article) => article.authorBucket === "editorial");
+  const articleSections = [
+    {
+      key: "ctv",
+      title: "Bài của CTV",
+      icon: "groups",
+      accent: "#2563eb",
+      background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.04))",
+      rows: ctvArticles,
+      emptyMessage: "Chưa có bài nào ở nhóm CTV.",
+    },
+    {
+      key: "editorial",
+      title: "Bài của Biên tập/Admin",
+      icon: "shield_person",
+      accent: "#f97316",
+      background: "linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(234, 88, 12, 0.04))",
+      rows: editorialArticles,
+      emptyMessage: "Chưa có bài nào ở nhóm Biên tập/Admin.",
+    },
+  ] as const;
+
+  const renderArticleTable = (rows: Article[], emptyMessage: string) => (
+    <div style={{ overflowX: "auto", maxHeight: showSplitArticleSections ? 460 : "calc(100vh - 320px)", minHeight: showSplitArticleSections ? 220 : 460 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: "6%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "30%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "13%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "5%" }} />
+          <col style={{ width: "12%" }} />
+        </colgroup>
+        <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+          <tr style={{ background: "rgba(248, 250, 252, 0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)" }}>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ID</th>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ngày</th>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Tiêu đề</th>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Bút danh</th>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Loại bài</th>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Trạng thái</th>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Link</th>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={8}>
+                <div style={{ padding: showSplitArticleSections ? 44 : 80, textAlign: "center", color: "var(--text-muted)" }}>
+                  <div style={{ fontSize: showSplitArticleSections ? 28 : 40, marginBottom: 12 }}>📄</div>
+                  <div style={{ fontWeight: 700 }}>{emptyMessage}</div>
+                </div>
+              </td>
+            </tr>
+          ) : (
+            rows.map((a) => (
+              <tr key={a.id} data-testid={`article-row-${a.id}`} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.02)", transition: "background 0.2s" }} className="hover:bg-white/[0.02]">
+                <td style={{ padding: "12px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
+                <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
+                <td style={{ padding: "12px 14px" }}>
+                  {getPreferredArticleNavigationLink(a) ? (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewArticle(a)}
+                      title={a.reviewLink ? `${a.title} (xem trước & mở CMS)` : a.title}
+                      style={{
+                        color: "var(--accent-blue)",
+                        textDecoration: "none",
+                        fontWeight: 600,
+                        fontSize: 14,
+                        lineHeight: 1.35,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        padding: 0,
+                        cursor: "pointer",
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                      }}
+                    >
+                      {a.title}
+                    </button>
+                  ) : (
+                    <span
+                      title={a.title}
+                      style={{
+                        color: "var(--text-main)",
+                        fontWeight: 500,
+                        fontSize: 14,
+                        lineHeight: 1.35,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {a.title}
+                    </span>
+                  )}
+                </td>
+                <td style={{ padding: "12px 14px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap", fontWeight: 600 }}>{a.penName}</span>
+                    {authorBucketBadge(a)}
+                  </div>
+                </td>
+                <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                  {articleTypeBadge(a.articleType)}
+                </td>
+                <td style={{ padding: "12px 14px", textAlign: "center" }}>{statusBadge(a.status)}</td>
+                <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                  {linkBadge(a)}
+                </td>
+                <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
+                    <div style={{ position: "relative", display: "inline-flex" }}>
+                      <button
+                        data-testid={`article-comment-${a.id}`}
+                        onClick={() => openComments(a)}
+                        className="btn-ios-pill btn-ios-secondary"
+                        style={{ padding: "5px 9px", minWidth: 34, height: 34 }}
+                        title={getCommentButtonTitle(a)}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 17 }}>forum</span>
+                      </button>
+                      {Number(a.commentCount || 0) > 0 && (
+                        <span
+                          className={Number(a.unreadCommentCount || 0) > 0 ? "comment-badge-pulse" : ""}
+                          style={{
+                            position: "absolute",
+                            top: -5,
+                            right: -5,
+                            minWidth: 17,
+                            height: 17,
+                            padding: "0 4px",
+                            borderRadius: 999,
+                            background: Number(a.unreadCommentCount || 0) > 0 ? "var(--danger)" : "var(--accent-blue)",
+                            color: "#fff",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            boxShadow: Number(a.unreadCommentCount || 0) > 0 ? "0 0 0 2px rgba(239, 68, 68, 0.12)" : "0 0 0 2px rgba(59, 130, 246, 0.12)",
+                          }}
+                        >
+                          {getCommentBadgeLabel(a)}
+                        </span>
+                      )}
+                      {Number(a.unreadCommentCount || 0) > 0 && Number(a.commentCount || 0) === 0 && (
+                        <span
+                          className="comment-badge-pulse"
+                          style={{
+                            position: "absolute",
+                            top: -3,
+                            right: -3,
+                            width: 10,
+                            height: 10,
+                            borderRadius: 999,
+                            background: "var(--danger)",
+                            boxShadow: "0 0 0 2px white",
+                          }}
+                        />
+                      )}
+                    </div>
+                    {canEditArticle(a) && (
+                      <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
+                        <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
+                      </button>
+                    )}
+                    {(canManageArticles || a.canDelete) && (
+                      <button
+                        data-testid={`article-delete-${a.id}`}
+                        onClick={() => deleteSingleArticle(a)}
+                        disabled={deletingArticleIds.includes(a.id)}
+                        className="btn-ios-pill"
+                        style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)", opacity: deletingArticleIds.includes(a.id) ? 0.7 : 1 }}
+                        title={deletingArticleIds.includes(a.id) ? "Đang xóa bài" : "Xóa bài"}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 17, animation: deletingArticleIds.includes(a.id) ? "spin 1s linear infinite" : undefined }}>
+                          {deletingArticleIds.includes(a.id) ? "sync" : "delete"}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <>
       <div>
@@ -1226,12 +1455,12 @@ export default function ArticlesPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, borderTop: "1px solid var(--glass-border)", paddingTop: 24, animation: "modalFadeIn 0.2s ease" }}>
             {canManageArticles && (
               <div className="form-group">
-                <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Cộng tác viên</label>
+                <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Bút danh</label>
                 <CustomSelect
                   value={filters.penName || ""}
                   onChange={(v) => applyFilter("penName", v)}
-                  options={[{ value: "", label: "Tất cả CTV" }, ...collaborators.filter(c => c.role === "writer").map(c => ({ value: c.penName, label: c.penName }))]}
-                  placeholder="Tất cả CTV"
+                  options={[{ value: "", label: "Tất cả bút danh" }, ...collaborators.map(c => ({ value: c.penName, label: c.penName }))]}
+                  placeholder="Tất cả bút danh"
                   menuMode="portal-bottom"
                 />
               </div>
@@ -1303,172 +1532,70 @@ export default function ArticlesPage() {
         )}
       </div>
 
-      <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto", maxHeight: "calc(100vh - 320px)", minHeight: 460 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
-            <colgroup>
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "30%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "5%" }} />
-              <col style={{ width: "12%" }} />
-            </colgroup>
-            <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
-              <tr style={{ background: "rgba(248, 250, 252, 0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)" }}>
-                <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ID</th>
-                <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ngày</th>
-                <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Tiêu đề</th>
-                <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Bút danh</th>
-                <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Loại bài</th>
-                <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Trạng thái</th>
-                <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Link</th>
-                <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: 60, color: "var(--accent-blue)", fontWeight: 600 }}>⏳ Đang tải bài viết...</td></tr>
-              ) : articles.length === 0 ? (
-                <tr><td colSpan={8}><div style={{ padding: 80, textAlign: "center", color: "var(--text-muted)" }}><div style={{ fontSize: 40, marginBottom: 16 }}>📄</div><div style={{ fontWeight: 600 }}>Chưa có bài viết nào</div>{!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>{isReviewer ? "Tài khoản duyệt bài chỉ hiển thị bài chờ duyệt hoặc bài đã được giao cho bạn." : `Tài khoản này đang hiển thị dữ liệu của ${collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.`}</div>}</div></td></tr>
-              ) : (
-                articles.map((a) => (
-                  <tr key={a.id} data-testid={`article-row-${a.id}`} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.02)", transition: "background 0.2s" }} className="hover:bg-white/[0.02]">
-                    <td style={{ padding: "12px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
-                    <td style={{ padding: "12px 14px" }}>
-                      {getPreferredArticleNavigationLink(a) ? (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewArticle(a)}
-                          title={a.reviewLink ? `${a.title} (xem trước & mở CMS)` : a.title}
-                          style={{
-                            color: "var(--accent-blue)",
-                            textDecoration: "none",
-                            fontWeight: 600,
-                            fontSize: 14,
-                            lineHeight: 1.35,
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                            padding: 0,
-                            cursor: "pointer",
-                            textAlign: "left",
-                            background: "none",
-                            border: "none",
-                          }}
-                        >
-                          {a.title}
-                        </button>
-                      ) : (
-                        <span
-                          title={a.title}
-                          style={{
-                            color: "var(--text-main)",
-                            fontWeight: 500,
-                            fontSize: 14,
-                            lineHeight: 1.35,
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {a.title}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.penName}</td>
-                    <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                      {articleTypeBadge(a.articleType)}
-                    </td>
-                    <td style={{ padding: "12px 14px", textAlign: "center" }}>{statusBadge(a.status)}</td>
-                    <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                      {linkBadge(a)}
-                    </td>
-                    <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                      <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
-                        <div style={{ position: "relative", display: "inline-flex" }}>
-                          <button
-                            data-testid={`article-comment-${a.id}`}
-                            onClick={() => openComments(a)}
-                            className="btn-ios-pill btn-ios-secondary"
-                            style={{ padding: "5px 9px", minWidth: 34, height: 34 }}
-                            title={getCommentButtonTitle(a)}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>forum</span>
-                          </button>
-                          {Number(a.commentCount || 0) > 0 && (
-                            <span
-                              className={Number(a.unreadCommentCount || 0) > 0 ? "comment-badge-pulse" : ""}
-                              style={{
-                                position: "absolute",
-                                top: -5,
-                                right: -5,
-                                minWidth: 17,
-                                height: 17,
-                                padding: "0 4px",
-                                borderRadius: 999,
-                                background: Number(a.unreadCommentCount || 0) > 0 ? "var(--danger)" : "var(--accent-blue)",
-                                color: "#fff",
-                                fontSize: 10,
-                                fontWeight: 700,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                boxShadow: Number(a.unreadCommentCount || 0) > 0 ? "0 0 0 2px rgba(239, 68, 68, 0.12)" : "0 0 0 2px rgba(59, 130, 246, 0.12)",
-                              }}
-                            >
-                              {getCommentBadgeLabel(a)}
-                            </span>
-                          )}
-                          {Number(a.unreadCommentCount || 0) > 0 && Number(a.commentCount || 0) === 0 && (
-                            <span
-                              className="comment-badge-pulse"
-                              style={{
-                                position: "absolute",
-                                top: -3,
-                                right: -3,
-                                width: 10,
-                                height: 10,
-                                borderRadius: 999,
-                                background: "var(--danger)",
-                                boxShadow: "0 0 0 2px white",
-                              }}
-                            />
-                          )}
-                        </div>
-                        {canEditArticle(a) && (
-                          <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
-                            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
-                          </button>
-                        )}
-                        {(canManageArticles || a.canDelete) && (
-                          <button
-                            data-testid={`article-delete-${a.id}`}
-                            onClick={() => deleteSingleArticle(a)}
-                            disabled={deletingArticleIds.includes(a.id)}
-                            className="btn-ios-pill"
-                            style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)", opacity: deletingArticleIds.includes(a.id) ? 0.7 : 1 }}
-                            title={deletingArticleIds.includes(a.id) ? "Đang xóa bài" : "Xóa bài"}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: 17, animation: deletingArticleIds.includes(a.id) ? "spin 1s linear infinite" : undefined }}>
-                              {deletingArticleIds.includes(a.id) ? "sync" : "delete"}
-                            </span>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {showSplitArticleSections && !loading && articles.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
+          <div className="glass-card" style={{ padding: 18, background: "linear-gradient(135deg, rgba(15, 23, 42, 0.03), rgba(148, 163, 184, 0.04))" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--accent-blue)" }}>dashboard</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Tổng trang hiện tại</span>
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-main)", lineHeight: 1 }}>{articles.length}</div>
+          </div>
+          {articleSections.map((section) => (
+            <div key={section.key} className="glass-card" style={{ padding: 18, background: section.background }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18, color: section.accent }}>{section.icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{section.title}</span>
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-main)", lineHeight: 1 }}>{section.rows.length}</div>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
+
+      {loading ? (
+        <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ textAlign: "center", padding: 60, color: "var(--accent-blue)", fontWeight: 600 }}>⏳ Đang tải bài viết...</div>
+        </div>
+      ) : articles.length === 0 ? (
+        <div className="glass-card" style={{ padding: 80, textAlign: "center", color: "var(--text-muted)" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>📄</div>
+          <div style={{ fontWeight: 600 }}>Chưa có bài viết nào</div>
+          {!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>{isReviewer ? "Tài khoản duyệt bài chỉ hiển thị bài chờ duyệt hoặc bài đã được giao cho bạn." : `Tài khoản này đang hiển thị dữ liệu của ${collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.`}</div>}
+        </div>
+      ) : showSplitArticleSections ? (
+        <div style={{ display: "grid", gap: 24 }}>
+          {articleSections.map((section) => (
+            <section key={section.key} className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
+              <div
+                data-testid={`article-section-${section.key}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: "18px 20px",
+                  borderBottom: "1px solid var(--glass-border)",
+                  background: section.background,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: section.accent }}>{section.icon}</span>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--text-main)" }}>{section.title}</h3>
+                </div>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 38, height: 38, padding: "0 12px", borderRadius: 999, background: "rgba(255, 255, 255, 0.7)", color: section.accent, fontSize: 16, fontWeight: 800 }}>
+                  {section.rows.length}
+                </span>
+              </div>
+              {renderArticleTable(section.rows, section.emptyMessage)}
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
+          {renderArticleTable(articles, "Chưa có bài viết nào")}
+        </div>
+      )}
       {pagination.totalPages > 1 && (
         <div className="pagination">
           <button disabled={pagination.page <= 1} onClick={() => fetchArticles(pagination.page - 1)}>← Trước</button>
