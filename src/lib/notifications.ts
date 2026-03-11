@@ -6,14 +6,14 @@ type NotificationInput = {
   fromUserId?: number | null;
   toUserId: number;
   toPenName?: string | null;
-  type?: "deadline" | "review" | "error_fix" | "info" | "system";
+  type?: "deadline" | "review" | "error_fix" | "comment" | "info" | "system";
   title: string;
   message: string;
   relatedArticleId?: number | null;
 };
 
 function getToastVariant(type: NotificationInput["type"]): RealtimeToastVariant {
-  if (type === "deadline" || type === "review" || type === "error_fix") return "warning";
+  if (type === "deadline" || type === "review" || type === "error_fix" || type === "comment") return "warning";
   if (type === "system") return "success";
   return "info";
 }

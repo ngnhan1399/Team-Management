@@ -5,6 +5,7 @@ import { useAuth } from "./auth-context";
 import CustomSelect from "./CustomSelect";
 import { useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
+import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
 import type {
   Article,
   ArticleComment,
@@ -247,6 +248,20 @@ export default function ArticlesPage() {
     effectiveDeleteCriteria.reviewerName ? `Người duyệt: ${effectiveDeleteCriteria.reviewerName}` : null,
   ].filter(Boolean) as string[];
 
+  const buildApiErrorMessage = (data: unknown, fallback: string) => {
+    const payload = (data && typeof data === "object") ? data as Record<string, unknown> : {};
+    const baseMessage = String(payload.error || payload.message || fallback);
+    const details = Array.isArray(payload.details)
+      ? payload.details.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+
+    if (details.length === 0) {
+      return baseMessage;
+    }
+
+    return `${baseMessage}\n\nChi tiết:\n- ${details.slice(0, 5).join("\n- ")}`;
+  };
+
   const analyzeImportFile = useCallback(async (file: File, sheetName?: string, headerRowNumber?: number) => {
     setImporting(true);
     setImportError("");
@@ -455,7 +470,7 @@ export default function ArticlesPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Không thể xóa dữ liệu");
+        throw new Error(buildApiErrorMessage(data, "Không thể xóa dữ liệu"));
       }
       alert(`✅ Đã xóa ${data.deletedCount} bài viết. Nhuận bút đã được reset để tránh lệch dữ liệu.`);
       setShowDeleteModal(false);
@@ -481,7 +496,7 @@ export default function ArticlesPage() {
       const res = await fetch(`/api/articles?id=${article.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Không thể xóa bài viết");
+        throw new Error(buildApiErrorMessage(data, "Không thể xóa bài viết"));
       }
       fetchArticles(1, search, filters);
       alert(`✅ Đã xóa bài "${article.title}".`);
@@ -712,18 +727,20 @@ export default function ArticlesPage() {
   }, []);
 
   const doesArticleMatchCurrentView = useCallback((article: Article) => {
-    const normalizedSearch = search.trim().toLowerCase();
+    const normalizedSearch = foldSearchText(search);
     if (normalizedSearch) {
+      const collaborator = collaborators.find((item) => item.penName === article.penName);
       const haystack = [
         article.title,
         article.articleId,
         article.penName,
         article.notes,
+        collaborator?.name,
+        collaborator?.email,
       ]
-        .map((value) => String(value || "").toLowerCase())
-        .join(" ");
+        .filter((value) => value != null);
 
-      if (!haystack.includes(normalizedSearch)) {
+      if (!haystack.some((value) => matchesLooseSearch(value, normalizedSearch))) {
         return false;
       }
     }
@@ -762,7 +779,7 @@ export default function ArticlesPage() {
     }
 
     return true;
-  }, [canManageArticles, filters, search, user]);
+  }, [canManageArticles, collaborators, filters, search, user]);
 
   const mergeSavedArticleIntoList = useCallback((savedArticle: Article, isEditing: boolean) => {
     const shouldBeVisible = doesArticleMatchCurrentView(savedArticle);

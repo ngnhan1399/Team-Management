@@ -1,0 +1,68 @@
+# Codex Handoff
+
+## Trạng thái hiện tại
+
+- Stack chính: `Next.js App Router` + `TypeScript` + `Drizzle ORM` + `PostgreSQL`.
+- Nghiệp vụ nhạy cảm nhất hiện tại là đồng bộ bài viết hai chiều với Google Sheet.
+- Luồng xóa `web -> Google Sheet -> DB` đã được vá để không còn xóa lệch dữ liệu âm thầm.
+- Repo đã có `AGENTS.md` và bộ tài liệu Codex để giảm nguy cơ kẹt thread do context quá dài.
+
+## Thay đổi quan trọng gần nhất
+
+Ngày cập nhật: `2026-03-11`
+
+- Đã thêm mutation `deleteArticle` trong `src/lib/google-sheet-mutation.ts`.
+- `DELETE /api/articles` giờ xác nhận xóa được trên Google Sheet rồi mới xóa DB.
+- Apps Script xuất ra ở `output/google-sheets-webhook.workdocker.gs` giờ dò xóa trên toàn workbook để tránh báo thành công giả khi tìm nhầm tab.
+
+## Việc còn cần nhớ
+
+- Cần redeploy Apps Script bằng file `output/google-sheets-webhook.workdocker.gs` mới nhất.
+- Nếu chưa redeploy, thao tác xóa từ web có thể bị chặn để tránh lệch dữ liệu.
+- UI đã hiện chi tiết lỗi xóa rõ hơn nếu Google Sheet chưa xác nhận được dòng gốc.
+
+## File nên mở đầu tiên
+
+- `AGENTS.md`
+- `docs/codex-thread-safety.md`
+- `src/app/api/articles/route.ts`
+- `src/lib/google-sheet-sync.ts`
+- `src/lib/google-sheet-mutation.ts`
+- `src/app/api/articles/google-sync/webhook/route.ts`
+- `output/google-sheets-webhook.workdocker.gs`
+
+## Khu vực không nên quét bừa
+
+- `.next`
+- `node_modules`
+- `logs`
+- `output` trừ khi đang làm Apps Script hoặc file export
+- `data` nếu task không liên quan import/export
+
+## Lệnh kiểm tra chuẩn
+
+```bash
+npm run lint
+npm run build
+```
+
+## Mẫu handoff cho thread sau
+
+```md
+## Trạng thái
+- Đang làm:
+- Đã xong:
+
+## File đã động vào
+- path/to/file
+
+## Việc tiếp theo
+- ...
+
+## Kiểm tra đã chạy
+- npm run lint
+- npm run build
+
+## Rủi ro / ghi chú
+- ...
+```

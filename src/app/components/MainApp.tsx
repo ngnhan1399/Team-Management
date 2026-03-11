@@ -62,7 +62,7 @@ export default function MainApp() {
           at: latestUnread.createdAt || new Date().toISOString(),
           toastTitle: latestUnread.title,
           toastMessage: latestUnread.message,
-          toastVariant: latestUnread.type === "review" || latestUnread.type === "error_fix" ? "warning" : "info",
+          toastVariant: latestUnread.type === "review" || latestUnread.type === "error_fix" || latestUnread.type === "comment" ? "warning" : "info",
         });
       })
       .catch(() => { });
@@ -143,11 +143,12 @@ export default function MainApp() {
       <RealtimeToastLayer />
       {sidebarOpen && <button className="sidebar-backdrop lg:hidden" aria-label="Đóng menu điều hướng" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div style={{ padding: 24, display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ lineHeight: 1.2 }}>
-            <BrandLogo markSize={42} titleSize={18} />
-            <p style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>{isAdmin ? "QUẢN TRỊ VIÊN" : "CỘNG TÁC VIÊN"}</p>
-          </div>
+        <div style={{ padding: 24, display: "flex", alignItems: "flex-start", width: "100%" }}>
+          <BrandLogo 
+            markSize={42} 
+            titleSize={18} 
+            subtitle={isAdmin ? "QUẢN TRỊ VIÊN" : "CỘNG TÁC VIÊN"} 
+          />
         </div>
 
         <nav className="flex-1 px-4 mt-4 space-y-1 overflow-y-auto custom-scrollbar">

@@ -1,14 +1,20 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articleComments, articleReviews, articles, articleSyncLinks, notifications, payments } from "@/db/schema";
+import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
-import { createArticleInGoogleSheet, mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
+import {
+  createArticleInGoogleSheet,
+  mirrorArticleDeleteToGoogleSheet,
+  mirrorArticleUpdateToGoogleSheet,
+  type GoogleSheetArticleSnapshot,
+  type GoogleSheetSyncLinkSnapshot,
+} from "@/lib/google-sheet-mutation";
 import { resolveArticleCategory } from "@/lib/article-category";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
-import { and, desc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, like, or, sql, type SQL } from "drizzle-orm";
 import { after, NextRequest, NextResponse } from "next/server";
 
 type ArticleInsert = typeof articles.$inferInsert;
@@ -45,6 +51,13 @@ type DeleteResult = {
   clearedPayments: number;
 };
 
+type ArticleDeleteSyncTarget = {
+  article: GoogleSheetArticleSnapshot & {
+    createdByUserId: number | null;
+  };
+  syncLink: GoogleSheetSyncLinkSnapshot | null;
+};
+
 type ArticleResponseRow = {
   id: number;
   articleId: string | null;
@@ -69,7 +82,7 @@ type NonBlockingStepOptions<T> = {
   fallback: T;
 };
 
-import { normalizeString } from "@/lib/normalize";
+import { foldSearchText, matchesLooseSearch, normalizeString } from "@/lib/normalize";
 
 async function runNonBlockingStep<T>(task: () => Promise<T>, options: NonBlockingStepOptions<T>): Promise<T> {
   try {
@@ -135,6 +148,106 @@ async function notifyGoogleSheetSyncIssue(userId: number, message: string) {
   );
 }
 
+async function loadArticleDeleteSyncTargets(articleIds: number[]): Promise<ArticleDeleteSyncTarget[]> {
+  if (articleIds.length === 0) {
+    return [];
+  }
+
+  const targetArticles = await db
+    .select({
+      id: articles.id,
+      articleId: articles.articleId,
+      title: articles.title,
+      penName: articles.penName,
+      date: articles.date,
+      status: articles.status,
+      reviewerName: articles.reviewerName,
+      notes: articles.notes,
+      link: articles.link,
+      articleType: articles.articleType,
+      contentType: articles.contentType,
+      wordCountRange: articles.wordCountRange,
+      createdByUserId: articles.createdByUserId,
+    })
+    .from(articles)
+    .where(inArray(articles.id, articleIds))
+    .all();
+
+  const latestSyncLinks = await db
+    .select({
+      id: articleSyncLinks.id,
+      articleIdRef: articleSyncLinks.articleIdRef,
+      sourceUrl: articleSyncLinks.sourceUrl,
+      sheetName: articleSyncLinks.sheetName,
+      sheetMonth: articleSyncLinks.sheetMonth,
+      sheetYear: articleSyncLinks.sheetYear,
+      sourceRowKey: articleSyncLinks.sourceRowKey,
+    })
+    .from(articleSyncLinks)
+    .where(inArray(articleSyncLinks.articleIdRef, articleIds))
+    .orderBy(desc(articleSyncLinks.updatedAt), desc(articleSyncLinks.id))
+    .all();
+
+  const syncLinksByArticleId = new Map<number, GoogleSheetSyncLinkSnapshot>();
+  for (const syncLink of latestSyncLinks) {
+    const articleId = Number(syncLink.articleIdRef || 0);
+    if (!Number.isInteger(articleId) || articleId <= 0 || syncLinksByArticleId.has(articleId)) {
+      continue;
+    }
+
+    syncLinksByArticleId.set(articleId, {
+      id: syncLink.id,
+      sourceUrl: syncLink.sourceUrl,
+      sheetName: syncLink.sheetName,
+      sheetMonth: syncLink.sheetMonth,
+      sheetYear: syncLink.sheetYear,
+      sourceRowKey: syncLink.sourceRowKey,
+    });
+  }
+
+  return targetArticles.map((article) => ({
+    article,
+    syncLink: syncLinksByArticleId.get(article.id) ?? null,
+  }));
+}
+
+async function ensureGoogleSheetDeleteConsistency(
+  targets: ArticleDeleteSyncTarget[],
+  actorUserId: number,
+  actorDisplayName: string,
+  reason: string
+) {
+  const failures: string[] = [];
+
+  for (const target of targets) {
+    const result = await mirrorArticleDeleteToGoogleSheet({
+      articleId: target.article.id,
+      actorUserId,
+      actorDisplayName,
+      reason,
+      snapshot: target.article,
+      syncLink: target.syncLink,
+    });
+
+    if (result.skipped || !result.success) {
+      failures.push(`${target.article.title}: ${result.message}`);
+    }
+  }
+
+  return failures;
+}
+
+function buildDeleteSyncFailureResponse(failures: string[]) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Không thể xác nhận xóa trên Google Sheet, nên hệ thống đã hủy thao tác để tránh lệch dữ liệu.",
+      details: failures.slice(0, 5),
+    },
+    { status: 409 }
+  );
+}
+
 function readCriteriaFromSearchParams(searchParams: URLSearchParams): ArticleCriteria {
   return {
     search: normalizeString(searchParams.get("search")),
@@ -165,11 +278,40 @@ function readCriteriaFromBody(body: Record<string, unknown>): ArticleCriteria {
   };
 }
 
+async function findMatchingCollaboratorPenNames(search: string) {
+  const foldedSearch = foldSearchText(search);
+  if (!foldedSearch) {
+    return [] as string[];
+  }
+
+  const rows = await db
+    .select({
+      name: collaborators.name,
+      penName: collaborators.penName,
+      email: collaborators.email,
+    })
+    .from(collaborators)
+    .all();
+
+  return Array.from(
+    new Set(
+      rows
+        .filter((row) => (
+          matchesLooseSearch(row.name, foldedSearch)
+          || matchesLooseSearch(row.penName, foldedSearch)
+          || matchesLooseSearch(row.email, foldedSearch)
+        ))
+        .map((row) => normalizeString(row.penName))
+        .filter(Boolean)
+    )
+  );
+}
+
 function hasCriteria(criteria: ArticleCriteria): boolean {
   return Object.values(criteria).some((value) => value !== "");
 }
 
-function buildArticleWhere(criteria: ArticleCriteria, isAdmin: boolean): SQL | undefined {
+function buildArticleWhere(criteria: ArticleCriteria, isAdmin: boolean, matchedSearchPenNames: string[] = []): SQL | undefined {
   const conditions: SQL[] = [];
 
   if (isAdmin && criteria.penName) {
@@ -177,12 +319,21 @@ function buildArticleWhere(criteria: ArticleCriteria, isAdmin: boolean): SQL | u
   }
 
   if (criteria.search) {
-    const searchCondition = or(
-      like(articles.title, `%${criteria.search}%`),
-      like(articles.articleId, `%${criteria.search}%`),
-      like(articles.penName, `%${criteria.search}%`),
-      like(articles.notes, `%${criteria.search}%`)
-    );
+    const searchClauses: SQL[] = [
+      ilike(articles.title, `%${criteria.search}%`),
+      ilike(articles.articleId, `%${criteria.search}%`),
+      ilike(articles.penName, `%${criteria.search}%`),
+      ilike(articles.notes, `%${criteria.search}%`),
+      ilike(articles.reviewerName, `%${criteria.search}%`),
+    ];
+
+    if (matchedSearchPenNames.length === 1) {
+      searchClauses.push(eq(articles.penName, matchedSearchPenNames[0] as never));
+    } else if (matchedSearchPenNames.length > 1) {
+      searchClauses.push(inArray(articles.penName, matchedSearchPenNames as never[]));
+    }
+
+    const searchCondition = or(...searchClauses);
 
     if (searchCondition) {
       conditions.push(searchCondition);
@@ -190,7 +341,7 @@ function buildArticleWhere(criteria: ArticleCriteria, isAdmin: boolean): SQL | u
   }
 
   if (criteria.titleQuery) {
-    conditions.push(like(articles.title, `%${criteria.titleQuery}%`));
+    conditions.push(ilike(articles.title, `%${criteria.titleQuery}%`));
   }
   if (criteria.status) {
     if (isApprovedArticleStatusFilterValue(criteria.status)) {
@@ -412,7 +563,8 @@ export async function GET(request: NextRequest) {
     const mode = normalizeString(searchParams.get("mode"));
     const criteria = readCriteriaFromSearchParams(searchParams);
     const canManageArticles = hasArticleManagerAccess(context);
-    const whereClause = buildArticleWhere(criteria, canManageArticles);
+    const matchedSearchPenNames = await findMatchingCollaboratorPenNames(criteria.search);
+    const whereClause = buildArticleWhere(criteria, canManageArticles, matchedSearchPenNames);
 
     if (mode === "delete-preview") {
       if (!canManageArticles) {
@@ -719,24 +871,17 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const id = normalizeString(searchParams.get("id"));
     const canManageArticles = hasArticleManagerAccess(context);
+    const actorDisplayName = getContextDisplayName(context) || context.user.email;
 
     if (id) {
       const articleId = parseInt(id, 10);
-      const existing = await db
-        .select({
-          id: articles.id,
-          title: articles.title,
-          penName: articles.penName,
-          date: articles.date,
-          createdByUserId: articles.createdByUserId,
-        })
-        .from(articles)
-        .where(eq(articles.id, articleId))
-        .get();
+      const [deleteTarget] = await loadArticleDeleteSyncTargets([articleId]);
 
-      if (!existing) {
+      if (!deleteTarget) {
         return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
       }
+
+      const existing = deleteTarget.article;
 
       if (!canManageArticles) {
         const identityCandidates = getContextIdentityCandidates(context);
@@ -750,6 +895,16 @@ export async function DELETE(request: NextRequest) {
             { status: 403 }
           );
         }
+      }
+
+      const deleteMirrorFailures = await ensureGoogleSheetDeleteConsistency(
+        [deleteTarget],
+        context.user.id,
+        actorDisplayName,
+        "article_delete"
+      );
+      if (deleteMirrorFailures.length > 0) {
+        return buildDeleteSyncFailureResponse(deleteMirrorFailures);
       }
 
       const deleted = await deleteArticlesByIds([articleId]);
@@ -780,6 +935,7 @@ export async function DELETE(request: NextRequest) {
     const action = normalizeString(body.action) || "preview";
     const scope = (normalizeString(body.scope) || "custom") as DeleteScope;
     const criteria = readCriteriaFromBody(body);
+    const matchedSearchPenNames = await findMatchingCollaboratorPenNames(criteria.search);
 
     if (scope !== "all" && !hasCriteria(criteria)) {
       return NextResponse.json(
@@ -788,14 +944,35 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const whereClause = scope === "all" ? undefined : buildArticleWhere(criteria, true);
+    const whereClause = scope === "all" ? undefined : buildArticleWhere(criteria, true, matchedSearchPenNames);
     const preview = await getDeletePreview(whereClause);
 
     if (action === "preview") {
       return NextResponse.json({ success: true, scope, criteria, ...preview });
     }
 
-    const deleted = await deleteArticlesByIds(preview.articleIds);
+    const deleteTargets = await loadArticleDeleteSyncTargets(preview.articleIds);
+    if (deleteTargets.length !== preview.articleIds.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Một số bài viết đã thay đổi trong lúc xử lý. Hãy tải lại danh sách và thử xóa lại.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const deleteMirrorFailures = await ensureGoogleSheetDeleteConsistency(
+      deleteTargets,
+      context.user.id,
+      actorDisplayName,
+      "articles_bulk_delete"
+    );
+    if (deleteMirrorFailures.length > 0) {
+      return buildDeleteSyncFailureResponse(deleteMirrorFailures);
+    }
+
+    const deleted = await deleteArticlesByIds(deleteTargets.map((target) => target.article.id));
 
     await writeAuditLog({
       userId: context.user.id,
@@ -822,5 +999,3 @@ export async function DELETE(request: NextRequest) {
     return handleServerError("articles.delete", error);
   }
 }
-
-

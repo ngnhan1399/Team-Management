@@ -147,7 +147,7 @@ export const notifications = pgTable("notifications", {
   fromUserId: integer("from_user_id"),
   toUserId: integer("to_user_id").notNull(),
   toPenName: text("to_pen_name"),
-  type: text("type", { enum: ["deadline", "review", "error_fix", "info", "system"] }).notNull().default("info"),
+  type: text("type", { enum: ["deadline", "review", "error_fix", "comment", "info", "system"] }).notNull().default("info"),
   title: text("title").notNull(),
   message: text("message").notNull(),
   relatedArticleId: integer("related_article_id"),

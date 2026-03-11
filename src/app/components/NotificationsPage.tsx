@@ -77,8 +77,8 @@ export default function NotificationsPage() {
     refreshNotifications();
   };
 
-  const typeIcon: Record<string, string> = { review: "rate_review", error_fix: "build", deadline: "schedule", info: "info", system: "settings" };
-  const typeColor: Record<string, string> = { review: "var(--accent-blue)", error_fix: "var(--accent-teal)", deadline: "var(--danger)", info: "var(--accent-purple)", system: "var(--text-muted)" };
+  const typeIcon: Record<string, string> = { review: "rate_review", error_fix: "build", deadline: "schedule", comment: "forum", info: "info", system: "settings" };
+  const typeColor: Record<string, string> = { review: "var(--accent-blue)", error_fix: "var(--accent-teal)", deadline: "var(--danger)", comment: "var(--accent-orange)", info: "var(--accent-purple)", system: "var(--text-muted)" };
 
   return (
     <>

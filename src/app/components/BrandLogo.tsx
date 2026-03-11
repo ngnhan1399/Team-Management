@@ -111,11 +111,13 @@ export default function BrandLogo({
   titleSize = 20,
 }: BrandLogoProps) {
   const isCentered = align === "center";
+  const subtitleSize = Math.max(10, Math.round(titleSize * 0.42));
 
   return (
     <div
       style={{
         display: "flex",
+        flexDirection: "row",
         alignItems: "center",
         justifyContent: isCentered ? "center" : "flex-start",
         gap,
@@ -123,31 +125,35 @@ export default function BrandLogo({
       }}
     >
       <BrandMark size={markSize} />
-      <div style={{ lineHeight: 1.05 }}>
+      <div>
         <div
           style={{
             fontSize: titleSize,
             fontWeight: 800,
             color: "var(--text-main)",
             letterSpacing: "-0.05em",
+            lineHeight: 1.1,
+            whiteSpace: "nowrap",
           }}
         >
           Workdocker
         </div>
-        {subtitle ? (
+        {subtitle && (
           <div
             style={{
-              marginTop: 6,
-              fontSize: Math.max(10, Math.round(titleSize * 0.42)),
+              fontSize: subtitleSize,
               fontWeight: 700,
               color: "var(--text-muted)",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
+              lineHeight: 1.1,
+              whiteSpace: "nowrap",
+              marginTop: 3,
             }}
           >
             {subtitle}
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   );

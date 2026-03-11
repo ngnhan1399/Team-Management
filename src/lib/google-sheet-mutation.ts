@@ -12,7 +12,7 @@ type GoogleSheetMirrorOverrides = {
   link?: string | null;
 };
 
-type ArticleSnapshot = {
+export type GoogleSheetArticleSnapshot = {
   id: number;
   articleId: string | null;
   title: string;
@@ -27,7 +27,7 @@ type ArticleSnapshot = {
   wordCountRange: string | null;
 };
 
-type SyncLinkSnapshot = {
+export type GoogleSheetSyncLinkSnapshot = {
   id: number;
   sourceUrl: string;
   sheetName: string;
@@ -36,7 +36,7 @@ type SyncLinkSnapshot = {
   sourceRowKey: string;
 };
 
-type GoogleSheetMutationMode = "mirrorArticleUpdate" | "upsertArticle";
+type GoogleSheetMutationMode = "mirrorArticleUpdate" | "upsertArticle" | "deleteArticle";
 
 type GoogleSheetMutationResponse = {
   success?: boolean;
@@ -49,6 +49,10 @@ type GoogleSheetMutationResponse = {
   month?: unknown;
   year?: unknown;
   sourceUrl?: unknown;
+  deleted?: unknown;
+  notFoundAcrossWorkbook?: unknown;
+  searchedSheets?: unknown;
+  matches?: unknown;
 };
 
 export type GoogleSheetMirrorResult = {
@@ -65,6 +69,8 @@ type MirrorOptions = {
   actorDisplayName?: string | null;
   reason?: string;
   overrides?: GoogleSheetMirrorOverrides;
+  snapshot?: GoogleSheetArticleSnapshot;
+  syncLink?: GoogleSheetSyncLinkSnapshot | null;
 };
 
 function normalizeText(value: unknown) {
@@ -84,6 +90,14 @@ function parseJsonSafely(value: string) {
   } catch {
     return null;
   }
+}
+
+function parseBooleanish(value: unknown) {
+  if (typeof value === "boolean") return value;
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return null;
 }
 
 function mapArticleStatusToGoogleSheetStatus(status: unknown) {
@@ -140,7 +154,7 @@ function normalizeCompositeKey(title: string, penName: string, date: string) {
   return `${title.toLowerCase().trim()}|||${penName.toLowerCase().trim()}|||${date}`;
 }
 
-function buildSourceRowKey(article: Pick<ArticleSnapshot, "articleId" | "link" | "title" | "penName" | "date">) {
+function buildSourceRowKey(article: Pick<GoogleSheetArticleSnapshot, "articleId" | "link" | "title" | "penName" | "date">) {
   const articleId = normalizeText(article.articleId);
   if (articleId) return `articleId:${articleId}`;
 
@@ -164,7 +178,7 @@ function shouldUseActorAsReviewer(status: string) {
   return isApprovedArticleStatus(status) || status === "NeedsFix" || status === "Reviewing";
 }
 
-function buildArticlePayload(article: ArticleSnapshot, options: MirrorOptions) {
+function buildArticlePayload(article: GoogleSheetArticleSnapshot, options: MirrorOptions) {
   const resolvedStatus = normalizeText(options.overrides?.status ?? article.status);
   const resolvedReviewerName = normalizeText(
     options.overrides?.reviewerName
@@ -175,7 +189,6 @@ function buildArticlePayload(article: ArticleSnapshot, options: MirrorOptions) {
   const resolvedLink = normalizeText(options.overrides?.link ?? article.link);
 
   return {
-    id: article.id,
     articleId: normalizeText(article.articleId),
     title: article.title,
     penName: article.penName,
@@ -208,7 +221,7 @@ async function loadArticleSnapshot(articleId: number) {
     })
     .from(articles)
     .where(eq(articles.id, articleId))
-    .get() as Promise<ArticleSnapshot | undefined>;
+    .get() as Promise<GoogleSheetArticleSnapshot | undefined>;
 }
 
 async function loadLatestSyncLink(articleId: number) {
@@ -224,7 +237,7 @@ async function loadLatestSyncLink(articleId: number) {
     .from(articleSyncLinks)
     .where(eq(articleSyncLinks.articleIdRef, articleId))
     .orderBy(desc(articleSyncLinks.updatedAt), desc(articleSyncLinks.id))
-    .get() as Promise<SyncLinkSnapshot | undefined>;
+    .get() as Promise<GoogleSheetSyncLinkSnapshot | undefined>;
 }
 
 async function upsertArticleSyncLink(articleId: number, response: GoogleSheetMutationResponse, fallback: {
@@ -272,9 +285,9 @@ async function upsertArticleSyncLink(articleId: number, response: GoogleSheetMut
 
 async function postMutationToAppsScript(
   mode: GoogleSheetMutationMode,
-  article: ArticleSnapshot,
+  article: GoogleSheetArticleSnapshot,
   options: MirrorOptions,
-  syncLink?: SyncLinkSnapshot
+  syncLink?: GoogleSheetSyncLinkSnapshot | null
 ) {
   const webAppUrl = normalizeText(process.env.GOOGLE_SHEETS_SCRIPT_WEB_APP_URL);
   if (!webAppUrl) {
@@ -330,11 +343,16 @@ async function postMutationToAppsScript(
 
     const rawText = await response.text();
     const parsed = parseJsonSafely(rawText);
+    const deleteWasConfirmed =
+      mode !== "deleteArticle"
+      || parseBooleanish(parsed?.deleted) === true
+      || parseBooleanish(parsed?.notFoundAcrossWorkbook) === true;
 
-    if (!response.ok || parsed?.success === false) {
+    if (!response.ok || parsed?.success === false || !deleteWasConfirmed) {
       const errorMessage =
         normalizeText(parsed?.error)
         || normalizeText(parsed?.message)
+        || (mode === "deleteArticle" ? "Google Sheet chưa xác nhận được trạng thái xóa của dòng gốc." : "")
         || `Google Sheet trả về lỗi ${response.status}.`;
 
       return {
@@ -346,7 +364,7 @@ async function postMutationToAppsScript(
       } as const;
     }
 
-    if (articleDateParts) {
+    if (mode !== "deleteArticle" && articleDateParts) {
       await upsertArticleSyncLink(article.id, parsed || {}, {
         sourceUrl: payload.sourceUrl,
         sheetName: normalizeText(parsed?.sheetName) || syncLink?.sheetName || `Tháng ${String(articleDateParts.month).padStart(2, "0")}${articleDateParts.year}`,
@@ -359,7 +377,9 @@ async function postMutationToAppsScript(
     return {
       skipped: false,
       success: true,
-      message: normalizeText(parsed?.message) || "Đã cập nhật Google Sheet gốc.",
+      message:
+        normalizeText(parsed?.message)
+        || (mode === "deleteArticle" ? "Đã xóa bài viết khỏi Google Sheet gốc." : "Đã cập nhật Google Sheet gốc."),
       response: parsed,
       payload,
     } as const;
@@ -372,7 +392,9 @@ async function postMutationToAppsScript(
       skipped: false,
       success: false,
       message: isTimeoutError
-        ? "Google Sheet phản hồi quá chậm. Bài viết vẫn đã lưu trong hệ thống, bạn có thể thử đồng bộ lại sau."
+        ? (mode === "deleteArticle"
+          ? "Google Sheet phản hồi quá chậm. Chưa xác nhận xóa được dòng gốc, nên thao tác xóa đã bị chặn để tránh lệch dữ liệu."
+          : "Google Sheet phản hồi quá chậm. Bài viết vẫn đã lưu trong hệ thống, bạn có thể thử đồng bộ lại sau.")
         : normalizeText(error) || "Không gọi được Apps Script web app.",
       response: null,
       payload,
@@ -385,7 +407,7 @@ async function finalizeMutationResult(
   options: MirrorOptions,
   mode: GoogleSheetMutationMode,
   result: Awaited<ReturnType<typeof postMutationToAppsScript>>,
-  syncLink?: SyncLinkSnapshot
+  syncLink?: GoogleSheetSyncLinkSnapshot | null
 ): Promise<GoogleSheetMirrorResult> {
   if (result.skipped) {
     return {
@@ -421,7 +443,12 @@ async function finalizeMutationResult(
 
   await writeAuditLog({
     userId: options.actorUserId ?? null,
-    action: mode === "upsertArticle" ? "article_google_sheet_created" : "article_google_sheet_pushed",
+    action:
+      mode === "upsertArticle"
+        ? "article_google_sheet_created"
+        : mode === "deleteArticle"
+          ? "article_google_sheet_deleted"
+          : "article_google_sheet_pushed",
     entity: "article",
     entityId: String(articleId),
     payload: {
@@ -442,7 +469,7 @@ async function finalizeMutationResult(
 }
 
 export async function createArticleInGoogleSheet(options: MirrorOptions): Promise<GoogleSheetMirrorResult> {
-  const article = await loadArticleSnapshot(options.articleId);
+  const article = options.snapshot ?? await loadArticleSnapshot(options.articleId);
   if (!article) {
     return {
       attempted: false,
@@ -452,13 +479,13 @@ export async function createArticleInGoogleSheet(options: MirrorOptions): Promis
     };
   }
 
-  const syncLink = await loadLatestSyncLink(options.articleId);
+  const syncLink = options.syncLink ?? await loadLatestSyncLink(options.articleId);
   const result = await postMutationToAppsScript("upsertArticle", article, options, syncLink);
   return finalizeMutationResult(article.id, options, "upsertArticle", result, syncLink);
 }
 
 export async function mirrorArticleUpdateToGoogleSheet(options: MirrorOptions): Promise<GoogleSheetMirrorResult> {
-  const article = await loadArticleSnapshot(options.articleId);
+  const article = options.snapshot ?? await loadArticleSnapshot(options.articleId);
   if (!article) {
     return {
       attempted: false,
@@ -468,8 +495,24 @@ export async function mirrorArticleUpdateToGoogleSheet(options: MirrorOptions): 
     };
   }
 
-  const syncLink = await loadLatestSyncLink(options.articleId);
+  const syncLink = options.syncLink ?? await loadLatestSyncLink(options.articleId);
   const mode: GoogleSheetMutationMode = syncLink ? "mirrorArticleUpdate" : "upsertArticle";
   const result = await postMutationToAppsScript(mode, article, options, syncLink);
   return finalizeMutationResult(article.id, options, mode, result, syncLink);
+}
+
+export async function mirrorArticleDeleteToGoogleSheet(options: MirrorOptions): Promise<GoogleSheetMirrorResult> {
+  const article = options.snapshot ?? await loadArticleSnapshot(options.articleId);
+  if (!article) {
+    return {
+      attempted: false,
+      success: false,
+      skipped: true,
+      message: "Không tìm thấy bài viết để xóa trên Google Sheet.",
+    };
+  }
+
+  const syncLink = options.syncLink ?? await loadLatestSyncLink(options.articleId);
+  const result = await postMutationToAppsScript("deleteArticle", article, options, syncLink);
+  return finalizeMutationResult(article.id, options, "deleteArticle", result, syncLink);
 }

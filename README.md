@@ -117,6 +117,14 @@ Nếu bạn không truyền `SEED_ADMIN_PASSWORD`, hệ thống sẽ tự sinh m
 - `npm run test:smoke`: kiểm tra schema và các API chính
 - `npm run test:e2e-smoke`: build production và chạy smoke test giao diện
 
+## Làm việc với Codex
+
+Để tránh kẹt thread khi ngữ cảnh quá dài và giúp mở thread mới nối việc nhanh hơn, dùng thêm:
+
+- `AGENTS.md`
+- `docs/codex-handoff.md`
+- `docs/codex-thread-safety.md`
+
 ## Lưu ý bảo mật
 
 - Không commit `.env.local`

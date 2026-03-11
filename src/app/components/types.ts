@@ -43,6 +43,8 @@ export interface Article {
   reviewerName: string;
   notes: string;
   canDelete?: boolean;
+  commentCount?: number;
+  unreadCommentCount?: number;
 }
 
 export interface ChatMessage {

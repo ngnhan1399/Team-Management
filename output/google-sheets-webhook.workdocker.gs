@@ -351,6 +351,12 @@ function appendArticleRow_(sheet, headerInfo, article) {
   return targetRowNumber;
 }
 
+function deleteArticleRow_(sheet, rowNumber) {
+  if (!rowNumber || rowNumber < 1) return false;
+  sheet.deleteRow(rowNumber);
+  return true;
+}
+
 function jsonResponse_(payload) {
   return ContentService
     .createTextOutput(JSON.stringify(payload))
@@ -396,6 +402,154 @@ function findMonthlySheet_(spreadsheet, month, year, preferredSheetName) {
   return candidates.length ? candidates[0].sheet : null;
 }
 
+function listMonthlySheets_(spreadsheet) {
+  const candidates = [];
+  const sheets = spreadsheet.getSheets();
+
+  for (let index = 0; index < sheets.length; index += 1) {
+    const sheet = sheets[index];
+    const parsed = parseMonthlySheetName_(sheet.getName());
+    if (!parsed) continue;
+    candidates.push({ sheet, parsed });
+  }
+
+  candidates.sort(function(left, right) {
+    if (left.parsed.year !== right.parsed.year) return right.parsed.year - left.parsed.year;
+    if (left.parsed.month !== right.parsed.month) return right.parsed.month - left.parsed.month;
+    if (left.parsed.isCopy !== right.parsed.isCopy) return Number(left.parsed.isCopy) - Number(right.parsed.isCopy);
+    return right.sheet.getName().localeCompare(left.sheet.getName());
+  });
+
+  return candidates;
+}
+
+function buildLookupCandidateSheets_(spreadsheet, month, year, preferredSheetName) {
+  const ordered = [];
+  const seen = {};
+  const monthlySheets = listMonthlySheets_(spreadsheet);
+
+  function pushSheetEntry(entry) {
+    if (!entry || !entry.sheet) return;
+    const name = entry.sheet.getName();
+    if (seen[name]) return;
+    seen[name] = true;
+    ordered.push(entry);
+  }
+
+  if (preferredSheetName) {
+    const direct = spreadsheet.getSheetByName(preferredSheetName);
+    const parsed = direct ? parseMonthlySheetName_(direct.getName()) : null;
+    if (direct && parsed) {
+      pushSheetEntry({ sheet: direct, parsed });
+    }
+  }
+
+  if (month && year) {
+    monthlySheets
+      .filter(function(entry) {
+        return entry.parsed.month === Number(month) && entry.parsed.year === Number(year);
+      })
+      .forEach(pushSheetEntry);
+  }
+
+  monthlySheets.forEach(pushSheetEntry);
+  return ordered;
+}
+
+function findArticleLocationAcrossWorkbook_(spreadsheet, article, sourceRowKey, preferredSheetName, month, year) {
+  const candidates = buildLookupCandidateSheets_(spreadsheet, month, year, preferredSheetName);
+  const matches = [];
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    const headerInfo = findHeaderInfo_(candidate.sheet);
+    if (!headerInfo) continue;
+
+    const rowNumber = findArticleRowNumber_(candidate.sheet, headerInfo, article, sourceRowKey);
+    if (!rowNumber) continue;
+
+    matches.push({
+      sheet: candidate.sheet,
+      parsed: candidate.parsed,
+      rowNumber: rowNumber,
+      headerInfo: headerInfo,
+    });
+  }
+
+  if (matches.length === 0) {
+    return {
+      match: null,
+      ambiguous: false,
+      searchedSheets: candidates.length,
+      matches: [],
+    };
+  }
+
+  if (preferredSheetName) {
+    const exactPreferredMatch = matches.find(function(entry) {
+      return entry.sheet.getName() === preferredSheetName;
+    });
+    if (exactPreferredMatch) {
+      return {
+        match: exactPreferredMatch,
+        ambiguous: false,
+        searchedSheets: candidates.length,
+        matches: [
+          {
+            sheetName: exactPreferredMatch.sheet.getName(),
+            rowNumber: exactPreferredMatch.rowNumber,
+          },
+        ],
+      };
+    }
+  }
+
+  if (matches.length === 1) {
+    return {
+      match: matches[0],
+      ambiguous: false,
+      searchedSheets: candidates.length,
+      matches: [
+        {
+          sheetName: matches[0].sheet.getName(),
+          rowNumber: matches[0].rowNumber,
+        },
+      ],
+    };
+  }
+
+  const exactPeriodNonCopyMatches = matches.filter(function(entry) {
+    if (!month || !year) return false;
+    return entry.parsed.month === Number(month) && entry.parsed.year === Number(year) && !entry.parsed.isCopy;
+  });
+
+  if (exactPeriodNonCopyMatches.length === 1) {
+    return {
+      match: exactPeriodNonCopyMatches[0],
+      ambiguous: false,
+      searchedSheets: candidates.length,
+      matches: [
+        {
+          sheetName: exactPeriodNonCopyMatches[0].sheet.getName(),
+          rowNumber: exactPeriodNonCopyMatches[0].rowNumber,
+        },
+      ],
+    };
+  }
+
+  return {
+    match: null,
+    ambiguous: true,
+    searchedSheets: candidates.length,
+    matches: matches.map(function(entry) {
+      return {
+        sheetName: entry.sheet.getName(),
+        rowNumber: entry.rowNumber,
+      };
+    }),
+  };
+}
+
 function resolveSourceRowKey_(article) {
   const articleId = String(article.articleId || '').trim();
   if (articleId) return `articleId:${articleId}`;
@@ -427,31 +581,93 @@ function doPost(e) {
     return jsonResponse_({ success: false, error: 'Webhook secret không hợp lệ.' });
   }
 
-  if (String(body.action || '') !== 'mirrorArticleUpdate' && String(body.action || '') !== 'upsertArticle') {
+  if (
+    String(body.action || '') !== 'mirrorArticleUpdate'
+    && String(body.action || '') !== 'upsertArticle'
+    && String(body.action || '') !== 'deleteArticle'
+  ) {
     return jsonResponse_({ success: false, error: 'Action không được hỗ trợ.' });
   }
 
   const article = body.article || {};
   const spreadsheet = SpreadsheetApp.openByUrl(String(body.sourceUrl || SOURCE_URL));
-  const sheet = findMonthlySheet_(spreadsheet, body.month, body.year, body.sheetName);
+  const lookup = findArticleLocationAcrossWorkbook_(
+    spreadsheet,
+    article,
+    body.sourceRowKey,
+    body.sheetName,
+    body.month,
+    body.year
+  );
+
+  if (lookup.ambiguous) {
+    return jsonResponse_({
+      success: false,
+      error: 'Tìm thấy nhiều dòng khớp trong workbook, chưa thể xóa/cập nhật an toàn.',
+      matches: lookup.matches,
+      searchedSheets: lookup.searchedSheets,
+    });
+  }
+
+  const sheet = lookup.match ? lookup.match.sheet : findMonthlySheet_(spreadsheet, body.month, body.year, body.sheetName);
   if (!sheet) {
     return jsonResponse_({ success: false, error: 'Không tìm thấy tab Google Sheet phù hợp.' });
   }
 
-  const headerInfo = findHeaderInfo_(sheet);
+  const headerInfo = lookup.match ? lookup.match.headerInfo : findHeaderInfo_(sheet);
   if (!headerInfo) {
     return jsonResponse_({ success: false, error: `Không xác định được hàng header trong tab ${sheet.getName()}.` });
   }
 
-  let rowNumber = findArticleRowNumber_(sheet, headerInfo, article, body.sourceRowKey);
+  let rowNumber = lookup.match ? lookup.match.rowNumber : 0;
   if (!rowNumber && String(body.action || '') === 'upsertArticle') {
     rowNumber = appendArticleRow_(sheet, headerInfo, article);
   }
 
   if (!rowNumber) {
+    if (String(body.action || '') === 'deleteArticle') {
+      const parsedSheet = parseMonthlySheetName_(sheet.getName());
+      const sourceRowKey = String(body.sourceRowKey || resolveSourceRowKey_(article)).trim();
+
+      return jsonResponse_({
+        success: true,
+        message: `Không tìm thấy dòng cho bài "${article.title || article.articleId || ''}" trên toàn workbook.`,
+        rowNumber: null,
+        deleted: false,
+        notFoundAcrossWorkbook: true,
+        sheetName: sheet.getName(),
+        sourceUrl: String(body.sourceUrl || SOURCE_URL),
+        month: parsedSheet ? parsedSheet.month : body.month,
+        year: parsedSheet ? parsedSheet.year : body.year,
+        sourceRowKey,
+        searchedSheets: lookup.searchedSheets,
+      });
+    }
+
     return jsonResponse_({
       success: false,
       error: `Không tìm thấy dòng tương ứng cho bài "${article.title || article.articleId || ''}" trong tab ${sheet.getName()}.`,
+    });
+  }
+
+  if (String(body.action || '') === 'deleteArticle') {
+    deleteArticleRow_(sheet, rowNumber);
+    SpreadsheetApp.flush();
+    const parsedSheet = parseMonthlySheetName_(sheet.getName());
+    const sourceRowKey = String(body.sourceRowKey || resolveSourceRowKey_(article)).trim();
+
+    return jsonResponse_({
+      success: true,
+      message: `Đã xóa dòng ${rowNumber} trong tab ${sheet.getName()}.`,
+      rowNumber,
+      deleted: true,
+      notFoundAcrossWorkbook: false,
+      sheetName: sheet.getName(),
+      sourceUrl: String(body.sourceUrl || SOURCE_URL),
+      month: parsedSheet ? parsedSheet.month : body.month,
+      year: parsedSheet ? parsedSheet.year : body.year,
+      sourceRowKey,
+      searchedSheets: lookup.searchedSheets,
     });
   }
 

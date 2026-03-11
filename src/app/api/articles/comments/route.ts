@@ -1,14 +1,29 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articleComments, articles, collaborators, users } from "@/db/schema";
+import { articleComments, articles, collaborators, notifications, users } from "@/db/schema";
 import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
-import { createNotification } from "@/lib/notifications";
+import { createNotifications } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { requiredInt, requiredString, optionalString, ValidationError } from "@/lib/validation";
-import { eq, desc } from "drizzle-orm";
+import { and, desc, eq, leftJoin } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+type UserDirectoryEntry = {
+  id: number;
+  email: string;
+  userRole: "admin" | "ctv";
+  collaboratorRole: "writer" | "reviewer" | "editor" | null;
+  penName: string | null;
+  name: string | null;
+  collaboratorEmail: string | null;
+};
+
+type NotificationRecipient = {
+  toUserId: number;
+  toPenName: string | null;
+};
 
 function extractMentions(content: string): string[] {
   const matches = content.match(/@([^\s@]+)/g) || [];
@@ -23,6 +38,109 @@ function parseMentions(raw: string | null): string[] {
   } catch {
     return [];
   }
+}
+
+async function loadUserDirectory(): Promise<UserDirectoryEntry[]> {
+  return db
+    .select({
+      id: users.id,
+      email: users.email,
+      userRole: users.role,
+      collaboratorRole: collaborators.role,
+      penName: collaborators.penName,
+      name: collaborators.name,
+      collaboratorEmail: collaborators.email,
+    })
+    .from(users)
+    .leftJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+    .all();
+}
+
+function getIdentityCandidates(entry: UserDirectoryEntry): string[] {
+  const emailLocalPart = entry.email.split("@")[0] || "";
+  return [
+    entry.penName,
+    entry.name,
+    entry.collaboratorEmail,
+    entry.email,
+    emailLocalPart,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+function dedupeRecipients(items: NotificationRecipient[]): NotificationRecipient[] {
+  const seen = new Map<number, NotificationRecipient>();
+  for (const item of items) {
+    if (!item.toUserId) continue;
+    if (!seen.has(item.toUserId)) {
+      seen.set(item.toUserId, item);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+function resolveRecipientsByIdentity(directory: UserDirectoryEntry[], identity: string): NotificationRecipient[] {
+  const normalizedIdentity = String(identity || "").trim();
+  if (!normalizedIdentity) return [];
+
+  return dedupeRecipients(
+    directory
+      .filter((entry) => matchesIdentityCandidate(getIdentityCandidates(entry), normalizedIdentity))
+      .map((entry) => ({
+        toUserId: entry.id,
+        toPenName: entry.penName,
+      }))
+  );
+}
+
+function resolveArticleOwnerRecipients(
+  article: { penName: string; createdByUserId: number | null },
+  directory: UserDirectoryEntry[]
+): NotificationRecipient[] {
+  const recipients: NotificationRecipient[] = [];
+
+  if (article.createdByUserId) {
+    const createdByUser = directory.find((entry) => entry.id === article.createdByUserId);
+    if (createdByUser) {
+      recipients.push({
+        toUserId: createdByUser.id,
+        toPenName: createdByUser.penName || article.penName,
+      });
+    }
+  }
+
+  recipients.push(...resolveRecipientsByIdentity(directory, article.penName));
+  return dedupeRecipients(recipients);
+}
+
+function resolveManagerRecipients(
+  article: { reviewerName: string | null },
+  directory: UserDirectoryEntry[]
+): NotificationRecipient[] {
+  const managerDirectory = directory.filter(
+    (entry) => entry.userRole === "admin" || entry.collaboratorRole === "editor"
+  );
+
+  const assignedManagers = article.reviewerName
+    ? managerDirectory.filter((entry) => matchesIdentityCandidate(getIdentityCandidates(entry), article.reviewerName))
+    : [];
+
+  const targets = assignedManagers.length > 0 ? assignedManagers : managerDirectory;
+
+  return dedupeRecipients(
+    targets.map((entry) => ({
+      toUserId: entry.id,
+      toPenName: entry.penName,
+    }))
+  );
+}
+
+function buildCommentPreview(content: string, maxLength = 120) {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 export async function GET(request: NextRequest) {
@@ -47,6 +165,39 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const unreadCommentNotifications = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.toUserId, context.user.id),
+          eq(notifications.relatedArticleId, articleId),
+          eq(notifications.type, "comment"),
+          eq(notifications.isRead, false)
+        )
+      )
+      .all();
+
+    if (unreadCommentNotifications.length > 0) {
+      await db
+        .update(notifications)
+        .set({ isRead: true })
+        .where(
+          and(
+            eq(notifications.toUserId, context.user.id),
+            eq(notifications.relatedArticleId, articleId),
+            eq(notifications.type, "comment"),
+            eq(notifications.isRead, false)
+          )
+        )
+        .run();
+
+      await publishRealtimeEvent({
+        channels: ["notifications", "articles"],
+        userIds: [context.user.id],
+      });
+    }
+
     const rows = await db
       .select()
       .from(articleComments)
@@ -56,7 +207,7 @@ export async function GET(request: NextRequest) {
 
     const data = rows.map((item) => ({ ...item, mentions: parseMentions(item.mentions) }));
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data, markedReadCount: unreadCommentNotifications.length });
   } catch (error) {
     if (error instanceof ValidationError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
@@ -94,6 +245,7 @@ export async function POST(request: NextRequest) {
     const actorPenName = ownPenName || context.user.email.split("@")[0];
     const mentions = extractMentions(content);
     const activityTimestamp = new Date().toISOString();
+    const actorIsManager = hasArticleManagerAccess(context);
 
     const insertedComment = await db
       .insert(articleComments)
@@ -113,25 +265,55 @@ export async function POST(request: NextRequest) {
       .where(eq(articles.id, articleId))
       .run();
 
-    for (const mention of mentions) {
-      const mentionedUser = await db
-        .select({ id: users.id })
-        .from(users)
-        .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
-        .where(eq(collaborators.penName, mention))
-        .get();
+    const userDirectory = await loadUserDirectory();
+    const defaultRecipients = actorIsManager
+      ? resolveArticleOwnerRecipients(article, userDirectory)
+      : resolveManagerRecipients(article, userDirectory);
+    const recipients = new Map<number, { toUserId: number; toPenName: string | null; mentioned: boolean }>();
 
-      if (mentionedUser?.id && mentionedUser.id !== context.user.id) {
-        await createNotification({
-          fromUserId: context.user.id,
-          toUserId: mentionedUser.id,
-          toPenName: mention,
-          type: "info",
-          title: "💬 Bạn được nhắc trong bình luận",
-          message: `${actorPenName} đã nhắc bạn trong bình luận của bài "${article.title}"`,
-          relatedArticleId: articleId,
+    for (const recipient of defaultRecipients) {
+      if (recipient.toUserId === context.user.id) continue;
+      recipients.set(recipient.toUserId, { ...recipient, mentioned: false });
+    }
+
+    for (const mention of mentions) {
+      for (const recipient of resolveRecipientsByIdentity(userDirectory, mention)) {
+        if (recipient.toUserId === context.user.id) continue;
+        const existingRecipient = recipients.get(recipient.toUserId);
+        if (existingRecipient) {
+          existingRecipient.mentioned = true;
+          if (!existingRecipient.toPenName && recipient.toPenName) {
+            existingRecipient.toPenName = recipient.toPenName;
+          }
+          continue;
+        }
+
+        recipients.set(recipient.toUserId, {
+          ...recipient,
+          mentioned: true,
         });
       }
+    }
+
+    const commentPreview = buildCommentPreview(content);
+    const notificationItems = Array.from(recipients.values()).map((recipient) => ({
+      fromUserId: context.user.id,
+      toUserId: recipient.toUserId,
+      toPenName: recipient.toPenName,
+      type: "comment" as const,
+      title: recipient.mentioned
+        ? "💬 Bạn được nhắc trong bình luận"
+        : actorIsManager
+          ? "💬 BTV vừa gửi bình luận"
+          : "💬 CTV vừa phản hồi bình luận",
+      message: recipient.mentioned
+        ? `${actorPenName} đã nhắc bạn trong bài "${article.title}"${commentPreview ? `: ${commentPreview}` : ""}`
+        : `${actorPenName} đã bình luận về bài "${article.title}"${commentPreview ? `: ${commentPreview}` : ""}`,
+      relatedArticleId: articleId,
+    }));
+
+    if (notificationItems.length > 0) {
+      await createNotifications(notificationItems);
     }
 
     await writeAuditLog({
@@ -139,7 +321,7 @@ export async function POST(request: NextRequest) {
       action: "article_comment_created",
       entity: "article_comment",
       entityId: String(insertedComment?.id),
-      payload: { articleId, mentionsCount: mentions.length },
+      payload: { articleId, mentionsCount: mentions.length, notificationCount: notificationItems.length },
     });
 
     await publishRealtimeEvent(["articles", "dashboard"]);
