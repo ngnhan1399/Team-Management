@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
+import ArticlePreviewPanel from "./ArticlePreviewPanel";
 import CustomSelect from "./CustomSelect";
 import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
@@ -144,6 +145,7 @@ export default function ArticlesPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteExecuting, setDeleteExecuting] = useState(false);
   const [deletingArticleIds, setDeletingArticleIds] = useState<number[]>([]);
+  const [previewArticle, setPreviewArticle] = useState<Article | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" });
@@ -1345,11 +1347,10 @@ export default function ArticlesPage() {
                     <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
                     <td style={{ padding: "12px 14px" }}>
                       {getArticleNavigationLink(a) ? (
-                        <a
-                          href={getArticleNavigationLink(a)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={a.reviewLink ? `${a.title} (mở link duyệt bài)` : a.title}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewArticle(a)}
+                          title={a.reviewLink ? `${a.title} (mở CMS duyệt bài)` : a.title}
                           style={{
                             color: "var(--accent-blue)",
                             textDecoration: "none",
@@ -1360,10 +1361,15 @@ export default function ArticlesPage() {
                             WebkitLineClamp: 2,
                             WebkitBoxOrient: "vertical",
                             overflow: "hidden",
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            cursor: "pointer",
+                            textAlign: "left",
                           }}
                         >
                           {a.title}
-                        </a>
+                        </button>
                       ) : (
                         <span
                           title={a.title}
@@ -2616,6 +2622,13 @@ export default function ArticlesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {previewArticle && (
+        <ArticlePreviewPanel
+          article={previewArticle}
+          onClose={() => setPreviewArticle(null)}
+        />
       )}
     </>
   );
