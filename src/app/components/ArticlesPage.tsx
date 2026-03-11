@@ -110,10 +110,7 @@ export default function ArticlesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [showReviewModal, setShowReviewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [reviewArticle, setReviewArticle] = useState<Article | null>(null);
-  const [errorNotes, setErrorNotes] = useState("");
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 0 });
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [formData, setFormData] = useState<Partial<Article>>({});
@@ -912,12 +909,7 @@ export default function ArticlesPage() {
     }
   };
 
-  const handleReview = async () => {
-    if (!reviewArticle || !errorNotes) return;
-    await fetch("/api/articles/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ articleId: reviewArticle.id, errorNotes }) });
-    setShowReviewModal(false); setErrorNotes(""); setReviewArticle(null);
-    alert("✅ Đã gửi lỗi cho CTV!"); fetchArticles(pagination.page);
-  };
+
 
   const getCommentBadgeLabel = (article: Article) => {
     const unreadCount = Number(article.unreadCommentCount || 0);
@@ -1415,11 +1407,7 @@ export default function ArticlesPage() {
                             <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
                           </button>
                         )}
-                        {canReviewArticles && a.status === "Submitted" && (
-                          <button onClick={() => { setReviewArticle(a); setShowReviewModal(true); }} className="btn-ios-pill" style={{ padding: "5px 9px", minWidth: 34, height: 34, background: "rgba(168, 85, 247, 0.1)", color: "#a855f7", border: "1px solid rgba(168, 85, 247, 0.2)" }} title="Duyệt lỗi">
-                            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>rule</span>
-                          </button>
-                        )}
+
                       </div>
                     </td>
                   </tr>
@@ -1534,43 +1522,7 @@ export default function ArticlesPage() {
         </div>
       )}
 
-      {showReviewModal && reviewArticle && (
-        <div className="modal-overlay" onClick={() => setShowReviewModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">Thông báo lỗi bài viết</h3>
-              <button className="modal-close" onClick={() => setShowReviewModal(false)}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ padding: 16, background: "rgba(0,0,0,0.02)", borderRadius: 16, marginBottom: 24, border: "1px solid var(--glass-border)" }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Đang đánh giá bài viết</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>{reviewArticle.title}</div>
-                <div style={{ fontSize: 13, color: "var(--accent-blue)", marginTop: 4, fontWeight: 600 }}>Tác giả: {reviewArticle.penName}</div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Mô tả chi tiết lỗi cần sửa</label>
-                <textarea
-                  className="form-input"
-                  value={errorNotes}
-                  onChange={e => setErrorNotes(e.target.value)}
-                  placeholder="CTV ơi, bài này cần chỉnh sửa lại các phần sau..."
-                  rows={6}
-                  style={{ resize: "none", background: "rgba(255,255,255,0.04)", padding: 16 }}
-                />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowReviewModal(false)}>Đóng</button>
-              <button className="btn-ios-pill btn-ios-primary" style={{ background: "var(--accent-orange)" }} onClick={handleReview}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>send</span>
-                Gửi yêu cầu chỉnh sửa
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {showCommentsModal && commentArticle && (
         <div className="modal-overlay" onClick={() => setShowCommentsModal(false)}>
