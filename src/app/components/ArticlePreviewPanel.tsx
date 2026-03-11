@@ -100,7 +100,7 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
       const timer = setTimeout(openPopup, 300);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [url, openPopup]);
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {

@@ -1,8 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
-import ArticlePreviewPanel from "./ArticlePreviewPanel";
 import CustomSelect from "./CustomSelect";
 import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
@@ -103,6 +103,51 @@ function normalizeIdentityValue(value: unknown) {
 
 function getArticleNavigationLink(article: Pick<Article, "reviewLink" | "link">) {
   return String(article.reviewLink || "").trim() || String(article.link || "").trim() || "";
+}
+
+const loadArticlePreviewPanel = () => import("./ArticlePreviewPanel");
+
+function PreviewPanelLoadingState() {
+  return (
+    <>
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.3)",
+          backdropFilter: "blur(2px)",
+          zIndex: 9998,
+        }}
+      />
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: "min(460px, 100vw)",
+          background: "var(--bg-main, #0f1117)",
+          borderLeft: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+          color: "var(--text-muted)",
+          fontSize: 14,
+          fontWeight: 600,
+        }}
+      >
+        Đang tải khung preview...
+      </div>
+    </>
+  );
+}
+
+const ArticlePreviewPanel = dynamic(loadArticlePreviewPanel, { loading: () => <PreviewPanelLoadingState /> });
+
+function preloadArticlePreviewPanel() {
+  void loadArticlePreviewPanel();
 }
 
 export default function ArticlesPage() {
@@ -1349,7 +1394,13 @@ export default function ArticlesPage() {
                       {getArticleNavigationLink(a) ? (
                         <button
                           type="button"
-                          onClick={() => setPreviewArticle(a)}
+                          onClick={() => {
+                            preloadArticlePreviewPanel();
+                            setPreviewArticle(a);
+                          }}
+                          onMouseEnter={preloadArticlePreviewPanel}
+                          onFocus={preloadArticlePreviewPanel}
+                          onTouchStart={preloadArticlePreviewPanel}
                           title={a.reviewLink ? `${a.title} (mở CMS duyệt bài)` : a.title}
                           style={{
                             color: "var(--accent-blue)",

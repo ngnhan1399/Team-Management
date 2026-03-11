@@ -4,43 +4,44 @@
 
 - Stack chính: `Next.js App Router` + `TypeScript` + `Drizzle ORM` + `PostgreSQL`.
 - Nghiệp vụ nhạy cảm nhất hiện tại là đồng bộ bài viết hai chiều với Google Sheet.
-- Luồng xóa `web -> Google Sheet -> DB` đã được vá để không còn xóa lệch dữ liệu âm thầm.
+- Luồng xóa `web -> Google Sheet` giờ là **non-blocking**: bài xóa trên web luôn thành công, nếu Google Sheet sync thất bại thì chỉ ghi warning vào audit log và trả về response.
 - Luồng phân quyền bài viết đã được chỉnh lại theo mô hình `admin` / `reviewer` / `writer`; reviewer giờ xem được hàng chờ duyệt và bài đã nhận duyệt.
+- Tính năng "Duyệt lỗi" đã được gom vào luồng **Bình luận** duy nhất — chỉ còn 1 entry point cho phản hồi bài viết.
 - Repo đã có `AGENTS.md` và bộ tài liệu Codex để giảm nguy cơ kẹt thread do context quá dài.
 
 ## Thay đổi quan trọng gần nhất
 
-Ngày cập nhật: `2026-03-11`
+Ngày cập nhật: `2026-03-11` (phiên chiều)
 
-- Đã tối ưu một số route nóng theo hướng ít rủi ro: `GET /api/notifications` trả list + unread count song song, `getDeletePreview` đếm comment/review/notification/payment song song, `GET /api/statistics` cho user thường chỉ lấy các cột cần thiết thay vì kéo full row, và SSE fallback poll ở `api/realtime` đã nới từ 1.5s lên 5s để giảm tải DB.
-- Luồng xóa bài đã được tối ưu cảm giác phản hồi: UI phát toast "đang xóa" ngay khi xác nhận, nút xóa đổi sang spinner/disabled, và API dời `writeAuditLog` + `publishRealtimeEvent` sang background để trả kết quả sớm hơn.
-- `src/app/components/MainApp.tsx` đã được tách bundle theo tab: giữ `DashboardPage` eager vì là màn mặc định, còn các page nặng như `Articles`, `Team`, `Royalty`, `Audit`, `Notifications`... được `next/dynamic` lazy-load. Điều hướng còn preload chunk theo hover/focus/touch và chỉ commit chuyển trang sau khi chunk sẵn sàng để giảm cảm giác khựng khi đổi tab.
-- `findMatchingCollaboratorPenNames` trong `src/app/api/articles/route.ts` giờ không đọc full bảng `collaborators` mặc định nữa; route sẽ thử narrow bằng `ILIKE` theo cụm search/token trước, chỉ fallback về full scan khi không tìm được candidate nào. Nhờ vậy các màn danh sách bài/xóa theo bộ lọc giảm khá nhiều tải ở case tìm kiếm phổ biến.
-- `GET /api/statistics` cho user thường giờ build tập nhãn identity từ context + collaborator match rồi query `articles.pen_name` theo exact scope trước; ở case phổ biến route còn đẩy luôn các phần `count/group` (`status`, `category`, `type`, `month`, `writer`, `latest`) xuống SQL thay vì gom toàn bộ row lên JS. Chỉ khi narrow query không ra dữ liệu mới fallback sang full scan để giữ đúng hành vi với dữ liệu legacy.
-- `GET /api/statistics` cho admin cũng đã giảm payload phần danh mục: thay vì kéo toàn bộ `category/articleType` của từng bài, route chỉ lấy các cặp đã `GROUP BY` rồi map lại category chuẩn trong JS.
-- Đã gỡ đoạn nút reviewer dang dở trong `src/app/components/ArticlesPage.tsx` còn gọi `setReviewArticle` / `setShowReviewModal` nhưng không còn state tương ứng; đây là nguyên nhân build production fail nên web chưa nhận được trường `review_link`.
-- Dọn helper xóa không còn dùng trong `src/app/api/articles/route.ts` để giữ `npm run lint` sạch.
-- Đã thêm mutation `deleteArticle` trong `src/lib/google-sheet-mutation.ts`.
-- `DELETE /api/articles` giờ xác nhận xóa được trên Google Sheet rồi mới xóa DB.
-- Apps Script xuất ra ở `output/google-sheets-webhook.workdocker.gs` giờ dò xóa trên toàn workbook để tránh báo thành công giả khi tìm nhầm tab.
-- Đã vá quyền reviewer trong `src/lib/auth.ts`, `src/app/api/articles/route.ts`, `src/app/api/articles/review/route.ts`, `src/app/api/articles/comments/route.ts`, `src/app/components/ArticlesPage.tsx`.
-- `POST /api/articles/review` giờ lưu cả `reviewerName` và `notes` vào DB để reviewer không bị mất bài sau khi gửi yêu cầu sửa.
-- Đã dọn mô hình 3 quyền ở `src/app/components/TeamPage.tsx`, `src/app/api/collaborators/route.ts`, `src/db/schema.ts`, `src/db/index.ts`, `src/db/seed.ts`, `src/app/components/MainApp.tsx`.
-- Bootstrap DB tự migrate `collaborators.role = 'editor'` cũ sang `reviewer` khi app khởi động.
-- Đã thêm trường `review_link` cho bài viết; form bài viết có ô `Đường dẫn duyệt bài` và tiêu đề trong danh sách giờ ưu tiên mở link này.
+### Phiên chiều 11/03
+
+- **Gom "Duyệt lỗi" vào "Bình luận"**: xóa nút "Duyệt lỗi", modal review, state `showReviewModal`/`reviewArticle`/`errorNotes`, hàm `handleReview` trong `ArticlesPage.tsx`. Phản hồi bài viết giờ chỉ qua comment.
+- **Fix xóa bài bị chặn bởi Google Sheet sync**: `ensureGoogleSheetDeleteConsistency` trong `articles/route.ts` giờ trả **warnings** (non-blocking) thay vì failures (blocking). Bài xóa trên web luôn thành công, warnings ghi vào audit log + trả về response.
+- **Xóa `buildDeleteSyncFailureResponse`**: helper không còn dùng sau khi chuyển sang non-blocking.
+- **Xóa mô tả chi tiết trong modal đồng bộ**: loại bỏ đoạn text giải thích engine/mirror/scope CTV và link Google Sheet cứng — tránh lộ thông tin triển khai.
+- **Thêm CMS Browser Panel** (`ArticlePreviewPanel.tsx`): click tiêu đề bài viết mở panel trượt phải + popup window hiển thị CMS. Có toolbar (URL bar, refresh, mở tab mới, đóng), thông tin bài viết, đèn trạng thái, nút **"Chuyển đến bài duyệt"** để re-navigate popup sau khi đăng nhập CMS, và hướng dẫn login flow. CMS FPT Shop chặn iframe nên dùng `window.open` thay thế.
+
+### Phiên sáng 11/03 và trước đó
+
+- Tối ưu route nóng: `GET /api/notifications`, `getDeletePreview` đếm song song, `GET /api/statistics` narrow query, SSE fallback poll nới lên 5s.
+- Luồng xóa bài tối ưu phản hồi: toast "đang xóa", spinner/disabled, audit+realtime chạy background.
+- `MainApp.tsx` tách bundle lazy-load theo tab, preload chunk hover/focus/touch.
+- `findMatchingCollaboratorPenNames` narrow bằng `ILIKE` trước, fallback full scan.
+- `GET /api/statistics` cho user thường + admin đều đã tối ưu aggregate xuống SQL.
+- Gỡ nút reviewer dang dở gây build fail, dọn helper xóa không dùng.
+- Thêm mutation `deleteArticle`, Apps Script xử lý xóa trên toàn workbook.
+- Vá quyền reviewer, dọn mô hình 3 quyền, bootstrap migrate `editor` → `reviewer`.
+- Thêm trường `review_link`; form có ô "Đường dẫn duyệt bài".
 
 ## Việc còn cần nhớ
 
-- `findMatchingCollaboratorPenNames` vẫn còn fallback full-scan để giữ đúng hành vi accent-insensitive/legacy matching; nếu bảng `collaborators` lớn thêm, bước tối ưu tiếp theo nên là cột search-normalized hoặc `pg_trgm`/`unaccent` thay vì chỉ dựa vào JS fallback.
-- Route `statistics` đã tối ưu mạnh ở nhánh scope phổ biến, nhưng fallback legacy vẫn còn đọc full bảng `articles` nếu narrow query trượt; nếu muốn bỏ hẳn fallback này thì cần một chiến lược identity/search canonical hơn ở DB.
-- Luồng xóa vẫn chờ xác nhận từ Google Sheet trước khi xóa DB; nếu còn chậm bất thường thì cần đo riêng Apps Script/webhook vì timeout web app hiện là 8 giây.
-- `MainApp` đã bớt nặng bundle đầu, nhưng nếu còn cảm giác chậm khi mở lần đầu từng tab thì nên đo tiếp chunk size của `ArticlesPage` và `DashboardPage`; đây nhiều khả năng là hai page client lớn nhất hiện tại.
-- Nếu production chưa thấy ô `Đường dẫn duyệt bài` trong modal thêm/sửa bài, kiểm tra xem commit gỡ lỗi build reviewer đã được push và redeploy hay chưa.
-- Cần redeploy Apps Script bằng file `output/google-sheets-webhook.workdocker.gs` mới nhất.
-- Nếu chưa redeploy, thao tác xóa từ web có thể bị chặn để tránh lệch dữ liệu.
-- UI đã hiện chi tiết lỗi xóa rõ hơn nếu Google Sheet chưa xác nhận được dòng gốc.
-- Từ khóa `editor` còn lại chỉ dùng để map dữ liệu legacy hoặc nhận diện cột import cũ, không còn là role nghiệp vụ hiển thị cho người dùng.
-- Bootstrap schema version hiện là `4`; cần restart app để cột `articles.review_link` được tạo trên DB hiện tại.
+- **Redeploy Apps Script**: file `output/google-sheets-webhook.workdocker.gs` đã có handler `deleteArticle` nhưng cần deploy lại trên Google để có hiệu lực. Nếu chưa redeploy, xóa bài trên web vẫn thành công nhưng dòng trên Sheet sẽ không bị xóa (warning trong audit log).
+- **CMS Browser Panel dùng popup**: CMS FPT Shop chặn iframe (`X-Frame-Options: SAMEORIGIN`), nên panel dùng `window.open`. Lần đầu dùng cần cho phép popup cho domain Vercel. Sau khi đăng nhập CMS một lần, phiên được trình duyệt ghi nhớ.
+- `findMatchingCollaboratorPenNames` vẫn còn fallback full-scan; nếu bảng lớn thêm nên dùng `pg_trgm`/`unaccent`.
+- Route `statistics` fallback legacy vẫn đọc full bảng nếu narrow query trượt.
+- `ArticlesPage` và `DashboardPage` là hai chunk client lớn nhất; nếu chậm cần đo tiếp.
+- Bootstrap schema version là `4`; cần restart app để cột `articles.review_link` được tạo.
+- Từ khóa `editor` còn lại chỉ dùng để map dữ liệu legacy.
 
 ## File nên mở đầu tiên
 
@@ -50,6 +51,8 @@ Ngày cập nhật: `2026-03-11`
 - `src/lib/google-sheet-sync.ts`
 - `src/lib/google-sheet-mutation.ts`
 - `src/app/api/articles/google-sync/webhook/route.ts`
+- `src/app/components/ArticlePreviewPanel.tsx`
+- `src/app/components/ArticlesPage.tsx`
 - `output/google-sheets-webhook.workdocker.gs`
 
 ## Khu vực không nên quét bừa
