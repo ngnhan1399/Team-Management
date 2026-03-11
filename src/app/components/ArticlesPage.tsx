@@ -106,12 +106,6 @@ function getArticleNavigationLink(article: Pick<Article, "reviewLink" | "link">)
 
 const CMS_REVIEW_TAB_NAME = "cms_review";
 
-function openArticleNavigationTarget(article: Pick<Article, "reviewLink" | "link">) {
-  const target = getArticleNavigationLink(article);
-  if (!target || typeof window === "undefined") return;
-  window.open(target, CMS_REVIEW_TAB_NAME);
-}
-
 export default function ArticlesPage() {
   type LinkHealthStatus = "ok" | "broken" | "unknown";
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
@@ -1353,9 +1347,9 @@ export default function ArticlesPage() {
                     <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
                     <td style={{ padding: "12px 14px" }}>
                       {getArticleNavigationLink(a) ? (
-                        <button
-                          type="button"
-                          onClick={() => openArticleNavigationTarget(a)}
+                        <a
+                          href={getArticleNavigationLink(a)}
+                          target={CMS_REVIEW_TAB_NAME}
                           title={a.reviewLink ? `${a.title} (mở CMS duyệt bài)` : a.title}
                           style={{
                             color: "var(--accent-blue)",
@@ -1367,15 +1361,13 @@ export default function ArticlesPage() {
                             WebkitLineClamp: 2,
                             WebkitBoxOrient: "vertical",
                             overflow: "hidden",
-                            background: "none",
-                            border: "none",
                             padding: 0,
                             cursor: "pointer",
                             textAlign: "left",
                           }}
                         >
                           {a.title}
-                        </button>
+                        </a>
                       ) : (
                         <span
                           title={a.title}
