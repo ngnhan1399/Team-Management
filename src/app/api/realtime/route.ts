@@ -6,6 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const encoder = new TextEncoder();
+const REALTIME_KEEP_ALIVE_INTERVAL_MS = 25000;
+const REALTIME_BACKFILL_POLL_INTERVAL_MS = 5000;
 
 export async function GET(request: Request) {
   const context = await getCurrentUserContext();
@@ -59,11 +61,11 @@ export async function GET(request: Request) {
 
       keepAlive = setInterval(() => {
         controller.enqueue(encoder.encode(": keep-alive\n\n"));
-      }, 25000);
+      }, REALTIME_KEEP_ALIVE_INTERVAL_MS);
 
       poller = setInterval(() => {
         void flushPendingEvents();
-      }, 1500);
+      }, REALTIME_BACKFILL_POLL_INTERVAL_MS);
     },
     cancel() {
       cleanup();

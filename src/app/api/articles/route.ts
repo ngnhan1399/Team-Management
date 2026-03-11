@@ -527,32 +527,36 @@ async function getDeletePreview(whereClause?: SQL) {
     };
   }
 
-  const commentsCount = Number((await db
-    .select({ count: sql<number>`count(*)` })
-    .from(articleComments)
-    .where(inArray(articleComments.articleId, targetIds))
-    .get())?.count || 0);
-
-  const reviewsCount = Number((await db
-    .select({ count: sql<number>`count(*)` })
-    .from(articleReviews)
-    .where(inArray(articleReviews.articleId, targetIds))
-    .get())?.count || 0);
-
-  const notificationsCount = Number((await db
-    .select({ count: sql<number>`count(*)` })
-    .from(notifications)
-    .where(inArray(notifications.relatedArticleId, targetIds))
-    .get())?.count || 0);
-
   const affectedPaymentWhere = buildAffectedPaymentWhere(targetRows);
-  const paymentsCount = affectedPaymentWhere
-    ? Number((await db
+  const [commentsRow, reviewsRow, notificationsRow, paymentsRow] = await Promise.all([
+    db
       .select({ count: sql<number>`count(*)` })
-      .from(payments)
-      .where(affectedPaymentWhere)
-      .get())?.count || 0)
-    : 0;
+      .from(articleComments)
+      .where(inArray(articleComments.articleId, targetIds))
+      .get(),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(articleReviews)
+      .where(inArray(articleReviews.articleId, targetIds))
+      .get(),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(inArray(notifications.relatedArticleId, targetIds))
+      .get(),
+    affectedPaymentWhere
+      ? db
+        .select({ count: sql<number>`count(*)` })
+        .from(payments)
+        .where(affectedPaymentWhere)
+        .get()
+      : Promise.resolve(undefined),
+  ]);
+
+  const commentsCount = Number(commentsRow?.count || 0);
+  const reviewsCount = Number(reviewsRow?.count || 0);
+  const notificationsCount = Number(notificationsRow?.count || 0);
+  const paymentsCount = Number(paymentsRow?.count || 0);
 
   return {
     total: targetRows.length,

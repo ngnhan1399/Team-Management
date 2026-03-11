@@ -13,6 +13,20 @@ type CollaboratorDirectoryItem = {
     email: string | null;
 };
 
+type StatisticsArticleRow = {
+  id: number;
+  articleId: string | null;
+  title: string;
+  penName: string;
+  articleType: string;
+  contentType: string;
+  status: string;
+  category: string;
+  date: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
 function resolveCollaborator(articlePenName: string, directory: CollaboratorDirectoryItem[]) {
     const exact = directory.find((item) => item.penName === articlePenName);
     if (exact) return exact;
@@ -151,7 +165,23 @@ export async function GET() {
             });
         }
 
-        const allArticles = await db.select().from(articles).orderBy(desc(articles.id)).all();
+        const allArticles = await db
+            .select({
+                id: articles.id,
+                articleId: articles.articleId,
+                title: articles.title,
+                penName: articles.penName,
+                articleType: articles.articleType,
+                contentType: articles.contentType,
+                status: articles.status,
+                category: articles.category,
+                date: articles.date,
+                createdAt: articles.createdAt,
+                updatedAt: articles.updatedAt,
+            })
+            .from(articles)
+            .orderBy(desc(articles.id))
+            .all() as StatisticsArticleRow[];
         const scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
 
         const totalArticles = scopedArticles.length;

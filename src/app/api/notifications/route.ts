@@ -25,19 +25,20 @@ export async function GET(request: NextRequest) {
             conditions.push(eq(notifications.isRead, false));
         }
 
-        const data = await db
-            .select()
-            .from(notifications)
-            .where(and(...conditions))
-            .orderBy(desc(notifications.id))
-            .limit(50)
-            .all();
-
-        const unreadCount = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(notifications)
-            .where(and(eq(notifications.toUserId, context.user.id), eq(notifications.isRead, false)))
-            .get();
+        const [data, unreadCount] = await Promise.all([
+            db
+                .select()
+                .from(notifications)
+                .where(and(...conditions))
+                .orderBy(desc(notifications.id))
+                .limit(50)
+                .all(),
+            db
+                .select({ count: sql<number>`count(*)` })
+                .from(notifications)
+                .where(and(eq(notifications.toUserId, context.user.id), eq(notifications.isRead, false)))
+                .get(),
+        ]);
 
         return NextResponse.json({
             success: true,
