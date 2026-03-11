@@ -37,6 +37,10 @@ Ngày cập nhật: `2026-03-11`
   - cuối cùng mới đẩy về `Team mặc định`
 - Đổi thứ tự danh sách bài viết sang `updatedAt DESC` trước `date DESC` để bài vừa sync từ tháng cũ vẫn nổi lên đầu danh sách khi bỏ lọc.
 - Bổ sung nhánh tự sửa dữ liệu khi sync gặp bài cũ đã match nhưng còn thiếu `teamId`.
+- Sửa tiếp màn `Bài viết` cho layout tách nhóm:
+  - split view không còn chia từ `1 page` dữ liệu chung
+  - `GET /api/articles?splitView=true` trả về toàn bộ tập dữ liệu đã lọc trong scope hiện tại
+  - ẩn phân trang đáy ở split view để tránh nhóm `Biên tập/Admin` bị rỗng giả khi trang đầu chỉ toàn bài CTV
 
 #### File đã động vào
 

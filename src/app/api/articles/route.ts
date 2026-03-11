@@ -767,6 +767,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const mode = normalizeString(searchParams.get("mode"));
+    const splitView = normalizeString(searchParams.get("splitView")) === "true";
     const criteria = readCriteriaFromSearchParams(searchParams);
     const canManageArticles = hasArticleManagerAccess(context);
     const canReviewArticles = hasArticleReviewAccess(context);
@@ -813,6 +814,35 @@ export async function GET(request: NextRequest) {
       : canReviewArticles
         ? combineWhereClauses(whereClause, buildArticleReviewScopeWhere(reviewerLabels))
         : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
+
+    if (splitView && (canManageArticles || canReviewArticles)) {
+      const allRows = await db
+        .select()
+        .from(articles)
+        .where(scopedWhereClause)
+        .orderBy(desc(articles.updatedAt), desc(articles.date), desc(articles.id))
+        .all();
+
+      const data = await attachArticleResponseMetadata(
+        allRows.map((row) => ({
+          ...row,
+          reviewLink: normalizeArticleReviewLink(row.reviewLink) || null,
+        })),
+        context.user.id,
+        canManageArticles
+      );
+
+      return NextResponse.json({
+        success: true,
+        data,
+        pagination: {
+          page: 1,
+          limit: data.length,
+          total: data.length,
+          totalPages: data.length > 0 ? 1 : 0,
+        },
+      });
+    }
 
     const [{ count: totalCount }, pagedRows] = await Promise.all([
       db

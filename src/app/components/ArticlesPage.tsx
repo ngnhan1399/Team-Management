@@ -163,6 +163,7 @@ export default function ArticlesPage() {
   const canManageArticles = isAdmin;
   const canCreateArticles = isAdmin || isWriter;
   const canSyncArticles = isAdmin || isWriter;
+  const shouldFetchSplitArticles = canManageArticles || isReviewer;
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
   const reviewerIdentityValues = Array.from(new Set([
     user?.collaborator?.name,
@@ -188,6 +189,7 @@ export default function ArticlesPage() {
   const fetchArticles = useCallback((p = 1, s = "", f = { penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" }) => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(p), limit: "30" });
+    if (shouldFetchSplitArticles) params.set("splitView", "true");
     if (s) params.set("search", s);
     if (isWriter && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
     else if (f.penName) params.set("penName", f.penName);
@@ -198,7 +200,7 @@ export default function ArticlesPage() {
     if (f.month) params.set("month", f.month);
     if (f.year) params.set("year", f.year);
     fetch(`/api/articles?${params}`, { cache: "no-store" }).then(r => r.json()).then(d => { setArticles(d.data || []); setPagination(d.pagination || {}); setLoading(false); }).catch(() => setLoading(false));
-  }, [isWriter, user]);
+  }, [isWriter, shouldFetchSplitArticles, user]);
 
   useEffect(() => {
     fetchArticles();
@@ -674,10 +676,10 @@ export default function ArticlesPage() {
 
       setShowModal(false);
       setFormData({});
-      if (data.article) {
+      if (data.article && !shouldFetchSplitArticles) {
         mergeSavedArticleIntoList(data.article as Article, isEditing);
       } else {
-        fetchArticles(pagination.page, search, filters);
+        fetchArticles(shouldFetchSplitArticles ? 1 : pagination.page, search, filters);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1129,7 +1131,7 @@ export default function ArticlesPage() {
     );
   };
 
-  const showSplitArticleSections = canManageArticles || isReviewer;
+  const showSplitArticleSections = shouldFetchSplitArticles;
   const ctvArticles = articles.filter((article) => article.authorBucket !== "editorial");
   const editorialArticles = articles.filter((article) => article.authorBucket === "editorial");
   const articleSections = [
@@ -1537,7 +1539,7 @@ export default function ArticlesPage() {
           <div className="glass-card" style={{ padding: 18, background: "linear-gradient(135deg, rgba(15, 23, 42, 0.03), rgba(148, 163, 184, 0.04))" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--accent-blue)" }}>dashboard</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Tổng trang hiện tại</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Tổng đang hiển thị</span>
             </div>
             <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-main)", lineHeight: 1 }}>{articles.length}</div>
           </div>
@@ -1596,7 +1598,7 @@ export default function ArticlesPage() {
           {renderArticleTable(articles, "Chưa có bài viết nào")}
         </div>
       )}
-      {pagination.totalPages > 1 && (
+      {!showSplitArticleSections && pagination.totalPages > 1 && (
         <div className="pagination">
           <button disabled={pagination.page <= 1} onClick={() => fetchArticles(pagination.page - 1)}>← Trước</button>
           <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Trang {pagination.page} / {pagination.totalPages} ({pagination.total} bài)</span>
