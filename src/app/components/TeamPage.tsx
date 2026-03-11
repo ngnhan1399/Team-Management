@@ -12,6 +12,9 @@ export default function TeamPage() {
   const [formData, setFormData] = useState<Partial<Collaborator>>({});
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchCTVs = () => {
     fetch("/api/collaborators", { cache: "no-store" })
@@ -46,23 +49,31 @@ export default function TeamPage() {
     setShowModal(true);
   };
 
-  const handleDelete = async (collaborator: Collaborator) => {
+  const deletableMembers = collaborators.filter((c) => {
+    const linkedUser = userAccounts.find((u) => u.collaboratorId === c.id);
+    return !linkedUser || linkedUser.role !== "admin";
+  });
+
+  const executeDelete = async () => {
+    const collaboratorId = Number(deleteTarget);
+    const collaborator = collaborators.find((c) => c.id === collaboratorId);
+    if (!collaborator) return;
+
     const confirmed = window.confirm(
-      `⚠️ Xác nhận xóa thành viên "${collaborator.name}" (${collaborator.penName})?\n\n` +
-      `Hành động này sẽ:\n` +
+      `⚠️ Xác nhận xóa "${collaborator.name}" (${collaborator.penName})?\n\n` +
       `• Xóa tài khoản đăng nhập (nếu có)\n` +
       `• Xóa thông báo và bình luận liên quan\n` +
-      `• Xóa dữ liệu KPI\n\n` +
-      `Bài viết sẽ được giữ lại nhưng không còn liên kết với tài khoản.\n\n` +
+      `• Bài viết sẽ được giữ lại\n\n` +
       `Thao tác KHÔNG THỂ HOÀN TÁC!`
     );
     if (!confirmed) return;
 
     try {
+      setIsDeleting(true);
       const res = await fetch("/api/collaborators", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: collaborator.id }),
+        body: JSON.stringify({ id: collaboratorId }),
       });
       const data = await res.json().catch(() => ({ success: false, error: "Không thể đọc phản hồi" }));
       if (!res.ok || !data.success) {
@@ -75,9 +86,13 @@ export default function TeamPage() {
         message += `\n\n🔒 Tài khoản ${data.deletedUserAccount.email} đã bị vô hiệu hóa.`;
       }
       alert(message);
+      setShowDeleteModal(false);
+      setDeleteTarget("");
       fetchCTVs();
     } catch {
       alert("❌ Không thể kết nối tới máy chủ.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -174,10 +189,16 @@ export default function TeamPage() {
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Đội ngũ</h2>
           <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>Quản lý thông tin và hiệu suất cộng tác viên chuyên nghiệp.</p>
         </div>
-        <button className="btn-ios-pill btn-ios-primary" onClick={openCreateModal}>
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_add</span>
-          Thêm thành viên
-        </button>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button className="btn-ios-pill btn-ios-primary" onClick={openCreateModal}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_add</span>
+            Thêm thành viên
+          </button>
+          <button className="btn-ios-pill" onClick={() => { setDeleteTarget(""); setShowDeleteModal(true); }} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
+            Xóa thành viên
+          </button>
+        </div>
       </header>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 24, marginBottom: 40 }}>
@@ -235,14 +256,9 @@ export default function TeamPage() {
                     </span>
                   </td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                      </button>
-                      <button className="btn-ios-pill" style={{ padding: "6px 12px", background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} onClick={() => handleDelete(c)} title="Xóa thành viên">
-                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
-                      </button>
-                    </div>
+                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -289,14 +305,9 @@ export default function TeamPage() {
                     </span>
                   </td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                      </button>
-                      <button className="btn-ios-pill" style={{ padding: "6px 12px", background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} onClick={() => handleDelete(c)} title="Xóa thành viên">
-                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
-                      </button>
-                    </div>
+                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -343,14 +354,9 @@ export default function TeamPage() {
                     </span>
                   </td>
                   <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                      </button>
-                      <button className="btn-ios-pill" style={{ padding: "6px 12px", background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }} onClick={() => handleDelete(c)} title="Xóa thành viên">
-                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
-                      </button>
-                    </div>
+                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -465,6 +471,71 @@ export default function TeamPage() {
               <button className="btn-ios-pill btn-ios-primary" onClick={handleSave} disabled={isSaving} style={{ opacity: isSaving ? 0.75 : 1 }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>save</span>
                 {isSaving ? "Đang lưu..." : "Lưu thành viên"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="modal-overlay" onClick={() => !isDeleting && setShowDeleteModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Xóa thành viên</h3>
+              <button className="modal-close" onClick={() => !isDeleting && setShowDeleteModal(false)}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(239, 68, 68, 0.18)", background: "rgba(239, 68, 68, 0.04)", fontSize: 13, color: "var(--danger)", fontWeight: 600, lineHeight: 1.5 }}>
+                ⚠️ Thao tác này sẽ xóa vĩnh viễn thành viên, tài khoản đăng nhập, thông báo và bình luận liên quan. Bài viết sẽ được giữ lại.
+              </div>
+              <div className="form-group">
+                <label className="form-label">Chọn thành viên cần xóa</label>
+                <CustomSelect
+                  value={deleteTarget}
+                  onChange={setDeleteTarget}
+                  options={[
+                    { value: "", label: "— Chọn thành viên —" },
+                    ...deletableMembers.map((c) => ({
+                      value: String(c.id),
+                      label: `${c.name} (${c.penName}) — ${c.role === "writer" ? "CTV" : c.role === "reviewer" ? "Duyệt" : "BTV"}`,
+                    })),
+                  ]}
+                  placeholder="Chọn thành viên"
+                />
+              </div>
+              {deleteTarget && (() => {
+                const target = collaborators.find((c) => c.id === Number(deleteTarget));
+                if (!target) return null;
+                const linkedUser = userAccounts.find((u) => u.collaboratorId === target.id);
+                return (
+                  <div style={{ padding: 16, borderRadius: 12, background: "rgba(0,0,0,0.02)", border: "1px solid var(--glass-border)" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", marginBottom: 8 }}>Thông tin sẽ bị xóa:</div>
+                    <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.8 }}>
+                      <div>👤 <strong>{target.name}</strong> ({target.penName})</div>
+                      <div>📧 {target.email || "Không có email"}</div>
+                      <div>🔑 Tài khoản: {linkedUser ? linkedUser.email : "Không có tài khoản"}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="modal-footer">
+              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Hủy bỏ</button>
+              <button
+                className="btn-ios-pill"
+                onClick={executeDelete}
+                disabled={!deleteTarget || isDeleting}
+                style={{
+                  background: deleteTarget ? "var(--danger)" : "rgba(239, 68, 68, 0.3)",
+                  color: "#fff",
+                  border: "none",
+                  opacity: isDeleting ? 0.75 : 1,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_forever</span>
+                {isDeleting ? "Đang xóa..." : "Xóa vĩnh viễn"}
               </button>
             </div>
           </div>

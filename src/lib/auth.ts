@@ -70,7 +70,12 @@ export interface CurrentUserContext {
 
 export function hasArticleManagerAccess(context: CurrentUserContext | null | undefined): boolean {
     if (!context) return false;
-    return context.user.role === "admin" || context.collaborator?.role === "editor";
+    return context.user.role === "admin";
+}
+
+export function hasArticleReviewAccess(context: CurrentUserContext | null | undefined): boolean {
+    if (!context) return false;
+    return context.user.role === "admin" || context.collaborator?.role === "reviewer" || context.collaborator?.role === "editor";
 }
 
 function normalizeIdentityValue(value: unknown): string {
@@ -156,6 +161,33 @@ export function getContextIdentityCandidates(context: CurrentUserContext): strin
     }
 
     return candidates;
+}
+
+export function getContextIdentityLabels(context: CurrentUserContext): string[] {
+    const values = [
+        context.collaborator?.name,
+        context.collaborator?.penName,
+        context.collaborator?.email,
+        context.token.penName,
+        context.user.email.split("@")[0],
+        context.user.email,
+    ];
+
+    const seen = new Set<string>();
+    const labels: string[] = [];
+
+    for (const value of values) {
+        const raw = String(value || "").trim();
+        if (!raw) continue;
+
+        const normalized = normalizeIdentityValue(raw);
+        if (!normalized || seen.has(normalized)) continue;
+
+        seen.add(normalized);
+        labels.push(raw);
+    }
+
+    return labels;
 }
 
 export function getContextArticleOwnerCandidates(context: CurrentUserContext): string[] {

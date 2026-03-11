@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments } from "@/db/schema";
-import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextIdentityLabels, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, hasArticleReviewAccess, matchesIdentityCandidate } from "@/lib/auth";
 import {
   createArticleInGoogleSheet,
   mirrorArticleDeleteToGoogleSheet,
@@ -461,6 +461,26 @@ function buildArticleOwnershipWhere(ownerCandidates: string[]): SQL | undefined 
   return inArray(articles.penName, normalizedCandidates as never[]);
 }
 
+function buildArticleReviewerWhere(identityLabels: string[]): SQL | undefined {
+  const normalizedLabels = Array.from(new Set(identityLabels.map((value) => normalizeString(value)).filter(Boolean)));
+  if (normalizedLabels.length === 0) {
+    return undefined;
+  }
+
+  const reviewerConditions = normalizedLabels.map((value) => sql`lower(${articles.reviewerName}) = lower(${value})`);
+  if (reviewerConditions.length === 1) {
+    return reviewerConditions[0];
+  }
+
+  return or(...reviewerConditions);
+}
+
+function buildArticleReviewScopeWhere(identityLabels: string[]): SQL {
+  const reviewerWhere = buildArticleReviewerWhere(identityLabels);
+  const submittedWhere = eq(articles.status, "Submitted");
+  return reviewerWhere ? or(submittedWhere, reviewerWhere)! : submittedWhere;
+}
+
 function buildAffectedPaymentWhere(rows: Array<Pick<ArticleDeleteRow, "penName" | "date">>) {
   const conditions: SQL[] = [];
   const seen = new Set<string>();
@@ -626,6 +646,7 @@ export async function GET(request: NextRequest) {
     const mode = normalizeString(searchParams.get("mode"));
     const criteria = readCriteriaFromSearchParams(searchParams);
     const canManageArticles = hasArticleManagerAccess(context);
+    const canReviewArticles = hasArticleReviewAccess(context);
     const matchedSearchPenNames = await findMatchingCollaboratorPenNames(criteria.search);
     const whereClause = buildArticleWhere(criteria, canManageArticles, matchedSearchPenNames);
 
@@ -641,8 +662,9 @@ export async function GET(request: NextRequest) {
     const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 200);
     const ownerCandidates = getContextArticleOwnerCandidates(context);
+    const reviewerLabels = getContextIdentityLabels(context);
 
-    if (!canManageArticles && ownerCandidates.length === 0) {
+    if (!canManageArticles && !canReviewArticles && ownerCandidates.length === 0) {
       return NextResponse.json({
         success: true,
         data: [],
@@ -652,7 +674,9 @@ export async function GET(request: NextRequest) {
 
     const scopedWhereClause = canManageArticles
       ? whereClause
-      : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
+      : canReviewArticles
+        ? combineWhereClauses(whereClause, buildArticleReviewScopeWhere(reviewerLabels))
+        : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
 
     const [{ count: totalCount }, pagedRows] = await Promise.all([
       db

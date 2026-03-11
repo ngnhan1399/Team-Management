@@ -96,6 +96,10 @@ function normalizeWordCountRangeValue(value: string | null | undefined) {
   }
 }
 
+function normalizeIdentityValue(value: unknown) {
+  return foldSearchText(value);
+}
+
 export default function ArticlesPage() {
   type LinkHealthStatus = "ok" | "broken" | "unknown";
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
@@ -150,17 +154,40 @@ export default function ArticlesPage() {
   const [commentAttachment, setCommentAttachment] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
   const isAdmin = user?.role === "admin";
-  const canManageArticles = isAdmin || user?.collaborator?.role === "editor";
+  const collaboratorRole = typeof user?.collaborator?.role === "string" ? user.collaborator.role : "";
+  const isReviewer = user?.role === "ctv" && collaboratorRole === "reviewer";
+  const isWriter = user?.role === "ctv" && collaboratorRole === "writer";
+  const canManageArticles = isAdmin;
+  const canReviewArticles = isAdmin || isReviewer;
+  const canCreateArticles = isAdmin || isWriter;
+  const canSyncArticles = isAdmin || isWriter;
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
+  const reviewerIdentityValues = Array.from(new Set([
+    user?.collaborator?.name,
+    user?.collaborator?.penName,
+    user?.email?.split("@")[0],
+    user?.email,
+  ].map((value) => normalizeIdentityValue(value)).filter(Boolean)));
   const mappedFields = Object.values(importMapping).filter(Boolean);
   const duplicateMappedFields = mappedFields.filter((field, index) => mappedFields.indexOf(field) !== index);
   const missingRequiredImportFields = REQUIRED_IMPORT_FIELDS.filter((field) => !mappedFields.includes(field));
+
+  const articleMatchesReviewerScope = useCallback((article: Article) => {
+    const normalizedReviewerName = normalizeIdentityValue(article.reviewerName);
+    return article.status === "Submitted" || (!!normalizedReviewerName && reviewerIdentityValues.includes(normalizedReviewerName));
+  }, [reviewerIdentityValues]);
+
+  const canEditArticle = useCallback((article: Article) => {
+    if (canManageArticles) return true;
+    if (!isWriter) return false;
+    return article.penName === user?.collaborator?.penName || article.createdByUserId === user?.id;
+  }, [canManageArticles, isWriter, user]);
 
   const fetchArticles = useCallback((p = 1, s = "", f = { penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" }) => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(p), limit: "30" });
     if (s) params.set("search", s);
-    if (!canManageArticles && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
+    if (isWriter && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
     else if (f.penName) params.set("penName", f.penName);
     if (f.status) params.set("status", f.status);
     if (f.category) params.set("category", f.category);
@@ -169,7 +196,7 @@ export default function ArticlesPage() {
     if (f.month) params.set("month", f.month);
     if (f.year) params.set("year", f.year);
     fetch(`/api/articles?${params}`, { cache: "no-store" }).then(r => r.json()).then(d => { setArticles(d.data || []); setPagination(d.pagination || {}); setLoading(false); }).catch(() => setLoading(false));
-  }, [canManageArticles, user]);
+  }, [isWriter, user]);
 
   useEffect(() => {
     fetchArticles();
@@ -753,7 +780,10 @@ export default function ArticlesPage() {
       }
     }
 
-    if (!canManageArticles && user?.collaborator?.penName && article.penName !== user.collaborator.penName) {
+    if (isWriter && user?.collaborator?.penName && article.penName !== user.collaborator.penName) {
+      return false;
+    }
+    if (isReviewer && !articleMatchesReviewerScope(article)) {
       return false;
     }
     if (canManageArticles && filters.penName && article.penName !== filters.penName) {
@@ -787,7 +817,7 @@ export default function ArticlesPage() {
     }
 
     return true;
-  }, [canManageArticles, collaborators, filters, search, user]);
+  }, [articleMatchesReviewerScope, canManageArticles, collaborators, filters, isReviewer, isWriter, search, user]);
 
   const mergeSavedArticleIntoList = useCallback((savedArticle: Article, isEditing: boolean) => {
     const shouldBeVisible = doesArticleMatchCurrentView(savedArticle);

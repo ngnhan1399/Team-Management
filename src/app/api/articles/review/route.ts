@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleReviews, articles, users, collaborators } from "@/db/schema";
-import { getContextDisplayName, getContextIdentityCandidates, getCurrentUserContext, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextDisplayName, getContextIdentityCandidates, getCurrentUserContext, hasArticleManagerAccess, hasArticleReviewAccess, matchesIdentityCandidate, type CurrentUserContext } from "@/lib/auth";
 import { mirrorArticleUpdateToGoogleSheet } from "@/lib/google-sheet-mutation";
 import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
@@ -9,6 +9,41 @@ import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { eq, desc } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+function canAccessArticleReview(
+    context: CurrentUserContext,
+    article: { penName: string; reviewerName: string | null; status: string }
+) {
+    if (hasArticleManagerAccess(context)) {
+        return true;
+    }
+
+    const identityCandidates = getContextIdentityCandidates(context);
+    if (matchesIdentityCandidate(identityCandidates, article.penName)) {
+        return true;
+    }
+
+    if (!hasArticleReviewAccess(context)) {
+        return false;
+    }
+
+    return article.status === "Submitted" || matchesIdentityCandidate(identityCandidates, article.reviewerName);
+}
+
+function canCreateArticleReview(
+    context: CurrentUserContext,
+    article: { reviewerName: string | null; status: string }
+) {
+    if (hasArticleManagerAccess(context)) {
+        return true;
+    }
+
+    if (!hasArticleReviewAccess(context)) {
+        return false;
+    }
+
+    return article.status === "Submitted" || matchesIdentityCandidate(getContextIdentityCandidates(context), article.reviewerName);
+}
 
 export async function GET(request: NextRequest) {
     try {
@@ -31,11 +66,8 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
         }
 
-        if (!hasArticleManagerAccess(context)) {
-            const identityCandidates = getContextIdentityCandidates(context);
-            if (!matchesIdentityCandidate(identityCandidates, article.penName)) {
-                return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
-            }
+        if (!canAccessArticleReview(context, article)) {
+            return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
         }
 
         const reviews = await db
@@ -61,14 +93,20 @@ export async function POST(request: NextRequest) {
         if (!context) {
             return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
         }
-        if (!hasArticleManagerAccess(context)) {
-            return NextResponse.json({ success: false, error: "Admin required" }, { status: 403 });
-        }
 
         const { articleId, errorNotes } = await request.json();
 
         if (!articleId || !errorNotes) {
             return NextResponse.json({ success: false, error: "articleId and errorNotes required" }, { status: 400 });
+        }
+
+        const article = await db.select().from(articles).where(eq(articles.id, articleId)).get();
+        if (!article) {
+            return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+        }
+
+        if (!canCreateArticleReview(context, article)) {
+            return NextResponse.json({ success: false, error: "Reviewer access required" }, { status: 403 });
         }
 
         await db.insert(articleReviews)
@@ -85,7 +123,6 @@ export async function POST(request: NextRequest) {
             .where(eq(articles.id, articleId))
             .run();
 
-        const article = await db.select().from(articles).where(eq(articles.id, articleId)).get();
         if (article) {
             let targetUserId = article.createdByUserId ?? null;
 
@@ -166,6 +203,10 @@ export async function PUT(request: NextRequest) {
         const article = await db.select().from(articles).where(eq(articles.id, review.articleId)).get();
         if (!article) {
             return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+        }
+
+        if (hasArticleReviewAccess(context) && !hasArticleManagerAccess(context)) {
+            return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
         }
 
         if (!hasArticleManagerAccess(context)) {

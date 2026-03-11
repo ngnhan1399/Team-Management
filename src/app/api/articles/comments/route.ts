@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articles, collaborators, notifications, users } from "@/db/schema";
-import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextIdentityCandidates, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, hasArticleReviewAccess, matchesIdentityCandidate, type CurrentUserContext } from "@/lib/auth";
 import { createNotifications } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
@@ -119,7 +119,7 @@ function resolveManagerRecipients(
   directory: UserDirectoryEntry[]
 ): NotificationRecipient[] {
   const managerDirectory = directory.filter(
-    (entry) => entry.userRole === "admin" || entry.collaboratorRole === "editor"
+    (entry) => entry.userRole === "admin" || entry.collaboratorRole === "reviewer" || entry.collaboratorRole === "editor"
   );
 
   const assignedManagers = article.reviewerName
@@ -143,6 +143,26 @@ function buildCommentPreview(content: string, maxLength = 120) {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
+function canAccessArticleComments(
+  context: CurrentUserContext,
+  article: { penName: string; reviewerName: string | null; status: string }
+) {
+  if (hasArticleManagerAccess(context)) {
+    return true;
+  }
+
+  const identityCandidates = getContextIdentityCandidates(context);
+  if (matchesIdentityCandidate(identityCandidates, article.penName)) {
+    return true;
+  }
+
+  if (!hasArticleReviewAccess(context)) {
+    return false;
+  }
+
+  return article.status === "Submitted" || matchesIdentityCandidate(identityCandidates, article.reviewerName);
+}
+
 export async function GET(request: NextRequest) {
   try {
     await ensureDatabaseInitialized();
@@ -158,11 +178,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
     }
 
-    if (!hasArticleManagerAccess(context)) {
-      const identityCandidates = getContextIdentityCandidates(context);
-      if (!matchesIdentityCandidate(identityCandidates, article.penName)) {
-        return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
-      }
+    if (!canAccessArticleComments(context, article)) {
+      return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
     }
 
     const unreadCommentNotifications = await db
@@ -238,14 +255,15 @@ export async function POST(request: NextRequest) {
     }
 
     const ownPenName = getContextPenName(context);
-    if (!hasArticleManagerAccess(context) && !matchesIdentityCandidate(getContextIdentityCandidates(context), article.penName)) {
+    if (!canAccessArticleComments(context, article)) {
       return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
     }
 
     const actorPenName = ownPenName || context.user.email.split("@")[0];
     const mentions = extractMentions(content);
     const activityTimestamp = new Date().toISOString();
-    const actorIsManager = hasArticleManagerAccess(context);
+    const actorCanReviewArticles = hasArticleReviewAccess(context);
+    const actorIsAdmin = hasArticleManagerAccess(context);
 
     const insertedComment = await db
       .insert(articleComments)
@@ -266,7 +284,7 @@ export async function POST(request: NextRequest) {
       .run();
 
     const userDirectory = await loadUserDirectory();
-    const defaultRecipients = actorIsManager
+    const defaultRecipients = actorCanReviewArticles
       ? resolveArticleOwnerRecipients(article, userDirectory)
       : resolveManagerRecipients(article, userDirectory);
     const recipients = new Map<number, { toUserId: number; toPenName: string | null; mentioned: boolean }>();
@@ -303,8 +321,10 @@ export async function POST(request: NextRequest) {
       type: "comment" as const,
       title: recipient.mentioned
         ? "💬 Bạn được nhắc trong bình luận"
-        : actorIsManager
-          ? "💬 BTV vừa gửi bình luận"
+        : actorCanReviewArticles
+          ? actorIsAdmin
+            ? "💬 BTV vừa gửi bình luận"
+            : "💬 Người duyệt vừa gửi bình luận"
           : "💬 CTV vừa phản hồi bình luận",
       message: recipient.mentioned
         ? `${actorPenName} đã nhắc bạn trong bài "${article.title}"${commentPreview ? `: ${commentPreview}` : ""}`
