@@ -91,11 +91,9 @@ export default function TeamPage() {
       closeModal();
       fetchCTVs();
 
-      if (data.generatedPassword) {
-        alert(`✅ CTV tạo thành công!\n\n📧 Email: ${email}\n🔑 Mật khẩu tạm: ${data.generatedPassword}\n\n⚠️ Gửi thông tin này cho CTV để đăng nhập!`);
-      } else {
-        alert("✅ Cập nhật thay đổi thành công!");
-      }
+      alert(data.generatedPassword
+        ? `✅ Đã tạo thành viên mới.\n\n📧 Email: ${email}\n🔑 Mật khẩu tạm: ${data.generatedPassword}`
+        : "✅ Cập nhật thay đổi thành công!");
     } catch {
       setFormError("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
     } finally {
@@ -411,12 +409,6 @@ export default function TeamPage() {
                   <input className="form-input" value={formData.socialTiktok || ""} onChange={e => setFormData({ ...formData, socialTiktok: e.target.value })} placeholder="@user" />
                 </div>
               </div>
-              {!formData.id && formData.email && (
-                <div style={{ padding: "12px 16px", background: "rgba(59, 130, 246, 0.05)", borderRadius: 12, border: "1px solid rgba(59, 130, 246, 0.1)", display: "flex", gap: 12, alignItems: "flex-start", marginTop: 8 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--accent-blue)" }}>info</span>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>Hệ thống sẽ tự động tạo tài khoản với mật khẩu ngẫu nhiên. Vui lòng gửi thông tin đăng nhập cho CTV sau khi lưu.</p>
-                </div>
-              )}
             </div>
             <div className="modal-footer">
               <button className="btn-ios-pill btn-ios-secondary" onClick={closeModal} disabled={isSaving}>Hủy bỏ</button>

@@ -3,8 +3,9 @@ import "@material-symbols/font-400/outlined.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CTV Management Tool | Quản lý Team Cộng tác viên",
-  description: "Công cụ quản lý team cộng tác viên tổng thể - theo dõi bài viết, KPI và nhuận bút.",
+  title: "Workdocker | Editorial Operations Workspace",
+  description: "Workdocker là không gian vận hành nội dung giúp đội ngũ theo dõi bài viết, KPI, feedback và nhuận bút trên một giao diện thống nhất.",
+  applicationName: "Workdocker",
 };
 
 export default function RootLayout({

@@ -40,7 +40,7 @@ async function requestUrl(url: URL, method: "HEAD" | "GET", signal: AbortSignal)
         signal,
         redirect: "follow",
         headers: {
-            "User-Agent": "Mozilla/5.0 (compatible; CTV-Manager-LinkChecker/1.0; +https://www.workdocker.com)",
+            "User-Agent": "Mozilla/5.0 (compatible; Workdocker-LinkChecker/1.0; +https://www.workdocker.com)",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "vi,en;q=0.8",
             ...(method === "GET" ? { Range: "bytes=0-0" } : {}),

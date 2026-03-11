@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useAuth } from "./auth-context";
+import BrandLogo from "./BrandLogo";
 
 export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   const { login, register } = useAuth();
@@ -61,11 +62,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
 
       <div className="glass-card auth-card">
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div className="sidebar-logo-icon" style={{ width: 64, height: 64, margin: "0 auto 18px", borderRadius: 18, boxShadow: "0 10px 30px rgba(37,99,235,0.28)", background: "var(--accent-blue)" }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 32, color: "white" }}>article</span>
-          </div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.02em", marginBottom: 8 }}>CTV Manager</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: 15, fontWeight: 500 }}>Đăng nhập hoặc kích hoạt tài khoản cộng tác viên</p>
+          <BrandLogo align="center" gap={16} markSize={72} titleSize={30} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20, padding: 6, borderRadius: 16, background: "rgba(15,23,42,0.04)", border: "1px solid var(--glass-border)" }}>
@@ -105,12 +102,6 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
           >
             Tạo mật khẩu lần đầu
           </button>
-        </div>
-
-        <div style={{ padding: "14px 16px", borderRadius: 14, background: "rgba(15,23,42,0.04)", border: "1px solid var(--glass-border)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 24 }}>
-          {mode === "login"
-            ? "CTV đã kích hoạt tài khoản chỉ cần nhập email và mật khẩu để vào hệ thống."
-            : "CTV mới chỉ cần dùng đúng email đã có sẵn trong danh sách đội ngũ để tự tạo mật khẩu lần đầu."}
         </div>
 
         <form onSubmit={mode === "login" ? handleLoginSubmit : handleRegisterSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>

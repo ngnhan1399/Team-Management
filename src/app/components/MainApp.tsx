@@ -12,6 +12,7 @@ import ProfilePage from "./ProfilePage";
 import RealtimeToastLayer from "./RealtimeToastLayer";
 import RoyaltyPage from "./RoyaltyPage";
 import TeamPage from "./TeamPage";
+import BrandLogo from "./BrandLogo";
 import { useAuth } from "./auth-context";
 import { emitRealtimePayload } from "./realtime";
 import type { Page } from "./types";
@@ -143,11 +144,8 @@ export default function MainApp() {
       {sidebarOpen && <button className="sidebar-backdrop lg:hidden" aria-label="Đóng menu điều hướng" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div style={{ padding: 24, display: "flex", alignItems: "center", gap: 14 }}>
-          <div className="sidebar-logo-icon" style={{ borderRadius: "var(--radius-ios-sm)", background: "var(--accent-blue)", width: 42, height: 42 }}>
-            <span className="material-symbols-outlined text-white" style={{ fontSize: 24 }}>article</span>
-          </div>
           <div style={{ lineHeight: 1.2 }}>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)", letterSpacing: "-0.02em" }}>CTV Manager</h1>
+            <BrandLogo markSize={42} titleSize={18} />
             <p style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>{isAdmin ? "QUẢN TRỊ VIÊN" : "CỘNG TÁC VIÊN"}</p>
           </div>
         </div>
