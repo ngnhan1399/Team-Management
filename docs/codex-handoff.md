@@ -19,7 +19,7 @@ Ngày cập nhật: `2026-03-11` (phiên chiều)
 - **Fix xóa bài bị chặn bởi Google Sheet sync**: `ensureGoogleSheetDeleteConsistency` trong `articles/route.ts` giờ trả **warnings** (non-blocking) thay vì failures (blocking). Bài xóa trên web luôn thành công, warnings ghi vào audit log + trả về response.
 - **Xóa `buildDeleteSyncFailureResponse`**: helper không còn dùng sau khi chuyển sang non-blocking.
 - **Xóa mô tả chi tiết trong modal đồng bộ**: loại bỏ đoạn text giải thích engine/mirror/scope CTV và link Google Sheet cứng — tránh lộ thông tin triển khai.
-- **Đã bỏ hẳn CMS Browser Panel**: theo yêu cầu mới, `ArticlesPage.tsx` không còn mở khung preview bên phải nữa. Click tiêu đề bài viết giờ mở thẳng `review_link` hoặc `link` như một link thường của trình duyệt, không đi qua `window.open` hay `target="cms_review"` nữa.
+- **Đã bỏ hẳn CMS Browser Panel**: theo yêu cầu mới, `ArticlesPage.tsx` không còn mở khung preview bên phải nữa. Click tiêu đề giờ là một anchor native mở tab mới (`target="_blank"`) với đúng URL gốc đang được ưu tiên (`review_link` trước, fallback `link`), không còn cơ chế copy link hay giữ tab CMS cố định.
 - **Tách `directory view` cho `/api/collaborators`**: các màn `Articles`, `EditorialTasks`, `Notifications`, `Royalty` không còn lấy full hồ sơ cộng tác viên nữa mà dùng `?view=directory`. Route chỉ trả field nhẹ cần cho dropdown/search/list, còn `TeamPage` vẫn giữ bản đầy đủ. Nhánh admin cũng bỏ cách ghép `allUsers.find(...)` lặp nhiều lần, chuyển sang `Map` để giảm chi phí join trong memory.
 
 ### Phiên sáng 11/03 và trước đó
@@ -37,7 +37,7 @@ Ngày cập nhật: `2026-03-11` (phiên chiều)
 ## Việc còn cần nhớ
 
 - **Redeploy Apps Script**: file `output/google-sheets-webhook.workdocker.gs` đã có handler `deleteArticle` nhưng cần deploy lại trên Google để có hiệu lực. Nếu chưa redeploy, xóa bài trên web vẫn thành công nhưng dòng trên Sheet sẽ không bị xóa (warning trong audit log).
-- Luồng mở link duyệt bài hiện dùng link thường trực tiếp từ danh sách bài; không còn panel CMS bên trong app, cũng không còn cơ chế ép mở tab tên cố định.
+- Luồng mở link duyệt bài hiện ưu tiên **copy link duyệt bài** thay vì điều hướng thẳng sang CMS, vì user đã xác nhận việc dán URL trực tiếp vào trình duyệt/tab CMS đang đăng nhập hoạt động ổn định hơn click cross-site từ web app.
 - `findMatchingCollaboratorPenNames` vẫn còn fallback full-scan; nếu bảng lớn thêm nên dùng `pg_trgm`/`unaccent`.
 - Route `statistics` fallback legacy vẫn đọc full bảng nếu narrow query trượt.
 - `ArticlesPage` và `DashboardPage` vẫn là hai chunk client lớn nhất; bước tối ưu client kế tiếp nên ưu tiên các modal/import flow còn nằm chung trong `ArticlesPage.tsx`.

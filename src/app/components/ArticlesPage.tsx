@@ -1347,6 +1347,8 @@ export default function ArticlesPage() {
                       {getArticleNavigationLink(a) ? (
                         <a
                           href={getArticleNavigationLink(a)}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           title={a.reviewLink ? `${a.title} (mở CMS duyệt bài)` : a.title}
                           style={{
                             color: "var(--accent-blue)",
