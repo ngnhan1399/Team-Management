@@ -87,18 +87,23 @@ export async function POST(request: NextRequest) {
 
         const article = await db.select().from(articles).where(eq(articles.id, articleId)).get();
         if (article) {
-            const targets = await db
-                .select({ id: users.id, penName: collaborators.penName, name: collaborators.name })
-                .from(users)
-                .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
-                .all();
+            let targetUserId = article.createdByUserId ?? null;
 
-            const targetUser = targets.find((item) => matchesIdentityCandidate([item.penName, item.name], article.penName));
+            if (!targetUserId) {
+                const targets = await db
+                    .select({ id: users.id, penName: collaborators.penName, name: collaborators.name })
+                    .from(users)
+                    .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+                    .all();
 
-            if (targetUser?.id) {
+                const targetUser = targets.find((item) => matchesIdentityCandidate([item.penName, item.name], article.penName));
+                targetUserId = targetUser?.id ?? null;
+            }
+
+            if (targetUserId) {
                 await createNotification({
                     fromUserId: context.user.id,
-                    toUserId: targetUser.id,
+                    toUserId: targetUserId,
                     toPenName: article.penName,
                     type: "review",
                     title: "📝 Bai viet can sua loi",

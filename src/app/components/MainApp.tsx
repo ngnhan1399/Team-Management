@@ -21,20 +21,53 @@ export default function MainApp() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const seenRealtimeIdsRef = useRef<number[]>([]);
+  const seenNotificationToastIdsRef = useRef<number[]>([]);
+  const lastUnreadCountRef = useRef(0);
+  const unreadBaselineReadyRef = useRef(false);
   const displayName = (typeof user?.collaborator?.name === "string" && user.collaborator.name.trim())
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
     || "Người dùng";
 
-  const refreshUnreadCount = useCallback(() => {
+  const refreshUnreadCount = useCallback((announceNew = false) => {
     fetch("/api/notifications?unread=true", { cache: "no-store" })
       .then(r => r.json())
-      .then(d => setUnreadCount(d.unreadCount || 0))
+      .then((d) => {
+        const nextUnreadCount = Number(d.unreadCount || 0);
+        const latestUnread = Array.isArray(d.data) ? d.data[0] : null;
+        const previousUnreadCount = lastUnreadCountRef.current;
+
+        setUnreadCount(nextUnreadCount);
+        lastUnreadCountRef.current = nextUnreadCount;
+
+        if (!unreadBaselineReadyRef.current) {
+          unreadBaselineReadyRef.current = true;
+          return;
+        }
+
+        if (!announceNew || nextUnreadCount <= previousUnreadCount || !latestUnread?.id) {
+          return;
+        }
+
+        if (seenNotificationToastIdsRef.current.includes(latestUnread.id)) {
+          return;
+        }
+
+        seenNotificationToastIdsRef.current = [...seenNotificationToastIdsRef.current.slice(-49), latestUnread.id];
+        emitRealtimePayload({
+          id: latestUnread.id,
+          channels: ["notifications"],
+          at: latestUnread.createdAt || new Date().toISOString(),
+          toastTitle: latestUnread.title,
+          toastMessage: latestUnread.message,
+          toastVariant: latestUnread.type === "review" || latestUnread.type === "error_fix" ? "warning" : "info",
+        });
+      })
       .catch(() => { });
   }, []);
 
   useEffect(() => {
-    refreshUnreadCount();
+    refreshUnreadCount(false);
 
     if (!user?.id) return;
 
@@ -51,7 +84,10 @@ export default function MainApp() {
         }
         emitRealtimePayload(payload);
         if (Array.isArray(payload.channels) && payload.channels.includes("notifications")) {
-          refreshUnreadCount();
+          if (payloadId > 0 && payload.toastTitle) {
+            seenNotificationToastIdsRef.current = [...seenNotificationToastIdsRef.current.slice(-49), payloadId];
+          }
+          refreshUnreadCount(false);
         }
         if (Array.isArray(payload.channels) && payload.channels.includes("team")) {
           refreshUser().catch(() => { });
@@ -68,10 +104,19 @@ export default function MainApp() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      refreshUnreadCount();
+      refreshUnreadCount(true);
     }, 30000);
     return () => clearInterval(interval);
   }, [refreshUnreadCount]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      seenRealtimeIdsRef.current = [];
+      seenNotificationToastIdsRef.current = [];
+      lastUnreadCountRef.current = 0;
+      unreadBaselineReadyRef.current = false;
+    }
+  }, [user?.id]);
 
   const navigateToPage = useCallback((nextPage: Page) => {
     setPage(nextPage);
