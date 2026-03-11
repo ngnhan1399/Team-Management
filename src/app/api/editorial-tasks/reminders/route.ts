@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     const dueTaskConditions = [
       lte(editorialTasks.remindAt, now),
       ne(editorialTasks.status, "done"),
-      adminTeamId ? eq(editorialTasks.teamId, adminTeamId) : null,
-    ].filter(Boolean);
+      adminTeamId ? eq(editorialTasks.teamId, adminTeamId) : undefined,
+    ].filter((c): c is NonNullable<typeof c> => c != null);
     const dueTasks = await db
       .select()
       .from(editorialTasks)

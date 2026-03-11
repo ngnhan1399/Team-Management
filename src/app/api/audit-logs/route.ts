@@ -2,6 +2,7 @@ import { db, ensureDatabaseInitialized } from "@/db";
 import { auditLogs } from "@/db/schema";
 import { getCurrentUserContext } from "@/lib/auth";
 import { handleServerError } from "@/lib/server-error";
+import { isLeader } from "@/lib/teams";
 import { desc, eq, and, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -12,8 +13,8 @@ export async function GET(request: NextRequest) {
         if (!context) {
             return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
         }
-        if (context.user.role !== "admin") {
-            return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+        if (!isLeader(context)) {
+            return NextResponse.json({ success: false, error: "Leader access required" }, { status: 403 });
         }
 
         const { searchParams } = new URL(request.url);

@@ -15,6 +15,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { normalizeArticleReviewLink } from "@/lib/review-link";
 import { handleServerError } from "@/lib/server-error";
+import { canAccessTeam, getContextTeamId, isLeader, normalizeTeamId, resolveScopedTeamId } from "@/lib/teams";
 import { and, desc, eq, ilike, inArray, like, or, sql, type SQL } from "drizzle-orm";
 import { after, NextRequest, NextResponse } from "next/server";
 
@@ -55,6 +56,7 @@ type DeleteResult = {
 type ArticleDeleteSyncTarget = {
   article: GoogleSheetArticleSnapshot & {
     createdByUserId: number | null;
+    teamId: number | null;
   };
   syncLink: GoogleSheetSyncLinkSnapshot | null;
 };
@@ -227,6 +229,7 @@ async function loadArticleDeleteSyncTargets(articleIds: number[]): Promise<Artic
   const targetArticles = await db
     .select({
       id: articles.id,
+      teamId: articles.teamId,
       articleId: articles.articleId,
       title: articles.title,
       penName: articles.penName,
@@ -343,7 +346,7 @@ function readCriteriaFromBody(body: Record<string, unknown>): ArticleCriteria {
   };
 }
 
-async function findMatchingCollaboratorPenNames(search: string) {
+async function findMatchingCollaboratorPenNames(search: string, teamId?: number | null) {
   const foldedSearch = foldSearchText(search);
   if (!foldedSearch) {
     return [] as string[];
@@ -372,7 +375,7 @@ async function findMatchingCollaboratorPenNames(search: string) {
         email: collaborators.email,
       })
       .from(collaborators)
-      .where(or(...collaboratorSearchClauses))
+      .where(teamId ? and(eq(collaborators.teamId, teamId), or(...collaboratorSearchClauses)) : or(...collaboratorSearchClauses))
       .limit(80)
       .all()
     : [];
@@ -384,6 +387,7 @@ async function findMatchingCollaboratorPenNames(search: string) {
       email: collaborators.email,
     })
     .from(collaborators)
+    .where(teamId ? eq(collaborators.teamId, teamId) : undefined)
     .all();
 
   return Array.from(
@@ -681,15 +685,20 @@ export async function GET(request: NextRequest) {
     const criteria = readCriteriaFromSearchParams(searchParams);
     const canManageArticles = hasArticleManagerAccess(context);
     const canReviewArticles = hasArticleReviewAccess(context);
-    const matchedSearchPenNames = await findMatchingCollaboratorPenNames(criteria.search);
+    const adminTeamId = canManageArticles && !isLeader(context) ? getContextTeamId(context) : null;
+    const teamScopeWhere = adminTeamId ? eq(articles.teamId, adminTeamId) : undefined;
+    const matchedSearchPenNames = await findMatchingCollaboratorPenNames(criteria.search, adminTeamId);
     const whereClause = buildArticleWhere(criteria, canManageArticles, matchedSearchPenNames);
 
     if (mode === "delete-preview") {
       if (!canManageArticles) {
         return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
       }
+      if (!isLeader(context) && !adminTeamId) {
+        return NextResponse.json({ success: false, error: "Không xác định được team của admin hiện tại" }, { status: 400 });
+      }
 
-      const preview = await getDeletePreview(whereClause);
+      const preview = await getDeletePreview(combineWhereClauses(teamScopeWhere, whereClause));
       return NextResponse.json({ success: true, ...preview });
     }
 
@@ -697,6 +706,14 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 200);
     const ownerCandidates = getContextArticleOwnerCandidates(context);
     const reviewerLabels = getContextIdentityLabels(context);
+
+    if (canManageArticles && !isLeader(context) && !adminTeamId) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      });
+    }
 
     if (!canManageArticles && !canReviewArticles && ownerCandidates.length === 0) {
       return NextResponse.json({
@@ -707,7 +724,7 @@ export async function GET(request: NextRequest) {
     }
 
     const scopedWhereClause = canManageArticles
-      ? whereClause
+      ? combineWhereClauses(teamScopeWhere, whereClause)
       : canReviewArticles
         ? combineWhereClauses(whereClause, buildArticleReviewScopeWhere(reviewerLabels))
         : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
@@ -772,6 +789,19 @@ export async function POST(request: NextRequest) {
     const date = normalizeString(body.date);
     const normalizedArticleType = normalizeString(body.articleType) || "Bài SEO ICT";
     const normalizedCategory = resolveArticleCategory(normalizeString(body.category), normalizedArticleType);
+    const requestedTeamId = normalizeTeamId(body.teamId);
+    const linkedCollaborator = finalPenName
+      ? await db
+        .select({ id: collaborators.id, teamId: collaborators.teamId })
+        .from(collaborators)
+        .where(eq(collaborators.penName, finalPenName))
+        .get()
+      : null;
+    const articleTeamId = canManageArticles
+      ? (isLeader(context)
+        ? requestedTeamId ?? linkedCollaborator?.teamId ?? getContextTeamId(context)
+        : resolveScopedTeamId(context, body.teamId))
+      : (context.collaborator?.teamId ?? context.user.teamId ?? linkedCollaborator?.teamId ?? null);
 
     if (!title || !finalPenName || !date) {
       return NextResponse.json(
@@ -779,10 +809,23 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (!articleTeamId) {
+      return NextResponse.json(
+        { success: false, error: "Không xác định được team cho bài viết này" },
+        { status: 400 }
+      );
+    }
+    if (linkedCollaborator?.teamId && linkedCollaborator.teamId !== articleTeamId) {
+      return NextResponse.json(
+        { success: false, error: "Bút danh được chọn không thuộc team hiện tại" },
+        { status: 400 }
+      );
+    }
 
     const insertedArticle = await db
       .insert(articles)
       .values({
+        teamId: articleTeamId,
         articleId: normalizeString(body.articleId) || undefined,
         date,
         title,
@@ -884,6 +927,9 @@ export async function PUT(request: NextRequest) {
     if (!existing) {
       return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
     }
+    if (!canAccessTeam(context, existing.teamId)) {
+      return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+    }
 
     const canManageArticles = hasArticleManagerAccess(context);
     if (!canManageArticles) {
@@ -913,6 +959,21 @@ export async function PUT(request: NextRequest) {
     if (typeof updateData.reviewerName === "string") updateData.reviewerName = updateData.reviewerName.trim() || undefined;
     if (typeof updateData.penName === "string") updateData.penName = updateData.penName.trim();
     if (typeof updateData.date === "string") updateData.date = updateData.date.trim();
+    if (typeof updateData.penName === "string" && updateData.penName) {
+      const nextCollaborator = await db
+        .select({ id: collaborators.id, teamId: collaborators.teamId })
+        .from(collaborators)
+        .where(eq(collaborators.penName, updateData.penName))
+        .get();
+
+      if (nextCollaborator?.teamId && !canAccessTeam(context, nextCollaborator.teamId)) {
+        return NextResponse.json({ success: false, error: "Bút danh mới không thuộc phạm vi team của bạn" }, { status: 403 });
+      }
+
+      if (nextCollaborator?.teamId && isLeader(context)) {
+        updateData.teamId = nextCollaborator.teamId;
+      }
+    }
     if (Object.prototype.hasOwnProperty.call(body, "category") || Object.prototype.hasOwnProperty.call(body, "articleType")) {
       updateData.category = resolveArticleCategory(updateData.category, updateData.articleType ?? existing.articleType) as never;
     }
@@ -998,6 +1059,8 @@ export async function DELETE(request: NextRequest) {
     const id = normalizeString(searchParams.get("id"));
     const canManageArticles = hasArticleManagerAccess(context);
     const actorDisplayName = getContextDisplayName(context) || context.user.email;
+    const adminTeamId = canManageArticles && !isLeader(context) ? getContextTeamId(context) : null;
+    const teamScopeWhere = adminTeamId ? eq(articles.teamId, adminTeamId) : undefined;
 
     if (id) {
       const articleId = parseInt(id, 10);
@@ -1008,6 +1071,12 @@ export async function DELETE(request: NextRequest) {
       }
 
       const existing = deleteTarget.article;
+      if (!canAccessTeam(context, existing.teamId)) {
+        return NextResponse.json(
+          { success: false, error: "Bạn không có quyền xóa bài thuộc team khác" },
+          { status: 403 }
+        );
+      }
 
       if (!canManageArticles) {
         const identityCandidates = getContextIdentityCandidates(context);
@@ -1062,12 +1131,15 @@ export async function DELETE(request: NextRequest) {
     if (!canManageArticles) {
       return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
     }
+    if (!isLeader(context) && !adminTeamId) {
+      return NextResponse.json({ success: false, error: "Không xác định được team của admin hiện tại" }, { status: 400 });
+    }
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const action = normalizeString(body.action) || "preview";
     const scope = (normalizeString(body.scope) || "custom") as DeleteScope;
     const criteria = readCriteriaFromBody(body);
-    const matchedSearchPenNames = await findMatchingCollaboratorPenNames(criteria.search);
+    const matchedSearchPenNames = await findMatchingCollaboratorPenNames(criteria.search, adminTeamId);
 
     if (scope !== "all" && !hasCriteria(criteria)) {
       return NextResponse.json(
@@ -1077,7 +1149,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const whereClause = scope === "all" ? undefined : buildArticleWhere(criteria, true, matchedSearchPenNames);
-    const preview = await getDeletePreview(whereClause);
+    const preview = await getDeletePreview(combineWhereClauses(teamScopeWhere, whereClause));
 
     if (action === "preview") {
       return NextResponse.json({ success: true, scope, criteria, ...preview });

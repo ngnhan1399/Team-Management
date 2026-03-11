@@ -6,6 +6,7 @@ import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { canAccessTeam } from "@/lib/teams";
 import { requiredInt, requiredString, optionalString, ValidationError } from "@/lib/validation";
 import { and, desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +15,7 @@ type UserDirectoryEntry = {
   id: number;
   email: string;
   userRole: "admin" | "ctv";
+  teamId: number | null;
   collaboratorRole: "writer" | "reviewer" | null;
   penName: string | null;
   name: string | null;
@@ -40,12 +42,13 @@ function parseMentions(raw: string | null): string[] {
   }
 }
 
-async function loadUserDirectory(): Promise<UserDirectoryEntry[]> {
+async function loadUserDirectory(teamId?: number | null): Promise<UserDirectoryEntry[]> {
   return db
     .select({
       id: users.id,
       email: users.email,
       userRole: users.role,
+      teamId: users.teamId,
       collaboratorRole: collaborators.role,
       penName: collaborators.penName,
       name: collaborators.name,
@@ -53,6 +56,7 @@ async function loadUserDirectory(): Promise<UserDirectoryEntry[]> {
     })
     .from(users)
     .leftJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+    .where(teamId ? eq(users.teamId, teamId) : undefined)
     .all();
 }
 
@@ -177,6 +181,9 @@ export async function GET(request: NextRequest) {
     if (!article) {
       return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
     }
+    if (!canAccessTeam(context, article.teamId)) {
+      return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+    }
 
     if (!canAccessArticleComments(context, article)) {
       return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
@@ -253,6 +260,9 @@ export async function POST(request: NextRequest) {
     if (!article) {
       return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
     }
+    if (!canAccessTeam(context, article.teamId)) {
+      return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+    }
 
     const ownPenName = getContextPenName(context);
     if (!canAccessArticleComments(context, article)) {
@@ -283,7 +293,7 @@ export async function POST(request: NextRequest) {
       .where(eq(articles.id, articleId))
       .run();
 
-    const userDirectory = await loadUserDirectory();
+    const userDirectory = await loadUserDirectory(article.teamId);
     const defaultRecipients = actorCanReviewArticles
       ? resolveArticleOwnerRecipients(article, userDirectory)
       : resolveManagerRecipients(article, userDirectory);
