@@ -40,6 +40,7 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
   const popupRef = useRef<Window | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupBlocked, setPopupBlocked] = useState(false);
+  const [needsLoginHint, setNeedsLoginHint] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const openPopup = useCallback(() => {
@@ -73,7 +74,26 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
     popupRef.current = win;
     setPopupOpen(true);
     setPopupBlocked(false);
+    setNeedsLoginHint(true);
   }, [url]);
+
+  const navigatePopupToArticle = useCallback(() => {
+    if (!url) return;
+
+    if (popupRef.current && !popupRef.current.closed) {
+      try {
+        popupRef.current.location.href = url;
+        popupRef.current.focus();
+      } catch {
+        popupRef.current.close();
+        popupRef.current = null;
+        openPopup();
+      }
+    } else {
+      openPopup();
+    }
+    setNeedsLoginHint(false);
+  }, [url, openPopup]);
 
   useEffect(() => {
     if (url) {
@@ -102,19 +122,6 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
       }
     };
   }, []);
-
-  const handleRefresh = () => {
-    if (popupRef.current && !popupRef.current.closed) {
-      try {
-        popupRef.current.location.href = url;
-      } catch {
-        popupRef.current.close();
-        openPopup();
-      }
-    } else {
-      openPopup();
-    }
-  };
 
   const handleClose = () => {
     if (popupRef.current && !popupRef.current.closed) {
@@ -204,8 +211,8 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
           {url && (
             <>
               <button
-                onClick={handleRefresh}
-                title={popupOpen ? "Tải lại" : "Mở lại CMS"}
+                onClick={navigatePopupToArticle}
+                title={popupOpen ? "Chuyển đến bài duyệt" : "Mở lại CMS"}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -268,7 +275,57 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Navigate to article button - always prominent */}
+          {url && popupOpen && (
+            <button
+              onClick={navigatePopupToArticle}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                padding: "12px 16px",
+                borderRadius: 12,
+                border: "1px solid rgba(59,130,246,0.3)",
+                background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.06))",
+                color: "#3b82f6",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                flexShrink: 0,
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
+              Chuyển đến bài duyệt
+            </button>
+          )}
+
+          {/* Login hint */}
+          {needsLoginHint && popupOpen && (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 12,
+                background: "rgba(245,158,11,0.06)",
+                border: "1px solid rgba(245,158,11,0.16)",
+                fontSize: 12,
+                color: "#f59e0b",
+                lineHeight: 1.7,
+              }}
+            >
+              <strong>💡 Nếu CMS yêu cầu đăng nhập:</strong>
+              <br />
+              1. Đăng nhập CMS trong cửa sổ popup
+              <br />
+              2. Quay lại panel này, bấm <strong>Chuyển đến bài duyệt</strong>
+              <br />
+              <span style={{ fontSize: 11, opacity: 0.8 }}>Phiên đăng nhập sẽ được trình duyệt ghi nhớ cho các lần sau.</span>
+            </div>
+          )}
+
           {/* Status indicator */}
           <div
             style={{

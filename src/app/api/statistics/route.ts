@@ -27,6 +27,17 @@ type StatisticsArticleRow = {
   updatedAt: string | null;
 };
 
+type StatisticsCategoryRow = {
+  category: string;
+  articleType: string;
+  count: number;
+};
+
+type StatisticsWriterCountRow = {
+  penName: string;
+  count: number;
+};
+
 function resolveCollaborator(articlePenName: string, directory: CollaboratorDirectoryItem[]) {
     const exact = directory.find((item) => item.penName === articlePenName);
     if (exact) return exact;
