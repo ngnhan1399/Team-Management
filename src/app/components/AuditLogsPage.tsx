@@ -74,7 +74,6 @@ export default function AuditLogsPage() {
       <header className="page-shell-header" style={{ marginBottom: 28 }}>
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Audit Logs</h2>
-          <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>Theo dõi ai đã thao tác gì, trên thực thể nào và thời điểm nào.</p>
         </div>
         <button className="btn-ios-pill btn-ios-primary" onClick={fetchLogs}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>

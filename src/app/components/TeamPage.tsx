@@ -386,11 +386,6 @@ export default function TeamPage() {
       <header className="page-shell-header">
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Đội ngũ</h2>
-          <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
-            {isLeader
-              ? "Leader theo dõi từng team, bàn giao admin và quản lý nhân sự theo phạm vi team."
-              : "Quản lý thông tin và hiệu suất cộng tác viên trong team của bạn."}
-          </p>
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           <button className="btn-ios-pill btn-ios-primary" onClick={openCreateModal} disabled={isLeader && !currentTeam}>
@@ -410,11 +405,6 @@ export default function TeamPage() {
             <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-main)", marginBottom: 6 }}>
               {isLeader ? "Điều phối team" : "Thông tin team"}
             </h3>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 720 }}>
-              {isLeader
-                ? "Chọn team để xem roster, tạo team mới hoặc bàn giao owner cho admin khác trong chính team đó."
-                : "Bạn chỉ nhìn thấy và quản lý thành viên, bài viết, task và thanh toán thuộc team hiện tại."}
-            </p>
           </div>
           {isLeader && (
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>

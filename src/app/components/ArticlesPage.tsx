@@ -1107,13 +1107,6 @@ export default function ArticlesPage() {
       <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Quản lý bài viết</h2>
-          <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
-            {canManageArticles
-              ? "Quản lý và theo dõi toàn bộ bài viết của đội ngũ."
-              : isReviewer
-                ? `Theo dõi bài đang chờ duyệt hoặc đã giao cho ${collaboratorLabel}.`
-                : `Theo dõi bài viết thuộc tài khoản ${collaboratorLabel}.`}
-          </p>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {canManageArticles && (

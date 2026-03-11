@@ -263,22 +263,12 @@ export default function RoyaltyPage() {
   const contentBalancePie = contentBalance.totalArticles > 0
     ? `conic-gradient(var(--accent-blue) 0deg ${newAngle}deg, var(--accent-orange) ${newAngle}deg 360deg)`
     : "conic-gradient(rgba(148, 163, 184, 0.16) 0deg 360deg)";
-  const contentScopeHint = isAdmin
-    ? "Chi tinh tong bai cua cac CTV writer, khong gom admin/bien tap vien."
-    : `Chi tinh bai cua ${collaboratorLabel}, khong lay bai cua nguoi khac.`;
 
   return (
     <>
       <header className="page-shell-header">
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Nhuận bút</h2>
-          <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
-            {isLeader
-              ? "Theo dõi ngân sách hệ thống và nhuận bút thực tế theo từng kỳ."
-              : isAdmin
-                ? "Theo dõi nhuận bút thực tế của team bạn theo từng kỳ."
-                : `Theo dõi nhuận bút thực tế của ${collaboratorLabel} theo từng kỳ.`}
-          </p>
         </div>
       </header>
 
@@ -327,9 +317,6 @@ export default function RoyaltyPage() {
                 <div className="form-group" style={{ marginBottom: 0, width: 120 }}>
                   <label className="form-label">Năm</label>
                   <CustomSelect value={String(overviewYear)} onChange={(value) => setOverviewYear(parseInt(value, 10))} options={yearSelectOptions} />
-                </div>
-                <div style={{ minWidth: 220, paddingBottom: 8, color: "var(--text-muted)", fontSize: 13 }}>
-                  Mọi chỉ số ngân sách và nhuận bút bên dưới đang bám theo kỳ {monthNames[overviewMonth - 1]}/{overviewYear}, chỉ tính bài của CTV writer.
                 </div>
               </div>
 
@@ -436,7 +423,6 @@ export default function RoyaltyPage() {
                   <div style={{ width: "100%", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
                     <div style={{ textAlign: "left" }}>
                       <h3 className="text-xl font-bold">Tỉ lệ Viết mới / Viết lại</h3>
-                      <p style={{ marginTop: 6, fontSize: 13, color: "var(--text-muted)" }}>{contentScopeHint}</p>
                     </div>
                     {contentBalance.isImbalanced && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999, background: "rgba(245, 158, 11, 0.14)", color: "var(--warning)", fontSize: 12, fontWeight: 800 }}>

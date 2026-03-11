@@ -85,7 +85,6 @@ export default function NotificationsPage() {
       <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Thông báo</h2>
-          <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>Luôn cập nhật thông tin mới nhất từ đội ngũ.</p>
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           <button className="btn-ios-pill btn-ios-secondary" onClick={markAllRead}>

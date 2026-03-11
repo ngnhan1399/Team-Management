@@ -72,15 +72,10 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
   const pending = stats?.articlesByStatus?.find((s) => s.status === "Submitted")?.count || 0;
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? "buổi sáng" : currentHour < 18 ? "buổi chiều" : "buổi tối";
-  const collaboratorRole = typeof user?.collaborator?.role === "string" ? user.collaborator.role : "";
-  const isWriterView = user?.role === "ctv" && collaboratorRole === "writer";
   const displayName = (typeof user?.collaborator?.name === "string" && user.collaborator.name.trim())
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
     || "bạn";
-  const dashboardSubtitle = isWriterView
-    ? `Hôm nay bạn có ${pending} bài viết đang chờ duyệt.`
-    : `Hôm nay có ${pending} bài viết đang chờ bạn phê duyệt.`;
 
   return (
     <>
@@ -93,7 +88,6 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
               <span style={{ fontSize: 11, fontWeight: 700, color: "#059669", textTransform: "uppercase" }}>Hệ thống ổn định</span>
             </div>
           </div>
-          <p style={{ color: "var(--text-muted)", fontSize: 15, fontWeight: 500, maxWidth: 720 }}>{dashboardSubtitle}</p>
         </div>
         <div className="page-shell-actions">
           <button className="btn-ios-pill btn-ios-secondary" style={{ background: "white", boxShadow: "var(--specular-top)" }}>
@@ -106,13 +100,6 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
           </button>
         </div>
       </header>
-
-      <div style={{ marginBottom: 24, padding: "14px 18px", borderRadius: 18, background: "rgba(13,148,136,0.06)", border: "1px solid rgba(13,148,136,0.14)", display: "flex", alignItems: "center", gap: 12 }}>
-        <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#0d9488" }}>fact_check</span>
-        <span style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600 }}>
-          Nhuận bút tháng chỉ tính cho các bài ở trạng thái đã duyệt.
-        </span>
-      </div>
 
       {/* Tier 1: Main KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 24, marginBottom: 32 }}>

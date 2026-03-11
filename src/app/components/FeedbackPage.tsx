@@ -209,9 +209,6 @@ export default function FeedbackPage() {
       <header className="page-shell-header" style={{ marginBottom: 28 }}>
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Feedback</h2>
-          <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>
-            Mọi người có thể góp ý tính năng, báo lỗi hoặc chia sẻ trải nghiệm để admin xem xét và cải thiện tool.
-          </p>
         </div>
       </header>
 
@@ -219,9 +216,6 @@ export default function FeedbackPage() {
         <div className="glass-card" style={{ padding: 24, alignSelf: "start" }}>
           <div style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-main)", marginBottom: 6 }}>Gửi feedback mới</h3>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
-              Ghi càng cụ thể càng tốt: đang ở màn nào, thao tác gì, mong muốn điều gì hoặc lỗi xuất hiện ra sao.
-            </p>
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -311,9 +305,6 @@ export default function FeedbackPage() {
               <h3 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-main)", marginBottom: 6 }}>
                 {isAdmin ? "Hộp thư feedback" : "Feedback của bạn"}
               </h3>
-              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                {isAdmin ? "Admin có thể theo dõi, phản hồi và cập nhật tiến độ xử lý ngay tại đây." : "Bạn có thể theo dõi trạng thái xử lý các feedback đã gửi."}
-              </p>
             </div>
 
             {loading ? (

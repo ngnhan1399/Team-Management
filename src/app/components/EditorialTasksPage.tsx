@@ -198,7 +198,6 @@ export default function EditorialTasksPage() {
       <header className="page-shell-header">
         <div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Lịch biên tập</h2>
-          <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 14 }}>Theo dõi deadline, phân công và SLA theo cộng tác viên.</p>
         </div>
         <div className="page-shell-actions" style={{ gap: 10 }}>
           {isAdmin && (

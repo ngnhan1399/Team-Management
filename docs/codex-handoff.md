@@ -17,6 +17,34 @@
 
 Ngày cập nhật: `2026-03-11`
 
+### Phiên khuya 4 - 11/03
+
+**Mục tiêu:** Dọn microcopy giải thích thừa trên giao diện hệ thống.
+
+#### Đã hoàn thành
+
+- Gỡ các dòng mô tả phụ dưới tiêu đề trang ở các màn chính:
+  - `ArticlesPage`
+  - `AuditLogsPage`
+  - `EditorialTasksPage`
+  - `FeedbackPage`
+  - `NotificationsPage`
+  - `RoyaltyPage`
+  - `TeamPage`
+- Dọn thêm các helper text không cần thiết trong:
+  - `DashboardPage` (subtitle + banner giải thích nhuận bút)
+  - `RoyaltyPage` (ghi chú kỳ đang xem + ghi chú scope biểu đồ)
+  - `FeedbackPage` (mô tả phụ ở form và danh sách)
+  - `TeamPage` (mô tả phụ ở thẻ thông tin team)
+- Giữ nguyên các cảnh báo thao tác, thông tin lỗi, trạng thái dữ liệu tạm tính và các hướng dẫn có tính an toàn vận hành.
+
+#### Kiểm tra đã chạy
+
+- `npm run lint` ✅
+  - Còn 2 warning từ `.next_stale_build/*`
+- `npx tsc --noEmit --pretty false` ✅
+- `npm run build` ✅
+
 ### Phiên tối 3 - 11/03
 
 **Mục tiêu:** Chuẩn bị bản mới để push GitHub và redeploy Vercel.
