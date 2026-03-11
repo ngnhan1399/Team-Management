@@ -104,8 +104,6 @@ function getArticleNavigationLink(article: Pick<Article, "reviewLink" | "link">)
   return String(article.reviewLink || "").trim() || String(article.link || "").trim() || "";
 }
 
-const CMS_REVIEW_TAB_NAME = "cms_review";
-
 export default function ArticlesPage() {
   type LinkHealthStatus = "ok" | "broken" | "unknown";
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
@@ -1349,7 +1347,6 @@ export default function ArticlesPage() {
                       {getArticleNavigationLink(a) ? (
                         <a
                           href={getArticleNavigationLink(a)}
-                          target={CMS_REVIEW_TAB_NAME}
                           title={a.reviewLink ? `${a.title} (mở CMS duyệt bài)` : a.title}
                           style={{
                             color: "var(--accent-blue)",
