@@ -52,7 +52,6 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
       try {
         popupRef.current.location.href = url;
       } catch {
-        // cross-origin - reopen via window.open which will reuse the named window
         popupRef.current = window.open(url, CMS_POPUP_NAME) || popupRef.current;
       }
       popupRef.current.focus();
@@ -84,7 +83,6 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
     setPopupBlocked(false);
   }, [url]);
 
-  // Auto-open or navigate on mount / article change
   useEffect(() => {
     if (!url) return;
     if (url === prevUrlRef.current) return;
@@ -93,7 +91,6 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
     return () => clearTimeout(timer);
   }, [url, openOrNavigatePopup]);
 
-  // Poll popup status
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       if (popupRef.current && popupRef.current.closed) {
@@ -108,14 +105,6 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
     };
   }, []);
 
-  // DO NOT close popup on unmount — keep CMS session alive
-  // The named window persists and will be reused next time
-
-  const handleClose = () => {
-    // Only close the panel, NOT the popup
-    onClose();
-  };
-
   const handleClosePopup = () => {
     if (popupRef.current && !popupRef.current.closed) {
       popupRef.current.close();
@@ -129,313 +118,194 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
   };
 
   return (
-    <>
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "min(400px, 45vw)",
+        background: "var(--bg-main, #0f1117)",
+        borderLeft: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
+        zIndex: 900,
+        display: "flex",
+        flexDirection: "column",
+        animation: "slideInRight 0.2s ease",
+        boxShadow: "-4px 0 24px rgba(0,0,0,0.3)",
+      }}
+    >
+      {/* Toolbar */}
       <div
         style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.3)",
-          backdropFilter: "blur(2px)",
-          zIndex: 9998,
-          animation: "fadeIn 0.2s ease",
-        }}
-        onClick={handleClose}
-      />
-
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "min(460px, 100vw)",
-          background: "var(--bg-main, #0f1117)",
-          borderLeft: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-          zIndex: 9999,
           display: "flex",
-          flexDirection: "column",
-          animation: "slideInRight 0.25s ease",
-          boxShadow: "-8px 0 32px rgba(0,0,0,0.4)",
+          alignItems: "center",
+          gap: 6,
+          padding: "8px 12px",
+          borderBottom: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
+          background: "rgba(255,255,255,0.02)",
+          flexShrink: 0,
         }}
       >
-        {/* Toolbar */}
         <div
           style={{
+            flex: 1,
             display: "flex",
             alignItems: "center",
             gap: 6,
-            padding: "10px 16px",
-            borderBottom: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-            background: "rgba(255,255,255,0.02)",
-            flexShrink: 0,
+            padding: "5px 10px",
+            borderRadius: 8,
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
+            minWidth: 0,
           }}
         >
-          <div
+          <span
             style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 12px",
-              borderRadius: 8,
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-              minWidth: 0,
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: popupOpen ? "#22c55e" : "#ef4444",
+              boxShadow: popupOpen ? "0 0 6px rgba(34,197,94,0.4)" : "none",
+              flexShrink: 0,
             }}
+          />
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              fontFamily: "monospace",
+            }}
+            title={url}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--text-muted)", flexShrink: 0 }}>
-              {popupOpen ? "language" : "link_off"}
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--text-muted)",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                fontFamily: "monospace",
-              }}
-              title={url}
+            {url || "Không có link"}
+          </span>
+        </div>
+
+        {url && (
+          <>
+            <button
+              onClick={openOrNavigatePopup}
+              title={popupOpen ? "Chuyển đến bài" : "Mở CMS"}
+              style={toolbarBtnStyle}
             >
-              {url || "Không có link"}
-            </span>
-          </div>
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+                {popupOpen ? "arrow_forward" : "open_in_new"}
+              </span>
+            </button>
+            <button onClick={handleOpenNewTab} title="Mở tab mới" style={toolbarBtnStyle}>
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>tab</span>
+            </button>
+          </>
+        )}
 
-          {url && (
-            <>
-              <button
-                onClick={openOrNavigatePopup}
-                title={popupOpen ? "Chuyển đến bài duyệt" : "Mở CMS"}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                  {popupOpen ? "arrow_forward" : "open_in_new"}
-                </span>
-              </button>
-              <button
-                onClick={handleOpenNewTab}
-                title="Mở trong tab mới"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>tab</span>
-              </button>
-            </>
-          )}
+        <button
+          onClick={onClose}
+          title="Đóng panel"
+          style={{ ...toolbarBtnStyle, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.06)", color: "var(--danger, #ef4444)" }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
+        </button>
+      </div>
 
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {url && popupOpen && (
           <button
-            onClick={handleClose}
-            title="Đóng panel"
+            onClick={openOrNavigatePopup}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-              background: "rgba(255,255,255,0.04)",
-              color: "var(--text-muted)",
+              gap: 8,
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid rgba(59,130,246,0.3)",
+              background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.06))",
+              color: "#3b82f6",
+              fontSize: 13,
+              fontWeight: 700,
               cursor: "pointer",
               flexShrink: 0,
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+            Chuyển đến bài duyệt
           </button>
-        </div>
+        )}
 
-        {/* Content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-
-          {/* Navigate button */}
-          {url && popupOpen && (
-            <button
-              onClick={openOrNavigatePopup}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: "12px 16px",
-                borderRadius: 12,
-                border: "1px solid rgba(59,130,246,0.3)",
-                background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.06))",
-                color: "#3b82f6",
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
-              Chuyển đến bài duyệt
-            </button>
-          )}
-
-          {/* Status indicator */}
-          <div
+        {!popupOpen && url && (
+          <button
+            onClick={openOrNavigatePopup}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              justifyContent: "center",
+              gap: 8,
               padding: "10px 14px",
-              borderRadius: 12,
-              background: popupOpen
-                ? "rgba(34,197,94,0.06)"
-                : "rgba(239,68,68,0.06)",
-              border: `1px solid ${popupOpen ? "rgba(34,197,94,0.16)" : "rgba(239,68,68,0.16)"}`,
+              borderRadius: 10,
+              border: "1px solid rgba(34,197,94,0.3)",
+              background: "linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.06))",
+              color: "#22c55e",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              flexShrink: 0,
             }}
           >
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 999,
-                background: popupOpen ? "#22c55e" : "#ef4444",
-                boxShadow: popupOpen ? "0 0 8px rgba(34,197,94,0.5)" : "none",
-                animation: popupOpen ? "pulse 2s infinite" : "none",
-                flexShrink: 0,
-              }}
-            />
-            <span style={{ fontSize: 12, fontWeight: 700, color: popupOpen ? "#22c55e" : "var(--danger, #ef4444)" }}>
-              {popupOpen ? "CMS đang mở — phiên đăng nhập được giữ" : "CMS chưa mở"}
-            </span>
-            {!popupOpen && url && (
-              <button
-                onClick={openOrNavigatePopup}
-                style={{
-                  marginLeft: "auto",
-                  padding: "4px 12px",
-                  borderRadius: 6,
-                  border: "1px solid rgba(59,130,246,0.3)",
-                  background: "rgba(59,130,246,0.1)",
-                  color: "#3b82f6",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Mở CMS
-              </button>
-            )}
-            {popupOpen && (
-              <button
-                onClick={handleClosePopup}
-                title="Đóng cửa sổ CMS"
-                style={{
-                  marginLeft: "auto",
-                  padding: "4px 8px",
-                  borderRadius: 6,
-                  border: "1px solid rgba(239,68,68,0.2)",
-                  background: "rgba(239,68,68,0.06)",
-                  color: "var(--danger, #ef4444)",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Đóng CMS
-              </button>
-            )}
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>open_in_new</span>
+            Mở CMS
+          </button>
+        )}
+
+        {popupOpen && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 700 }}>● CMS đang mở</span>
+            <button
+              onClick={handleClosePopup}
+              style={{ marginLeft: "auto", padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.06)", color: "var(--danger, #ef4444)", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+            >
+              Đóng CMS
+            </button>
+          </div>
+        )}
+
+        {popupBlocked && (
+          <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.16)", fontSize: 12, color: "#f59e0b", lineHeight: 1.6 }}>
+            ⚠️ Cho phép popup cho trang này rồi bấm <strong>Mở CMS</strong>.
+          </div>
+        )}
+
+        {/* Article info */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main, #fff)", lineHeight: 1.4 }}>
+            {article.title}
           </div>
 
-          {popupBlocked && (
-            <div
-              style={{
-                padding: "10px 14px",
-                borderRadius: 12,
-                background: "rgba(245,158,11,0.06)",
-                border: "1px solid rgba(245,158,11,0.16)",
-                fontSize: 12,
-                color: "#f59e0b",
-                lineHeight: 1.6,
-              }}
-            >
-              ⚠️ Trình duyệt đã chặn popup. Vui lòng <strong>cho phép popup</strong> cho trang này rồi bấm <strong>Mở CMS</strong> lại.
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <InfoCard label="Bút danh" value={article.penName} />
+            <InfoCard label="Ngày viết" value={article.date} />
+            <InfoCard label="Trạng thái" value={statusLabel(article.status)} valueColor={statusColor(article.status)} />
+            <InfoCard label="Người duyệt" value={article.reviewerName || "—"} />
+            <InfoCard label="Loại bài" value={article.articleType || "—"} />
+            <InfoCard label="ID" value={article.articleId || String(article.id)} mono />
+          </div>
+
+          {article.notes && (
+            <div style={{ fontSize: 12, color: "var(--text-main, #fff)", lineHeight: 1.6, padding: 10, borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border, rgba(255,255,255,0.06))", whiteSpace: "pre-wrap" }}>
+              {article.notes}
             </div>
           )}
 
-          {/* Article info */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                Bài viết
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main, #fff)", lineHeight: 1.5 }}>
-                {article.title}
-              </div>
+          {article.link && article.reviewLink && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <LinkRow icon="edit_document" label="Link duyệt bài" url={article.reviewLink} />
+              <LinkRow icon="language" label="Link bài viết" url={article.link} />
             </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <InfoCard label="Bút danh" value={article.penName} />
-              <InfoCard label="Ngày viết" value={article.date} />
-              <InfoCard
-                label="Trạng thái"
-                value={statusLabel(article.status)}
-                valueColor={statusColor(article.status)}
-              />
-              <InfoCard label="Người duyệt" value={article.reviewerName || "—"} />
-              <InfoCard label="Loại bài" value={article.articleType || "—"} />
-              <InfoCard label="ID" value={article.articleId || String(article.id)} mono />
-            </div>
-
-            {article.notes && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                  Ghi chú
-                </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "var(--text-main, #fff)",
-                    lineHeight: 1.6,
-                    padding: 12,
-                    borderRadius: 10,
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {article.notes}
-                </div>
-              </div>
-            )}
-
-            {article.link && article.reviewLink && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                  Liên kết
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <LinkRow icon="edit_document" label="Link duyệt bài" url={article.reviewLink} />
-                  <LinkRow icon="language" label="Link bài viết" url={article.link} />
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
@@ -444,74 +314,40 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
           from { transform: translateX(100%); opacity: 0; }
           to { transform: translateX(0); opacity: 1; }
         }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
       `}</style>
-    </>
+    </div>
   );
 }
 
+const toolbarBtnStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 30,
+  height: 30,
+  borderRadius: 7,
+  border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
+  background: "rgba(255,255,255,0.04)",
+  color: "var(--text-muted)",
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
 function InfoCard({ label, value, valueColor, mono }: { label: string; value: string; valueColor?: string; mono?: boolean }) {
   return (
-    <div
-      style={{
-        padding: "10px 12px",
-        borderRadius: 10,
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-      }}
-    >
-      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: valueColor || "var(--text-main, #fff)",
-          fontFamily: mono ? "monospace" : "inherit",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-        title={value}
-      >
-        {value}
-      </div>
+    <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border, rgba(255,255,255,0.06))" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: valueColor || "var(--text-main, #fff)", fontFamily: mono ? "monospace" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={value}>{value}</div>
     </div>
   );
 }
 
 function LinkRow({ icon, label, url }: { icon: string; label: string; url: string }) {
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "8px 12px",
-        borderRadius: 8,
-        background: "rgba(59,130,246,0.04)",
-        border: "1px solid rgba(59,130,246,0.1)",
-        color: "#3b82f6",
-        textDecoration: "none",
-        fontSize: 12,
-        fontWeight: 600,
-        transition: "background 0.15s",
-      }}
-    >
-      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{icon}</span>
+    <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 7, background: "rgba(59,130,246,0.04)", border: "1px solid rgba(59,130,246,0.1)", color: "#3b82f6", textDecoration: "none", fontSize: 11, fontWeight: 600 }}>
+      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{icon}</span>
       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-      <span className="material-symbols-outlined" style={{ fontSize: 14, opacity: 0.5 }}>open_in_new</span>
+      <span className="material-symbols-outlined" style={{ fontSize: 13, opacity: 0.5 }}>open_in_new</span>
     </a>
   );
 }
