@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
 import CustomSelect from "./CustomSelect";
@@ -105,49 +104,12 @@ function getArticleNavigationLink(article: Pick<Article, "reviewLink" | "link">)
   return String(article.reviewLink || "").trim() || String(article.link || "").trim() || "";
 }
 
-const loadArticlePreviewPanel = () => import("./ArticlePreviewPanel");
+const CMS_REVIEW_TAB_NAME = "cms_review";
 
-function PreviewPanelLoadingState() {
-  return (
-    <>
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.3)",
-          backdropFilter: "blur(2px)",
-          zIndex: 9998,
-        }}
-      />
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "min(460px, 100vw)",
-          background: "var(--bg-main, #0f1117)",
-          borderLeft: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
-          zIndex: 9999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-          color: "var(--text-muted)",
-          fontSize: 14,
-          fontWeight: 600,
-        }}
-      >
-        Đang tải khung preview...
-      </div>
-    </>
-  );
-}
-
-const ArticlePreviewPanel = dynamic(loadArticlePreviewPanel, { loading: () => <PreviewPanelLoadingState /> });
-
-function preloadArticlePreviewPanel() {
-  void loadArticlePreviewPanel();
+function openArticleNavigationTarget(article: Pick<Article, "reviewLink" | "link">) {
+  const target = getArticleNavigationLink(article);
+  if (!target || typeof window === "undefined") return;
+  window.open(target, CMS_REVIEW_TAB_NAME);
 }
 
 export default function ArticlesPage() {
@@ -190,7 +152,6 @@ export default function ArticlesPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteExecuting, setDeleteExecuting] = useState(false);
   const [deletingArticleIds, setDeletingArticleIds] = useState<number[]>([]);
-  const [previewArticle, setPreviewArticle] = useState<Article | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" });
@@ -1394,13 +1355,7 @@ export default function ArticlesPage() {
                       {getArticleNavigationLink(a) ? (
                         <button
                           type="button"
-                          onClick={() => {
-                            preloadArticlePreviewPanel();
-                            setPreviewArticle(a);
-                          }}
-                          onMouseEnter={preloadArticlePreviewPanel}
-                          onFocus={preloadArticlePreviewPanel}
-                          onTouchStart={preloadArticlePreviewPanel}
+                          onClick={() => openArticleNavigationTarget(a)}
                           title={a.reviewLink ? `${a.title} (mở CMS duyệt bài)` : a.title}
                           style={{
                             color: "var(--accent-blue)",
@@ -2675,12 +2630,6 @@ export default function ArticlesPage() {
         </div>
       )}
 
-      {previewArticle && (
-        <ArticlePreviewPanel
-          article={previewArticle}
-          onClose={() => setPreviewArticle(null)}
-        />
-      )}
     </>
   );
 }
