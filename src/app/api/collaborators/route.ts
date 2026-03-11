@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { canAccessTeam, getContextTeamId, isLeader, normalizeTeamId, resolveScopedTeamId } from "@/lib/teams";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -15,6 +16,7 @@ import { normalizeString, normalizeOptionalString } from "@/lib/normalize";
 
 const collaboratorDirectorySelect = {
     id: collaborators.id,
+    teamId: collaborators.teamId,
     name: collaborators.name,
     penName: collaborators.penName,
     role: collaborators.role,
@@ -27,7 +29,9 @@ type LinkedUserSummary = {
     id: number;
     email: string;
     role: "admin" | "ctv";
+    isLeader: boolean;
     collaboratorId: number | null;
+    teamId: number | null;
 };
 
 function normalizeCollaboratorRole(value: unknown): "writer" | "reviewer" | undefined {
@@ -65,6 +69,8 @@ function attachLinkedUsers<T extends { id: number; role?: string | null }>(
             linkedUserId: linkedUser?.id ?? null,
             linkedUserEmail: linkedUser?.email ?? null,
             linkedUserRole: linkedUser?.role ?? null,
+            linkedUserIsLeader: linkedUser?.isLeader ?? false,
+            linkedUserTeamId: linkedUser?.teamId ?? null,
         };
     });
 }
@@ -123,21 +129,41 @@ export async function GET(request: NextRequest) {
 
         const view = request.nextUrl.searchParams.get("view");
         const useDirectoryView = view === "directory";
+        const requestedTeamId = normalizeTeamId(request.nextUrl.searchParams.get("teamId"));
 
         if (context.user.role === "admin") {
+            const scopedTeamId = isLeader(context)
+                ? requestedTeamId
+                : getContextTeamId(context);
+
+            if (!isLeader(context) && !scopedTeamId) {
+                return NextResponse.json({ success: true, data: useDirectoryView ? [] : [], users: [] });
+            }
+
             const allUsers = await db
                 .select({
                     id: users.id,
                     email: users.email,
                     role: users.role,
+                    isLeader: users.isLeader,
                     collaboratorId: users.collaboratorId,
+                    teamId: users.teamId,
                 })
                 .from(users)
+                .where(scopedTeamId ? eq(users.teamId, scopedTeamId) : undefined)
                 .all();
 
             const allCollaborators = useDirectoryView
-                ? await db.select(collaboratorDirectorySelect).from(collaborators).all()
-                : await db.select().from(collaborators).all();
+                ? await db
+                    .select(collaboratorDirectorySelect)
+                    .from(collaborators)
+                    .where(scopedTeamId ? eq(collaborators.teamId, scopedTeamId) : undefined)
+                    .all()
+                : await db
+                    .select()
+                    .from(collaborators)
+                    .where(scopedTeamId ? eq(collaborators.teamId, scopedTeamId) : undefined)
+                    .all();
 
             const data = attachLinkedUsers(allCollaborators, allUsers);
 
@@ -180,9 +206,13 @@ export async function POST(request: NextRequest) {
         const name = normalizeString(body.name);
         const penName = normalizeString(body.penName);
         const email = normalizeOptionalEmail(body.email);
+        const targetTeamId = resolveScopedTeamId(context, body.teamId);
 
         if (!name || !penName) {
             return NextResponse.json({ success: false, error: "Name and penName are required" }, { status: 400 });
+        }
+        if (!targetTeamId) {
+            return NextResponse.json({ success: false, error: "Không xác định được team cần thêm thành viên" }, { status: 400 });
         }
 
         const duplicatePenName = await db
@@ -203,6 +233,7 @@ export async function POST(request: NextRequest) {
 
         const collaboratorValues = {
             ...buildCollaboratorValues(body, email),
+            teamId: targetTeamId,
             name,
             penName,
             role: (normalizeCollaboratorRole(body.role) || "writer") as never,
@@ -228,7 +259,9 @@ export async function POST(request: NextRequest) {
                         email,
                         passwordHash,
                         role: "ctv",
+                        isLeader: false,
                         collaboratorId: newCollaboratorId,
+                        teamId: targetTeamId,
                         mustChangePassword: true,
                     })
                     .run();
@@ -242,7 +275,7 @@ export async function POST(request: NextRequest) {
             action: "collaborator_created",
             entity: "collaborator",
             entityId: collaboratorId,
-            payload: { name, penName, email: email ?? null },
+            payload: { name, penName, email: email ?? null, teamId: targetTeamId },
         });
 
         await publishRealtimeEvent({
@@ -298,6 +331,9 @@ export async function PUT(request: NextRequest) {
         if (!existingCollaborator) {
             return NextResponse.json({ success: false, error: "Collaborator not found" }, { status: 404 });
         }
+        if (!canAccessTeam(context, existingCollaborator.teamId)) {
+            return NextResponse.json({ success: false, error: "Bạn không có quyền chỉnh thành viên của team này" }, { status: 403 });
+        }
 
         const penName = normalizeOptionalString(body.penName);
         if (penName) {
@@ -314,12 +350,15 @@ export async function PUT(request: NextRequest) {
         const email = normalizeOptionalEmail(body.email);
         if (email) {
             const emailOwner = await db
-                .select({ id: users.id, collaboratorId: users.collaboratorId })
+                .select({ id: users.id, collaboratorId: users.collaboratorId, teamId: users.teamId })
                 .from(users)
                 .where(eq(users.email, email))
                 .get();
             if (emailOwner && emailOwner.id !== normalizedLinkedUserId && emailOwner.collaboratorId !== id) {
                 return NextResponse.json({ success: false, error: "Email đã được dùng cho tài khoản khác" }, { status: 409 });
+            }
+            if (emailOwner?.teamId && emailOwner.teamId !== existingCollaborator.teamId) {
+                return NextResponse.json({ success: false, error: "Email này đang thuộc về team khác" }, { status: 409 });
             }
         }
 
@@ -374,7 +413,9 @@ export async function PUT(request: NextRequest) {
                     id: users.id,
                     email: users.email,
                     role: users.role,
+                    isLeader: users.isLeader,
                     collaboratorId: users.collaboratorId,
+                    teamId: users.teamId,
                 })
                 .from(users)
                 .where(eq(users.collaboratorId, id))
@@ -396,7 +437,9 @@ export async function PUT(request: NextRequest) {
                         id: users.id,
                         email: users.email,
                         role: users.role,
+                        isLeader: users.isLeader,
                         collaboratorId: users.collaboratorId,
+                        teamId: users.teamId,
                     })
                     .from(users)
                     .where(eq(users.id, normalizedLinkedUserId))
@@ -408,13 +451,16 @@ export async function PUT(request: NextRequest) {
                 if (selectedUser.role !== "ctv") {
                     throw new Error("Chỉ có thể liên kết tài khoản CTV tại màn hình này");
                 }
+                if (selectedUser.teamId && selectedUser.teamId !== existingCollaborator.teamId) {
+                    throw new Error("Tài khoản này đang thuộc team khác");
+                }
                 if (selectedUser.collaboratorId && selectedUser.collaboratorId !== id) {
                     throw new Error("Tài khoản này đã được liên kết với cộng tác viên khác");
                 }
 
                 const nextUserEmail = email || selectedUser.email;
                 await tx.update(users)
-                    .set({ collaboratorId: id, email: nextUserEmail })
+                    .set({ collaboratorId: id, email: nextUserEmail, teamId: existingCollaborator.teamId })
                     .where(eq(users.id, selectedUser.id))
                     .run();
 
@@ -485,15 +531,21 @@ export async function DELETE(request: NextRequest) {
         if (!collaborator) {
             return NextResponse.json({ success: false, error: "Không tìm thấy thành viên" }, { status: 404 });
         }
+        if (!canAccessTeam(context, collaborator.teamId)) {
+            return NextResponse.json({ success: false, error: "Không thể xóa thành viên của team khác" }, { status: 403 });
+        }
 
         const linkedUser = await db
-            .select({ id: users.id, role: users.role, email: users.email })
+            .select({ id: users.id, role: users.role, email: users.email, isLeader: users.isLeader })
             .from(users)
             .where(eq(users.collaboratorId, collaboratorId))
             .get();
 
         if (linkedUser?.role === "admin") {
             return NextResponse.json({ success: false, error: "Không thể xóa tài khoản admin" }, { status: 403 });
+        }
+        if (linkedUser?.isLeader) {
+            return NextResponse.json({ success: false, error: "Không thể xóa tài khoản leader" }, { status: 403 });
         }
 
         if (linkedUser?.id === context.user.id) {
@@ -543,5 +595,3 @@ export async function DELETE(request: NextRequest) {
         return handleServerError("collaborators.delete", error);
     }
 }
-
-

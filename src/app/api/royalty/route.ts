@@ -6,12 +6,14 @@ import { matchesRoyaltyMonthYear, parseRoyaltyDateParts } from "@/lib/royalty";
 import { requiredInt, optionalString, ValidationError } from "@/lib/validation";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { getContextTeamId, isLeader } from "@/lib/teams";
 import { and, eq, inArray, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type RoyaltyBreakdown = Record<string, { count: number; unitPrice: number; total: number }>;
 
 type RoyaltySourceArticle = {
+    teamId: number | null;
     penName: string;
     articleType: string;
     contentType: string;
@@ -27,7 +29,7 @@ function buildArticleOwnerWhere(ownerCandidates: string[]): SQL | undefined {
     return inArray(articles.penName, normalizedCandidates as never[]);
 }
 
-async function selectRoyaltyArticles(options?: { ownerCandidates?: string[]; exactPenName?: string }) {
+async function selectRoyaltyArticles(options?: { ownerCandidates?: string[]; exactPenName?: string; teamId?: number | null }) {
     const conditions: SQL[] = [inArray(articles.status, [...ROYALTY_ELIGIBLE_STATUS_VALUES])];
 
     if (options?.exactPenName) {
@@ -36,8 +38,12 @@ async function selectRoyaltyArticles(options?: { ownerCandidates?: string[]; exa
         const ownerWhere = buildArticleOwnerWhere(options.ownerCandidates);
         if (ownerWhere) conditions.push(ownerWhere);
     }
+    if (options?.teamId) {
+        conditions.push(eq(articles.teamId, options.teamId));
+    }
 
     return db.select({
+        teamId: articles.teamId,
         penName: articles.penName,
         articleType: articles.articleType,
         contentType: articles.contentType,
@@ -58,6 +64,7 @@ export async function GET(request: NextRequest) {
 
         const { searchParams } = new URL(request.url);
         const action = searchParams.get("action");
+        const adminTeamId = context.user.role === "admin" && !isLeader(context) ? getContextTeamId(context) : null;
 
         if (action === "rates") {
             const rates = await db.select().from(royaltyRates).where(eq(royaltyRates.isActive, true)).all();
@@ -65,6 +72,9 @@ export async function GET(request: NextRequest) {
         }
 
         if (action === "budget-get") {
+            if (!isLeader(context)) {
+                return NextResponse.json({ success: true, data: null });
+            }
             const month = searchParams.get("month")
                 ? requiredInt(searchParams.get("month"), "month")
                 : new Date().getMonth() + 1;
@@ -81,6 +91,17 @@ export async function GET(request: NextRequest) {
         }
 
         if (action === "dashboard") {
+            if (context.user.role === "admin" && !isLeader(context) && !adminTeamId) {
+                return NextResponse.json({
+                    success: true,
+                    data: {
+                        monthlyData: [],
+                        currentMonth: { month: new Date().getMonth() + 1, year: new Date().getFullYear(), totalAmount: 0, totalArticles: 0 },
+                        budget: { budgetAmount: 0, spent: 0, remaining: 0, percentage: 0, hasBudget: false },
+                        topWriters: [],
+                    },
+                });
+            }
             const now = new Date();
             const currentMonth = searchParams.get("month")
                 ? requiredInt(searchParams.get("month"), "month")
@@ -98,6 +119,7 @@ export async function GET(request: NextRequest) {
             const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
             const scopedArticles = await selectRoyaltyArticles({
                 ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
+                teamId: adminTeamId,
             });
 
             const monthlyMap: Record<string, { month: number; year: number; totalAmount: number; totalArticles: number }> = {};
@@ -132,11 +154,13 @@ export async function GET(request: NextRequest) {
                 monthlyData.push(monthlyMap[key] || { month, year, totalAmount: 0, totalArticles: 0 });
             }
 
-            const budget = await db
-                .select()
-                .from(monthlyBudgets)
-                .where(and(eq(monthlyBudgets.month, currentMonth), eq(monthlyBudgets.year, currentYear)))
-                .get();
+            const budget = isLeader(context)
+                ? await db
+                    .select()
+                    .from(monthlyBudgets)
+                    .where(and(eq(monthlyBudgets.month, currentMonth), eq(monthlyBudgets.year, currentYear)))
+                    .get()
+                : null;
 
             const currentKey = `${currentYear}-${currentMonth}`;
             const currentSpent = monthlyMap[currentKey]?.totalAmount || 0;
@@ -173,6 +197,9 @@ export async function GET(request: NextRequest) {
         }
 
         if (action === "calculate") {
+            if (context.user.role === "admin" && !isLeader(context) && !adminTeamId) {
+                return NextResponse.json({ success: true, data: [], month: 0, year: 0 });
+            }
             const month = searchParams.get("month") ? requiredInt(searchParams.get("month"), "month") : 0;
             const year = searchParams.get("year") ? requiredInt(searchParams.get("year"), "year") : 0;
             const requestPenName = optionalString(searchParams.get("penName")) || "";
@@ -187,6 +214,7 @@ export async function GET(request: NextRequest) {
             const scopedArticles = await selectRoyaltyArticles({
                 exactPenName: context.user.role === "admin" ? requestPenName || undefined : undefined,
                 ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
+                teamId: adminTeamId,
             });
 
             const filtered = scopedArticles.filter((article) => {
@@ -254,8 +282,8 @@ export async function PUT(request: NextRequest) {
         if (!context) {
             return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
         }
-        if (context.user.role !== "admin") {
-            return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+        if (!isLeader(context)) {
+            return NextResponse.json({ success: false, error: "Leader access required" }, { status: 403 });
         }
 
         const body = (await request.json()) as Record<string, unknown>;
@@ -288,8 +316,8 @@ export async function POST(request: NextRequest) {
         if (!context) {
             return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
         }
-        if (context.user.role !== "admin") {
-            return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+        if (!isLeader(context)) {
+            return NextResponse.json({ success: false, error: "Leader access required" }, { status: 403 });
         }
 
         const body = (await request.json()) as Record<string, unknown>;

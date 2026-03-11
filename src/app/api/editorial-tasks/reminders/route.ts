@@ -6,6 +6,7 @@ import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { getContextTeamId, isLeader } from "@/lib/teams";
 import { and, eq, lte, ne } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -24,17 +25,27 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
+    const adminTeamId = !isLeader(context) ? getContextTeamId(context) : null;
+    if (!isLeader(context) && !adminTeamId) {
+      return NextResponse.json({ success: true, checked: 0, notified: 0 });
+    }
+    const dueTaskConditions = [
+      lte(editorialTasks.remindAt, now),
+      ne(editorialTasks.status, "done"),
+      adminTeamId ? eq(editorialTasks.teamId, adminTeamId) : null,
+    ].filter(Boolean);
     const dueTasks = await db
       .select()
       .from(editorialTasks)
-      .where(and(lte(editorialTasks.remindAt, now), ne(editorialTasks.status, "done")))
+      .where(and(...dueTaskConditions))
       .all();
 
     let notified = 0;
     const assigneeCandidates = await db
-      .select({ id: users.id, penName: collaborators.penName, name: collaborators.name })
+      .select({ id: users.id, penName: collaborators.penName, name: collaborators.name, teamId: users.teamId })
       .from(users)
       .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+      .where(adminTeamId ? eq(users.teamId, adminTeamId) : undefined)
       .all();
 
     for (const task of dueTasks) {

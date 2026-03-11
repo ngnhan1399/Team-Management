@@ -14,8 +14,11 @@ export async function GET() {
                 id: context.user.id,
                 email: context.user.email,
                 role: context.user.role,
+                isLeader: Boolean(context.user.isLeader),
                 mustChangePassword: context.user.mustChangePassword,
                 collaboratorId: context.collaborator?.id ?? context.user.collaboratorId,
+                teamId: context.team?.id ?? context.user.teamId ?? context.collaborator?.teamId ?? null,
+                team: context.team,
                 collaborator: context.collaborator,
             },
         });

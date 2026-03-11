@@ -2,6 +2,8 @@ import { db } from "@/db";
 import { articles } from "@/db/schema";
 import { getCurrentUserContext, hasArticleManagerAccess } from "@/lib/auth";
 import { normalizeArticleReviewLink } from "@/lib/review-link";
+import { getContextTeamId, isLeader } from "@/lib/teams";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
@@ -15,7 +17,12 @@ export async function GET() {
             return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
         }
 
-        const data = await db.select().from(articles).all();
+        const adminTeamId = !isLeader(context) ? getContextTeamId(context) : null;
+        const data = await db
+            .select()
+            .from(articles)
+            .where(adminTeamId ? eq(articles.teamId, adminTeamId) : undefined)
+            .all();
 
         const exportData = data.map((a) => ({
             STT: a.id,

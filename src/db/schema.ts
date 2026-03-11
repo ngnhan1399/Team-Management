@@ -8,14 +8,27 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["admin", "ctv"] }).notNull().default("ctv"),
+  isLeader: boolean("is_leader").notNull().default(false),
   collaboratorId: integer("collaborator_id"),
+  teamId: integer("team_id"),
   mustChangePassword: boolean("must_change_password").notNull().default(true),
   lastLogin: text("last_login"),
   createdAt: text("created_at").notNull().default(timestampTextDefault),
 });
 
+export const teams = pgTable("teams", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  ownerUserId: integer("owner_user_id"),
+  status: text("status", { enum: ["active", "archived"] }).notNull().default("active"),
+  createdAt: text("created_at").notNull().default(timestampTextDefault),
+  updatedAt: text("updated_at").notNull().default(timestampTextDefault),
+});
+
 export const collaborators = pgTable("collaborators", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id"),
   name: text("name").notNull(),
   penName: text("pen_name").notNull(),
   role: text("role", { enum: ["writer", "reviewer"] }).notNull().default("writer"),
@@ -40,6 +53,7 @@ export const collaborators = pgTable("collaborators", {
 
 export const articles = pgTable("articles", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id"),
   articleId: text("article_id"),
   date: text("date").notNull(),
   title: text("title").notNull(),
@@ -95,6 +109,7 @@ export const articleComments = pgTable("article_comments", {
 
 export const editorialTasks = pgTable("editorial_tasks", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id"),
   title: text("title").notNull(),
   description: text("description"),
   assigneePenName: text("assignee_pen_name").notNull(),
@@ -109,6 +124,7 @@ export const editorialTasks = pgTable("editorial_tasks", {
 
 export const kpiRecords = pgTable("kpi_records", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id"),
   month: integer("month").notNull(),
   year: integer("year").notNull(),
   penName: text("pen_name").notNull(),
@@ -129,6 +145,7 @@ export const royaltyRates = pgTable("royalty_rates", {
 
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id"),
   month: integer("month").notNull(),
   year: integer("year").notNull(),
   penName: text("pen_name").notNull(),
@@ -191,6 +208,7 @@ export const feedbackEntries = pgTable("feedback_entries", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   collaboratorId: integer("collaborator_id"),
+  teamId: integer("team_id"),
   submitterName: text("submitter_name").notNull(),
   submitterEmail: text("submitter_email").notNull(),
   category: text("category", { enum: ["bug", "feature", "improvement", "other"] }).notNull().default("improvement"),
@@ -215,6 +233,7 @@ export const realtimeEvents = pgTable("realtime_events", {
 });
 
 export type User = typeof users.$inferSelect;
+export type Team = typeof teams.$inferSelect;
 export type Collaborator = typeof collaborators.$inferSelect;
 export type NewCollaborator = typeof collaborators.$inferInsert;
 export type Article = typeof articles.$inferSelect;

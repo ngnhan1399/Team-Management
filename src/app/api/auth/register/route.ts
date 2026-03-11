@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
                     email,
                     passwordHash,
                     collaboratorId: collaborator.id,
+                    teamId: collaborator.teamId,
                     mustChangePassword: false,
                     lastLogin: now,
                 })
@@ -112,6 +113,7 @@ export async function POST(request: NextRequest) {
                     passwordHash,
                     role: "ctv",
                     collaboratorId: collaborator.id,
+                    teamId: collaborator.teamId,
                     mustChangePassword: false,
                     lastLogin: now,
                 })
@@ -127,8 +129,10 @@ export async function POST(request: NextRequest) {
             userId,
             email,
             role: "ctv",
+            isLeader: false,
             penName: collaborator.penName,
             collaboratorId: collaborator.id,
+            teamId: collaborator.teamId,
         });
 
         await setAuthCookie(token);
@@ -151,8 +155,10 @@ export async function POST(request: NextRequest) {
                 id: userId,
                 email,
                 role: "ctv",
+                isLeader: false,
                 mustChangePassword: false,
                 collaboratorId: collaborator.id,
+                teamId: collaborator.teamId,
             },
         });
     } catch (error) {

@@ -6,6 +6,7 @@ import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { canAccessTeam, getContextTeamId, isLeader, normalizeTeamId, resolveScopedTeamId } from "@/lib/teams";
 import { eq, and, desc, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { requiredString, requiredInt, optionalString, optionalEnum, ValidationError } from "@/lib/validation";
@@ -25,11 +26,16 @@ export async function GET(request: NextRequest) {
     const status = optionalEnum(searchParams.get("status"), TASK_STATUS);
     const assignee = optionalString(searchParams.get("assigneePenName"));
     const identityCandidates = getContextIdentityCandidates(context);
+    const adminTeamId = context.user.role === "admin" && !isLeader(context) ? getContextTeamId(context) : null;
 
     const conditions: SQL[] = [];
     if (status) conditions.push(eq(editorialTasks.status, status));
 
     if (context.user.role === "admin") {
+      if (!isLeader(context) && !adminTeamId) {
+        return NextResponse.json({ success: true, data: [] });
+      }
+      if (adminTeamId) conditions.push(eq(editorialTasks.teamId, adminTeamId));
       if (assignee) conditions.push(eq(editorialTasks.assigneePenName, assignee));
     } else if (identityCandidates.length === 0) {
       return NextResponse.json({ success: true, data: [] });
@@ -77,10 +83,27 @@ export async function POST(request: NextRequest) {
     const remindAt = optionalString(body.remindAt);
     const status = optionalEnum(body.status, TASK_STATUS) || "todo";
     const priority = optionalEnum(body.priority, TASK_PRIORITY) || "medium";
+    const requestedTeamId = normalizeTeamId(body.teamId);
+    const assigneeCollaborator = await db
+      .select({ id: collaborators.id, teamId: collaborators.teamId })
+      .from(collaborators)
+      .where(eq(collaborators.penName, assigneePenName))
+      .get();
+    const teamId = isLeader(context)
+      ? requestedTeamId ?? assigneeCollaborator?.teamId ?? getContextTeamId(context)
+      : resolveScopedTeamId(context, body.teamId);
+
+    if (!teamId) {
+      return NextResponse.json({ success: false, error: "Không xác định được team của task" }, { status: 400 });
+    }
+    if (assigneeCollaborator?.teamId && assigneeCollaborator.teamId !== teamId) {
+      return NextResponse.json({ success: false, error: "Người nhận không thuộc team đã chọn" }, { status: 400 });
+    }
 
     const createdTask = await db
       .insert(editorialTasks)
       .values({
+        teamId,
         title,
         assigneePenName,
         dueDate,
@@ -94,9 +117,10 @@ export async function POST(request: NextRequest) {
       .get();
 
     const assigneeCandidates = await db
-      .select({ id: users.id, penName: collaborators.penName, name: collaborators.name })
+      .select({ id: users.id, penName: collaborators.penName, name: collaborators.name, teamId: users.teamId })
       .from(users)
       .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+      .where(eq(users.teamId, teamId))
       .all();
 
     const assigneeUser = assigneeCandidates.find((item) => matchesIdentityCandidate([item.penName, item.name], assigneePenName));
@@ -148,6 +172,9 @@ export async function PUT(request: NextRequest) {
     const existing = await db.select().from(editorialTasks).where(eq(editorialTasks.id, id)).get();
     if (!existing) {
       return NextResponse.json({ success: false, error: "Task not found" }, { status: 404 });
+    }
+    if (!canAccessTeam(context, existing.teamId)) {
+      return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
     }
 
     const identityCandidates = getContextIdentityCandidates(context);

@@ -6,6 +6,7 @@ import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { canAccessTeam, getContextTeamId, isLeader } from "@/lib/teams";
 import { eq, and, desc, sql, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -65,23 +66,32 @@ export async function POST(request: NextRequest) {
         }
 
         const { toUserId, toPenName, type, title, message, relatedArticleId } = await request.json();
+        const adminTeamId = !isLeader(context) ? getContextTeamId(context) : null;
 
         if (!title || !message) {
             return NextResponse.json({ success: false, error: "Title and message required" }, { status: 400 });
+        }
+        if (!isLeader(context) && !adminTeamId) {
+            return NextResponse.json({ success: false, error: "Không xác định được team của admin hiện tại" }, { status: 400 });
         }
 
         const recipients: Array<{ userId: number; penName: string | null }> = [];
 
         if (toUserId) {
-            const target = await db.select({ id: users.id }).from(users).where(eq(users.id, Number(toUserId))).get();
-            if (target?.id) {
+            const target = await db
+                .select({ id: users.id, teamId: users.teamId })
+                .from(users)
+                .where(eq(users.id, Number(toUserId)))
+                .get();
+            if (target?.id && canAccessTeam(context, target.teamId)) {
                 recipients.push({ userId: target.id, penName: toPenName || null });
             }
         } else if (toPenName) {
             const targets = await db
-                .select({ id: users.id, penName: collaborators.penName, name: collaborators.name })
+                .select({ id: users.id, penName: collaborators.penName, name: collaborators.name, teamId: users.teamId })
                 .from(users)
                 .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+                .where(adminTeamId ? eq(users.teamId, adminTeamId) : undefined)
                 .all();
 
             const target = targets.find((item) => matchesIdentityCandidate([item.penName, item.name], toPenName));
@@ -89,11 +99,15 @@ export async function POST(request: NextRequest) {
                 recipients.push({ userId: target.id, penName: target.penName ?? null });
             }
         } else {
+            const broadcastConditions = [
+                sql`${users.id} != ${context.user.id}`,
+                adminTeamId ? eq(users.teamId, adminTeamId) : null,
+            ].filter(Boolean);
             const broadcastTargets = await db
-                .select({ id: users.id, penName: collaborators.penName })
+                .select({ id: users.id, penName: collaborators.penName, teamId: users.teamId })
                 .from(users)
                 .leftJoin(collaborators, eq(users.collaboratorId, collaborators.id))
-                .where(sql`${users.id} != ${context.user.id}`)
+                .where(and(...broadcastConditions))
                 .all();
 
             for (const target of broadcastTargets) {

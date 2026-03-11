@@ -26,6 +26,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 const compatCache = new WeakMap<object, object>();
+const DEFAULT_TEAM_NAME = "Team mặc định";
 
 function normalizeRows(result: unknown) {
   if (Array.isArray(result)) return result;
@@ -125,13 +126,25 @@ const bootstrapStatements = [
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'ctv',
+    is_leader BOOLEAN NOT NULL DEFAULT false,
     collaborator_id INTEGER,
+    team_id INTEGER,
     must_change_password BOOLEAN NOT NULL DEFAULT true,
     last_login TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
+  `CREATE TABLE IF NOT EXISTS teams (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    owner_user_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
   `CREATE TABLE IF NOT EXISTS collaborators (
     id SERIAL PRIMARY KEY,
+    team_id INTEGER,
     name TEXT NOT NULL,
     pen_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'writer',
@@ -155,6 +168,7 @@ const bootstrapStatements = [
   )`,
   `CREATE TABLE IF NOT EXISTS articles (
     id SERIAL PRIMARY KEY,
+    team_id INTEGER,
     article_id TEXT,
     date TEXT NOT NULL,
     title TEXT NOT NULL,
@@ -195,6 +209,7 @@ const bootstrapStatements = [
   )`,
   `CREATE TABLE IF NOT EXISTS editorial_tasks (
     id SERIAL PRIMARY KEY,
+    team_id INTEGER,
     title TEXT NOT NULL,
     description TEXT,
     assignee_pen_name TEXT NOT NULL,
@@ -208,6 +223,7 @@ const bootstrapStatements = [
   )`,
   `CREATE TABLE IF NOT EXISTS kpi_records (
     id SERIAL PRIMARY KEY,
+    team_id INTEGER,
     month INTEGER NOT NULL,
     year INTEGER NOT NULL,
     pen_name TEXT NOT NULL,
@@ -226,6 +242,7 @@ const bootstrapStatements = [
   )`,
   `CREATE TABLE IF NOT EXISTS payments (
     id SERIAL PRIMARY KEY,
+    team_id INTEGER,
     month INTEGER NOT NULL,
     year INTEGER NOT NULL,
     pen_name TEXT NOT NULL,
@@ -283,6 +300,7 @@ const bootstrapStatements = [
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     collaborator_id INTEGER,
+    team_id INTEGER,
     submitter_name TEXT NOT NULL,
     submitter_email TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'improvement',
@@ -304,6 +322,14 @@ const bootstrapStatements = [
     toast_variant TEXT DEFAULT 'info',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
+  "CREATE INDEX IF NOT EXISTS idx_teams_status ON teams(status)",
+  "CREATE INDEX IF NOT EXISTS idx_users_team_id ON users(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_collaborators_team_id ON collaborators(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_articles_team_id ON articles(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_team_id ON editorial_tasks(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_team_id ON kpi_records(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_payments_team_id ON payments(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_feedback_entries_team_id ON feedback_entries(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_articles_pen_name ON articles(pen_name)",
   "CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(date)",
   "CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status)",
@@ -339,7 +365,29 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "4";
+const BOOTSTRAP_SCHEMA_VERSION = "5";
+
+async function getOrCreateDefaultTeamId() {
+  const existingDefault = await pool.query(
+    `SELECT id FROM teams WHERE name = $1 ORDER BY id ASC LIMIT 1`,
+    [DEFAULT_TEAM_NAME]
+  );
+
+  if (existingDefault.rowCount) {
+    return Number(existingDefault.rows[0]?.id);
+  }
+
+  const insertedDefault = await pool.query(
+    `
+      INSERT INTO teams (name, description, status, created_at, updated_at)
+      VALUES ($1, $2, 'active', CURRENT_TIMESTAMP::text, CURRENT_TIMESTAMP::text)
+      RETURNING id
+    `,
+    [DEFAULT_TEAM_NAME, "Được tạo tự động để tiếp nhận dữ liệu legacy sau khi nâng cấp hệ thống nhiều team."]
+  );
+
+  return Number(insertedDefault.rows[0]?.id);
+}
 
 export async function initializeDatabase() {
   await pool.query(RUNTIME_META_TABLE_SQL);
@@ -363,8 +411,26 @@ export async function initializeDatabase() {
   await ensureColumnExists("payments", "updated_at", "TEXT DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists("articles", "created_by_user_id", "INTEGER");
   await ensureColumnExists("articles", "review_link", "TEXT");
+  await ensureColumnExists("users", "is_leader", "BOOLEAN NOT NULL DEFAULT false");
+  await ensureColumnExists("users", "team_id", "INTEGER");
+  await ensureColumnExists("collaborators", "team_id", "INTEGER");
+  await ensureColumnExists("articles", "team_id", "INTEGER");
+  await ensureColumnExists("editorial_tasks", "team_id", "INTEGER");
+  await ensureColumnExists("kpi_records", "team_id", "INTEGER");
+  await ensureColumnExists("payments", "team_id", "INTEGER");
+  await ensureColumnExists("feedback_entries", "team_id", "INTEGER");
   await pool.query(`ALTER TABLE articles ALTER COLUMN status SET DEFAULT 'Submitted'`);
   await pool.query(`UPDATE collaborators SET role = 'reviewer' WHERE role = 'editor'`);
+  await pool.query(`UPDATE users SET is_leader = true WHERE role = 'admin' AND is_leader = false`);
+
+  const defaultTeamId = await getOrCreateDefaultTeamId();
+  await pool.query(`UPDATE users SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`UPDATE collaborators SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`UPDATE articles SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`UPDATE editorial_tasks SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`UPDATE kpi_records SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`UPDATE payments SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`UPDATE feedback_entries SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
 
   await pool.query(`
     UPDATE articles

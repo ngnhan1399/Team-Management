@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { db, ensureDatabaseInitialized } from "@/db";
-import { users, collaborators, type User, type Collaborator } from "@/db/schema";
+import { users, collaborators, teams, type User, type Collaborator, type Team } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const jwtSecretValue = process.env.JWT_SECRET;
@@ -17,8 +17,10 @@ type TokenPayload = {
     userId: number;
     email: string;
     role: "admin" | "ctv";
+    isLeader: boolean;
     penName: string;
     collaboratorId: number | null;
+    teamId: number | null;
 };
 
 export function generatePassword(length = 8): string {
@@ -66,6 +68,7 @@ export interface CurrentUserContext {
     token: TokenPayload;
     user: User;
     collaborator: Collaborator | null;
+    team: Team | null;
 }
 
 export function hasArticleManagerAccess(context: CurrentUserContext | null | undefined): boolean {
@@ -132,7 +135,12 @@ export async function getCurrentUserContext(): Promise<CurrentUserContext | null
             await db.select().from(collaborators).where(eq(collaborators.email, user.email)).get() ?? null;
     }
 
-    return { token, user, collaborator };
+    const teamId = user.teamId ?? collaborator?.teamId ?? token.teamId ?? null;
+    const team = teamId
+        ? await db.select().from(teams).where(eq(teams.id, teamId)).get() ?? null
+        : null;
+
+    return { token, user, collaborator, team };
 }
 
 export function getContextPenName(context: CurrentUserContext): string | null {

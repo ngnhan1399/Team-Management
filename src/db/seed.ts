@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { db, ensureDatabaseInitialized } from "./index";
-import { royaltyRates, collaborators, users } from "./schema";
+import { royaltyRates, collaborators, teams, users } from "./schema";
 import { hashPassword } from "@/lib/auth";
 
 const ROYALTY_DATA = [
@@ -38,6 +38,8 @@ const CTV_DATA = [
 
 export async function seedDatabase() {
     await ensureDatabaseInitialized();
+    const defaultTeam = await db.select().from(teams).orderBy(teams.id).get();
+    const defaultTeamId = Number(defaultTeam?.id || 1);
 
     const existingRates = await db.select().from(royaltyRates).all();
     if (existingRates.length === 0) {
@@ -50,7 +52,10 @@ export async function seedDatabase() {
     const existingCTVs = await db.select().from(collaborators).all();
     if (existingCTVs.length === 0) {
         for (const ctv of CTV_DATA) {
-            await db.insert(collaborators).values(ctv).run();
+            await db.insert(collaborators).values({
+                ...ctv,
+                teamId: defaultTeamId,
+            }).run();
         }
         console.log(`✅ Seeded ${CTV_DATA.length} demo collaborators`);
     }
@@ -64,7 +69,9 @@ export async function seedDatabase() {
             email: adminEmail,
             passwordHash: adminPasswordHash,
             role: "admin",
+            isLeader: true,
             collaboratorId: 9,
+            teamId: defaultTeamId,
             mustChangePassword: true,
         }).run();
         console.log(`✅ Seeded admin user: ${adminEmail}`);

@@ -94,8 +94,10 @@ export async function POST(request: NextRequest) {
             userId: user.id,
             email: user.email,
             role: user.role as "admin" | "ctv",
+            isLeader: Boolean(user.isLeader),
             penName,
             collaboratorId: user.collaboratorId,
+            teamId: user.teamId,
         });
 
         await setAuthCookie(token);
@@ -115,8 +117,10 @@ export async function POST(request: NextRequest) {
                 id: user.id,
                 email: user.email,
                 role: user.role,
+                isLeader: Boolean(user.isLeader),
                 mustChangePassword: user.mustChangePassword,
                 collaboratorId: user.collaboratorId,
+                teamId: user.teamId,
             },
         });
     } catch (error) {

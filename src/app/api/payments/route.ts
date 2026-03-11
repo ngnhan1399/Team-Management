@@ -8,11 +8,13 @@ import { matchesRoyaltyMonthYear } from "@/lib/royalty";
 import { requiredInt, optionalString, ValidationError, enumValue } from "@/lib/validation";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { canAccessTeam, getContextTeamId, isLeader } from "@/lib/teams";
 import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type PaymentDetails = Record<string, { count: number; unitPrice: number; total: number }>;
 type CalcRow = {
+  teamId: number | null;
   penName: string;
   totalArticles: number;
   totalAmount: number;
@@ -20,6 +22,7 @@ type CalcRow = {
 };
 
 type PaymentSourceArticle = {
+  teamId: number | null;
   penName: string;
   articleType: string;
   contentType: string;
@@ -35,7 +38,7 @@ function buildArticleOwnerWhere(ownerCandidates: string[]): SQL | undefined {
   return inArray(articles.penName, normalizedCandidates as never[]);
 }
 
-async function selectPaymentSourceArticles(options?: { exactPenName?: string; ownerCandidates?: string[] }) {
+async function selectPaymentSourceArticles(options?: { exactPenName?: string; ownerCandidates?: string[]; teamId?: number | null }) {
   const conditions: SQL[] = [inArray(articles.status, [...ROYALTY_ELIGIBLE_STATUS_VALUES])];
 
   if (options?.exactPenName) {
@@ -44,8 +47,12 @@ async function selectPaymentSourceArticles(options?: { exactPenName?: string; ow
     const ownerWhere = buildArticleOwnerWhere(options.ownerCandidates);
     if (ownerWhere) conditions.push(ownerWhere);
   }
+  if (options?.teamId) {
+    conditions.push(eq(articles.teamId, options.teamId));
+  }
 
   return db.select({
+    teamId: articles.teamId,
     penName: articles.penName,
     articleType: articles.articleType,
     contentType: articles.contentType,
@@ -66,7 +73,7 @@ function parsePaymentDetails(raw: string | null): PaymentDetails | null {
   }
 }
 
-async function buildCalculation(month: number, year: number, options?: { exactPenName?: string; ownerCandidates?: string[] }): Promise<CalcRow[]> {
+async function buildCalculation(month: number, year: number, options?: { exactPenName?: string; ownerCandidates?: string[]; teamId?: number | null }): Promise<CalcRow[]> {
   const rates = await db.select().from(royaltyRates).where(eq(royaltyRates.isActive, true)).all();
   const rateMap = new Map<string, number>();
   for (const rate of rates) {
@@ -81,6 +88,7 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
   for (const article of sourceArticles) {
     if (!byWriter[article.penName]) {
       byWriter[article.penName] = {
+        teamId: article.teamId ?? options?.teamId ?? null,
         penName: article.penName,
         totalArticles: 0,
         totalAmount: 0,
@@ -106,11 +114,12 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
   return Object.values(byWriter);
 }
 
-async function notifyPaymentStatus(fromUserId: number, penName: string, title: string, message: string) {
+async function notifyPaymentStatus(fromUserId: number, penName: string, title: string, message: string, teamId?: number | null) {
   const targets = await db
-    .select({ id: users.id, penName: collaborators.penName, name: collaborators.name })
+    .select({ id: users.id, penName: collaborators.penName, name: collaborators.name, teamId: users.teamId })
     .from(users)
     .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+    .where(teamId ? eq(users.teamId, teamId) : undefined)
     .all();
 
   const target = targets.find((item) =>
@@ -144,6 +153,7 @@ export async function GET(request: NextRequest) {
     const penNameFilter = optionalString(searchParams.get("penName"));
     const identityCandidates = getContextIdentityCandidates(context);
     const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
+    const adminTeamId = context.user.role === "admin" && !isLeader(context) ? getContextTeamId(context) : null;
 
     const conditions: SQL[] = [];
     if (month) conditions.push(eq(payments.month, month));
@@ -151,6 +161,10 @@ export async function GET(request: NextRequest) {
     if (status) conditions.push(eq(payments.status, status as never));
 
     if (context.user.role === "admin") {
+      if (!isLeader(context) && !adminTeamId) {
+        return NextResponse.json({ success: true, data: [] });
+      }
+      if (adminTeamId) conditions.push(eq(payments.teamId, adminTeamId));
       if (penNameFilter) conditions.push(eq(payments.penName, penNameFilter));
     } else if (identityCandidates.length === 0 && ownerCandidates.length === 0) {
       return NextResponse.json({ success: true, data: [] });
@@ -223,6 +237,11 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as Record<string, unknown>;
     const action = enumValue(body.action, "action", ["generate"] as const);
+    const adminTeamId = !isLeader(context) ? getContextTeamId(context) : null;
+
+    if (!isLeader(context) && !adminTeamId) {
+      return NextResponse.json({ success: false, error: "Không xác định được team của admin hiện tại" }, { status: 400 });
+    }
 
     if (action === "generate") {
       const month = requiredInt(body.month, "month");
@@ -230,16 +249,25 @@ export async function POST(request: NextRequest) {
       const penName = optionalString(body.penName);
       const force = Boolean(body.force);
 
-      const calculation = await buildCalculation(month, year, { exactPenName: penName || undefined });
+      const calculation = await buildCalculation(month, year, {
+        exactPenName: penName || undefined,
+        teamId: adminTeamId,
+      });
       let generated = 0;
       let skipped = 0;
       const targetPenNames = new Set(calculation.map((row) => row.penName));
 
       for (const row of calculation) {
+        const existingPaymentConditions = [
+          eq(payments.month, month),
+          eq(payments.year, year),
+          eq(payments.penName, row.penName),
+          row.teamId ? eq(payments.teamId, row.teamId) : adminTeamId ? eq(payments.teamId, adminTeamId) : null,
+        ].filter(Boolean);
         const existing = await db
           .select()
           .from(payments)
-          .where(and(eq(payments.month, month), eq(payments.year, year), eq(payments.penName, row.penName)))
+          .where(and(...existingPaymentConditions))
           .get();
 
         if (existing && existing.status !== "pending" && !force) {
@@ -266,6 +294,7 @@ export async function POST(request: NextRequest) {
         } else {
           await db.insert(payments)
             .values({
+              teamId: row.teamId ?? adminTeamId,
               month,
               year,
               penName: row.penName,
@@ -280,9 +309,13 @@ export async function POST(request: NextRequest) {
         generated += 1;
       }
 
-      const stalePaymentWhere = penName
-        ? and(eq(payments.month, month), eq(payments.year, year), eq(payments.penName, penName))
-        : and(eq(payments.month, month), eq(payments.year, year));
+      const stalePaymentConditions = [
+        eq(payments.month, month),
+        eq(payments.year, year),
+        penName ? eq(payments.penName, penName) : null,
+        adminTeamId ? eq(payments.teamId, adminTeamId) : null,
+      ].filter(Boolean);
+      const stalePaymentWhere = and(...stalePaymentConditions);
 
       const stalePayments = await db
         .select()
@@ -343,6 +376,9 @@ export async function PUT(request: NextRequest) {
     if (!payment) {
       return NextResponse.json({ success: false, error: "Payment not found" }, { status: 404 });
     }
+    if (!canAccessTeam(context, payment.teamId)) {
+      return NextResponse.json({ success: false, error: "Bạn không có quyền xử lý thanh toán của team này" }, { status: 403 });
+    }
 
     if (action === "approve") {
       if (payment.status !== "pending") {
@@ -363,7 +399,8 @@ export async function PUT(request: NextRequest) {
         context.user.id,
         payment.penName,
         "Nhuan but da duoc duyet",
-        `Nhuan but ky ${payment.month}/${payment.year} cua ban da duoc duyet.`
+        `Nhuan but ky ${payment.month}/${payment.year} cua ban da duoc duyet.`,
+        payment.teamId
       );
 
       await writeAuditLog({
@@ -396,7 +433,8 @@ export async function PUT(request: NextRequest) {
       context.user.id,
       payment.penName,
       "Nhuan but da thanh toan",
-      `Nhuan but ky ${payment.month}/${payment.year} cua ban da duoc thanh toan.`
+      `Nhuan but ky ${payment.month}/${payment.year} cua ban da duoc thanh toan.`,
+      payment.teamId
     );
 
     await writeAuditLog({

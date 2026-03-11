@@ -2,6 +2,7 @@ import { db, ensureDatabaseInitialized } from "@/db";
 import { articles } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getCurrentUserContext } from "@/lib/auth";
 import { handleServerError } from "@/lib/server-error";
+import { getContextTeamId, isLeader } from "@/lib/teams";
 import { and, desc, eq, inArray, like, or, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
         const query = searchParams.get("q") || "";
         const limit = parseInt(searchParams.get("limit") || "20");
         const ownerCandidates = getContextArticleOwnerCandidates(context);
+        const adminTeamId = context.user.role === "admin" && !isLeader(context) ? getContextTeamId(context) : null;
 
         if (context.user.role !== "admin" && ownerCandidates.length === 0) {
             return NextResponse.json({
@@ -56,7 +58,9 @@ export async function GET(request: NextRequest) {
         );
 
         const scopedWhere = context.user.role === "admin"
-            ? searchCondition
+            ? adminTeamId
+                ? and(searchCondition, eq(articles.teamId, adminTeamId))
+                : searchCondition
             : and(searchCondition, buildArticleOwnershipWhere(ownerCandidates));
 
         const results = await db

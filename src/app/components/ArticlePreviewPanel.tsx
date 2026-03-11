@@ -68,6 +68,12 @@ export default function ArticlePreviewPanel({ article, onClose }: Props) {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
 
+  // Toggle class on <html> so global CSS can adjust the layout
+  useEffect(() => {
+    document.documentElement.classList.add("cms-panel-open");
+    return () => { document.documentElement.classList.remove("cms-panel-open"); };
+  }, []);
+
   const badge = statusBadge(article.status);
 
   return (

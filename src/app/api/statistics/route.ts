@@ -3,11 +3,13 @@ import { articles, collaborators } from "@/db/schema";
 import { resolveArticleCategory } from "@/lib/article-category";
 import { getContextIdentityCandidates, getContextIdentityLabels, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { handleServerError } from "@/lib/server-error";
+import { getContextTeamId, isLeader } from "@/lib/teams";
 import { desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 type CollaboratorDirectoryItem = {
     id: number;
+    teamId: number | null;
     name: string;
     penName: string;
     email: string | null;
@@ -245,7 +247,7 @@ async function getScopedStatistics(
   };
 }
 
-async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[]) {
+async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[], articleWhere?: SQL, collaboratorWhere?: SQL) {
   const [
     totalArticlesRow,
     totalCTVRow,
@@ -256,30 +258,30 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[])
     writerRows,
     latestArticlesRows,
   ] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(articles).get(),
-    db.select({ count: sql<number>`count(*)` }).from(collaborators).get(),
+    db.select({ count: sql<number>`count(*)` }).from(articles).where(articleWhere).get(),
+    db.select({ count: sql<number>`count(*)` }).from(collaborators).where(collaboratorWhere).get(),
     db.select({
       status: articles.status,
       count: sql<number>`count(*)`,
-    }).from(articles).groupBy(articles.status).all(),
+    }).from(articles).where(articleWhere).groupBy(articles.status).all(),
     db.select({
       category: articles.category,
       articleType: articles.articleType,
       count: sql<number>`count(*)`,
-    }).from(articles).groupBy(articles.category, articles.articleType).all() as Promise<StatisticsCategoryRow[]>,
+    }).from(articles).where(articleWhere).groupBy(articles.category, articles.articleType).all() as Promise<StatisticsCategoryRow[]>,
     db.select({
       articleType: articles.articleType,
       contentType: articles.contentType,
       count: sql<number>`count(*)`,
-    }).from(articles).groupBy(articles.articleType, articles.contentType).all(),
+    }).from(articles).where(articleWhere).groupBy(articles.articleType, articles.contentType).all(),
     db.select({
       date: articles.date,
       count: sql<number>`count(*)`,
-    }).from(articles).groupBy(articles.date).all(),
+    }).from(articles).where(articleWhere).groupBy(articles.date).all(),
     db.select({
       penName: articles.penName,
       count: sql<number>`count(*)`,
-    }).from(articles).groupBy(articles.penName).all(),
+    }).from(articles).where(articleWhere).groupBy(articles.penName).all(),
     db.select({
       id: articles.id,
       articleId: articles.articleId,
@@ -292,7 +294,7 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[])
       updatedAt: articles.updatedAt,
       contentType: articles.contentType,
       category: articles.category,
-    }).from(articles).orderBy(desc(articles.updatedAt), desc(articles.id)).limit(8).all() as Promise<StatisticsArticleRow[]>,
+    }).from(articles).where(articleWhere).orderBy(desc(articles.updatedAt), desc(articles.id)).limit(8).all() as Promise<StatisticsArticleRow[]>,
   ]);
 
   return {
@@ -321,19 +323,44 @@ export async function GET() {
 
         const identityCandidates = getContextIdentityCandidates(context);
         const identityLabels = getContextIdentityLabels(context);
+        const adminTeamId = context.user.role === "admin" && !isLeader(context)
+            ? getContextTeamId(context)
+            : null;
         const allCollaborators = await db
             .select({
                 id: collaborators.id,
+                teamId: collaborators.teamId,
                 name: collaborators.name,
                 penName: collaborators.penName,
                 email: collaborators.email,
             })
             .from(collaborators)
+            .where(adminTeamId ? eq(collaborators.teamId, adminTeamId) : undefined)
             .all();
         if (context.user.role === "admin") {
+            if (!isLeader(context) && !adminTeamId) {
+                return NextResponse.json({
+                    success: true,
+                    data: {
+                        totalArticles: 0,
+                        totalCTVs: 0,
+                        articlesByStatus: [],
+                        articlesByCategory: [],
+                        articlesByWriter: [],
+                        articlesByType: [],
+                        articlesByMonth: [],
+                        latestArticles: [],
+                    },
+                });
+            }
+
             return NextResponse.json({
                 success: true,
-                data: await getAdminStatistics(allCollaborators),
+                data: await getAdminStatistics(
+                    allCollaborators,
+                    adminTeamId ? eq(articles.teamId, adminTeamId) : undefined,
+                    adminTeamId ? eq(collaborators.teamId, adminTeamId) : undefined
+                ),
             });
         }
 

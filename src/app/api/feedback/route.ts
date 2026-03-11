@@ -6,8 +6,9 @@ import { createNotifications } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
+import { canAccessTeam, getContextTeamId, isLeader } from "@/lib/teams";
 import { ValidationError, optionalInt, optionalString, requiredInt, requiredString, optionalEnum } from "@/lib/validation";
-import { and, desc, eq, type SQL } from "drizzle-orm";
+import { and, desc, eq, or, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 const FEEDBACK_CATEGORY = ["bug", "feature", "improvement", "other"] as const;
@@ -31,11 +32,19 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10) || 50, 200);
     const status = optionalEnum(searchParams.get("status"), FEEDBACK_STATUS);
     const category = optionalEnum(searchParams.get("category"), FEEDBACK_CATEGORY);
+    const adminTeamId = context.user.role === "admin" && !isLeader(context) ? getContextTeamId(context) : null;
 
     const conditions: SQL[] = [];
     if (status) conditions.push(eq(feedbackEntries.status, status));
     if (category) conditions.push(eq(feedbackEntries.category, category));
-    if (context.user.role !== "admin") {
+    if (context.user.role === "admin") {
+      if (!isLeader(context) && !adminTeamId) {
+        return NextResponse.json({ success: true, data: [] });
+      }
+      if (adminTeamId) {
+        conditions.push(eq(feedbackEntries.teamId, adminTeamId));
+      }
+    } else {
       conditions.push(eq(feedbackEntries.userId, context.user.id));
     }
 
@@ -79,11 +88,13 @@ export async function POST(request: NextRequest) {
     }
 
     const createdAt = new Date().toISOString();
+    const feedbackTeamId = getContextTeamId(context);
     const inserted = await db
       .insert(feedbackEntries)
       .values({
         userId: context.user.id,
         collaboratorId: context.collaborator?.id ?? context.user.collaboratorId,
+        teamId: feedbackTeamId,
         submitterName: getContextDisplayName(context),
         submitterEmail: context.user.email,
         category,
@@ -101,7 +112,12 @@ export async function POST(request: NextRequest) {
     const adminRecipients = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.role, "admin"))
+      .where(and(
+        eq(users.role, "admin"),
+        feedbackTeamId
+          ? or(eq(users.teamId, feedbackTeamId), eq(users.isLeader, true))
+          : eq(users.isLeader, true)
+      ))
       .all();
 
     const recipientIds = adminRecipients
@@ -175,6 +191,9 @@ export async function PUT(request: NextRequest) {
     const existing = await db.select().from(feedbackEntries).where(eq(feedbackEntries.id, id)).get();
     if (!existing) {
       return NextResponse.json({ success: false, error: "Không tìm thấy feedback." }, { status: 404 });
+    }
+    if (!canAccessTeam(context, existing.teamId)) {
+      return NextResponse.json({ success: false, error: "Bạn không có quyền xử lý feedback của team này." }, { status: 403 });
     }
 
     const updateData: Partial<typeof feedbackEntries.$inferInsert> = {
