@@ -8,11 +8,12 @@ function foldText(value: string): string {
     .trim();
 }
 
-type ArticleCategory = "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đánh giá" | "Khác";
+type ArticleCategory = "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đánh giá" | "SEO AI" | "Khác";
 
 export function normalizeExplicitArticleCategory(value: unknown): ArticleCategory | null {
   const folded = foldText(String(value || ""));
   if (!folded) return null;
+  if (folded.includes("seo ai")) return "SEO AI";
   if (folded.includes("gia dung")) return "Gia dụng";
   if (folded.includes("thu thuat")) return "Thủ thuật";
   if (folded.includes("giai tri")) return "Giải trí";
@@ -25,6 +26,7 @@ export function normalizeExplicitArticleCategory(value: unknown): ArticleCategor
 export function inferArticleCategoryFromType(articleType: unknown): ArticleCategory | null {
   const folded = foldText(String(articleType || ""));
   if (!folded) return null;
+  if (folded.includes("seo ai")) return "SEO AI";
   if (folded.includes("gia dung")) return "Gia dụng";
   if (folded.includes("thu thuat")) return "Thủ thuật";
   if (folded.includes("giai tri")) return "Giải trí";

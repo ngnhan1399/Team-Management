@@ -43,8 +43,10 @@ const IMPORT_FIELD_OPTIONS = [
 
 const REQUIRED_IMPORT_FIELDS = ["date", "title", "penName"];
 const IMPORTANT_IMPORT_FIELDS = ["articleId", "date", "title", "penName", "status", "link"];
-const CATEGORY_OPTIONS = ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "SEO AI", "Khác"];
+const CATEGORY_OPTIONS = ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "Khác"];
+const EDITORIAL_ONLY_CATEGORY_OPTIONS = ["SEO AI"];
 const ARTICLE_TYPE_OPTIONS = ["Mô tả SP ngắn", "Mô tả SP dài", "Bài dịch Review SP", "Bài SEO ICT", "Bài SEO Gia dụng", "Bài SEO ICT 1K5", "Bài SEO Gia dụng 1K5", "Bài SEO ICT 2K", "Bài SEO Gia dụng 2K", "Thủ thuật"];
+const EDITORIAL_ONLY_ARTICLE_TYPE_OPTIONS = ["SEO AI"];
 const CONTENT_TYPE_OPTIONS = ["Viết mới", "Viết lại"];
 const WORD_COUNT_RANGE_OPTIONS = [
   { value: "800-1000", label: "800-1000 chữ" },
@@ -81,6 +83,35 @@ const EMPTY_DELETE_CRITERIA: ArticleDeleteCriteria = {
   year: "",
   reviewerName: "",
 };
+
+type ArticleFilters = Pick<ArticleDeleteCriteria, "penName" | "status" | "category" | "articleType" | "contentType" | "month" | "year">;
+
+const PEN_NAME_DISPLAY_ALIASES: Record<string, string> = {
+  "Nhân BTV": "Đình Nhân",
+};
+const MANAGER_DEFAULT_PEN_NAME = "Nhân BTV";
+
+function createCurrentMonthFilters(): ArticleFilters {
+  const now = new Date();
+  return {
+    penName: "",
+    status: "",
+    category: "",
+    articleType: "",
+    contentType: "",
+    month: String(now.getMonth() + 1),
+    year: String(now.getFullYear()),
+  };
+}
+
+function getDisplayedPenName(value: string | null | undefined) {
+  const normalizedValue = String(value || "").trim();
+  if (!normalizedValue) {
+    return "";
+  }
+
+  return PEN_NAME_DISPLAY_ALIASES[normalizedValue] || normalizedValue;
+}
 
 function normalizeWordCountRangeValue(value: string | null | undefined) {
   const normalized = String(value || "").trim();
@@ -153,10 +184,7 @@ export default function ArticlesPage() {
   const [previewArticle, setPreviewArticle] = useState<Article | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState(() => {
-    const now = new Date();
-    return { penName: "", status: "", category: "", articleType: "", contentType: "", month: String(now.getMonth() + 1), year: String(now.getFullYear()) };
-  });
+  const [filters, setFilters] = useState<ArticleFilters>(createCurrentMonthFilters);
   const [linkHealth, setLinkHealth] = useState<Record<string, LinkHealthEntry>>({});
   const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [commentArticle, setCommentArticle] = useState<Article | null>(null);
@@ -173,7 +201,14 @@ export default function ArticlesPage() {
   const canCreateArticles = isAdmin || isWriter;
   const canSyncArticles = isAdmin || isWriter;
   const shouldShowSplitArticleSections = canManageArticles || isReviewer;
-  const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
+  const canSeeEditorialOnlyArticleOptions = canManageArticles || isReviewer;
+  const visibleCategoryOptions = canSeeEditorialOnlyArticleOptions
+    ? [...CATEGORY_OPTIONS, ...EDITORIAL_ONLY_CATEGORY_OPTIONS]
+    : CATEGORY_OPTIONS;
+  const visibleArticleTypeOptions = canSeeEditorialOnlyArticleOptions
+    ? [...ARTICLE_TYPE_OPTIONS, ...EDITORIAL_ONLY_ARTICLE_TYPE_OPTIONS]
+    : ARTICLE_TYPE_OPTIONS;
+  const collaboratorLabel = getDisplayedPenName(user?.collaborator?.penName) || user?.collaborator?.name || "tài khoản của bạn";
   const reviewerIdentityValues = Array.from(new Set([
     user?.collaborator?.name,
     user?.collaborator?.penName,
@@ -222,7 +257,7 @@ export default function ArticlesPage() {
     return article.penName === user?.collaborator?.penName || article.createdByUserId === user?.id;
   }, [canManageArticles, isWriter, user]);
 
-  const fetchArticles = useCallback((p = 1, s = "", f = { penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" }) => {
+  const fetchArticles = useCallback((p = 1, s = "", f: ArticleFilters = createCurrentMonthFilters()) => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(p), limit: "30" });
     if (s) params.set("search", s);
@@ -238,7 +273,7 @@ export default function ArticlesPage() {
   }, [isWriter, user]);
 
   useEffect(() => {
-    fetchArticles();
+    fetchArticles(1, "", createCurrentMonthFilters());
   }, [fetchArticles]);
 
   useEffect(() => {
@@ -304,7 +339,7 @@ export default function ArticlesPage() {
 
   const handleSearch = (e?: React.FormEvent) => { e?.preventDefault(); fetchArticles(1, search, filters); };
   const applyFilter = (key: string, val: string) => { const f = { ...filters, [key]: val }; setFilters(f); fetchArticles(1, search, f); };
-  const clearFilters = () => { const now = new Date(); const f = { penName: "", status: "", category: "", articleType: "", contentType: "", month: String(now.getMonth() + 1), year: String(now.getFullYear()) }; setFilters(f); fetchArticles(1, search, f); };
+  const clearFilters = () => { const f = createCurrentMonthFilters(); setFilters(f); fetchArticles(1, search, f); };
   const activeFilterCount = Object.entries(filters).filter(([k, v]) => v !== "" && k !== "month" && k !== "year").length;
   const currentFilterDeleteCriteria: ArticleDeleteCriteria = {
     search,
@@ -840,7 +875,7 @@ export default function ArticlesPage() {
       if (res.ok && data.success) {
         setImportResult(data);
         setImportStep(3);
-        fetchArticles();
+        fetchArticles(1, search, filters);
       } else {
         throw new Error(data.error || "Import thất bại");
       }
@@ -970,12 +1005,8 @@ export default function ArticlesPage() {
   }, [articles, compareArticleRows, doesArticleMatchCurrentView, pagination.page]);
 
   const focusSyncedArticles = (month: number, year: number) => {
-    const nextFilters = {
-      penName: "",
-      status: "",
-      category: "",
-      articleType: "",
-      contentType: "",
+    const nextFilters: ArticleFilters = {
+      ...createCurrentMonthFilters(),
       month: String(month),
       year: String(year),
     };
@@ -1310,7 +1341,7 @@ export default function ArticlesPage() {
                 </td>
                 <td style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
-                    <span style={{ fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap", fontWeight: 600 }}>{a.penName}</span>
+                    <span style={{ fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap", fontWeight: 600 }}>{getDisplayedPenName(a.penName)}</span>
                     {authorBucketBadge(a)}
                   </div>
                 </td>
@@ -1483,7 +1514,7 @@ export default function ArticlesPage() {
             </a>
           )}
           {canCreateArticles && (
-            <button className="btn-ios-pill btn-ios-primary" onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? "Đình Nhân" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}>
+            <button className="btn-ios-pill btn-ios-primary" onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? MANAGER_DEFAULT_PEN_NAME : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
               Thêm bài viết
             </button>
@@ -1531,7 +1562,7 @@ export default function ArticlesPage() {
                 <CustomSelect
                   value={filters.penName || ""}
                   onChange={(v) => applyFilter("penName", v)}
-                  options={[{ value: "", label: collaboratorsLoading && collaborators.length === 0 ? "Đang tải bút danh..." : "Tất cả bút danh" }, ...collaborators.map(c => ({ value: c.penName, label: c.penName }))]}
+                  options={[{ value: "", label: collaboratorsLoading && collaborators.length === 0 ? "Đang tải bút danh..." : "Tất cả bút danh" }, ...collaborators.map(c => ({ value: c.penName, label: getDisplayedPenName(c.penName) }))]}
                   placeholder={collaboratorsLoading && collaborators.length === 0 ? "Đang tải bút danh..." : "Tất cả bút danh"}
                   menuMode="portal-bottom"
                 />
@@ -1552,7 +1583,7 @@ export default function ArticlesPage() {
               <CustomSelect
                 value={filters.category || ""}
                 onChange={(v) => applyFilter("category", v)}
-                options={[{ value: "", label: "Tất cả" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: category }))]}
+                options={[{ value: "", label: "Tất cả" }, ...visibleCategoryOptions.map((category) => ({ value: category, label: category }))]}
                 placeholder="Tất cả"
                 menuMode="portal-bottom"
               />
@@ -1562,7 +1593,7 @@ export default function ArticlesPage() {
               <CustomSelect
                 value={filters.articleType || ""}
                 onChange={(v) => applyFilter("articleType", v)}
-                options={[{ value: "", label: "Tất cả" }, ...ARTICLE_TYPE_OPTIONS.map(t => ({ value: t, label: t }))]}
+                options={[{ value: "", label: "Tất cả" }, ...visibleArticleTypeOptions.map(t => ({ value: t, label: t }))]}
                 placeholder="Tất cả"
                 menuMode="portal-bottom"
               />
@@ -1670,9 +1701,9 @@ export default function ArticlesPage() {
       )}
       {pagination.totalPages > 1 && (
         <div className="pagination">
-          <button disabled={pagination.page <= 1} onClick={() => fetchArticles(pagination.page - 1)}>← Trước</button>
+          <button disabled={pagination.page <= 1} onClick={() => fetchArticles(pagination.page - 1, search, filters)}>← Trước</button>
           <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Trang {pagination.page} / {pagination.totalPages} ({pagination.total} bài)</span>
-          <button disabled={pagination.page >= pagination.totalPages} onClick={() => fetchArticles(pagination.page + 1)}>Sau →</button>
+          <button disabled={pagination.page >= pagination.totalPages} onClick={() => fetchArticles(pagination.page + 1, search, filters)}>Sau →</button>
         </div>
       )}
       {showModal && (
@@ -1696,11 +1727,11 @@ export default function ArticlesPage() {
                     <CustomSelect
                       value={formData.penName || ""}
                       onChange={v => setFormData({ ...formData, penName: v })}
-                      options={[{ value: "", label: collaboratorsLoading && collaborators.length === 0 ? "Đang tải CTV..." : "Chọn CTV" }, ...collaborators.map(c => ({ value: c.penName, label: c.penName }))]}
+                      options={[{ value: "", label: collaboratorsLoading && collaborators.length === 0 ? "Đang tải CTV..." : "Chọn CTV" }, ...collaborators.map(c => ({ value: c.penName, label: getDisplayedPenName(c.penName) }))]}
                       placeholder={collaboratorsLoading && collaborators.length === 0 ? "Đang tải CTV..." : "Chọn CTV"}
                     />
                   ) : (
-                    <input className="form-input" value={formData.penName || ""} readOnly style={{ background: "rgba(255,255,255,0.01)", opacity: 0.6 }} />
+                    <input className="form-input" value={getDisplayedPenName(formData.penName)} readOnly style={{ background: "rgba(255,255,255,0.01)", opacity: 0.6 }} />
                   )}
                 </div>
                 <div className="form-group">
@@ -1714,7 +1745,7 @@ export default function ArticlesPage() {
                   <CustomSelect
                     value={formData.articleType || "Bài SEO ICT"}
                     onChange={v => setFormData({ ...formData, articleType: v })}
-                    options={ARTICLE_TYPE_OPTIONS.map(t => ({ value: t, label: t }))}
+                    options={visibleArticleTypeOptions.map(t => ({ value: t, label: t }))}
                   />
                 </div>
                 <div className="form-group">
@@ -1796,7 +1827,7 @@ export default function ArticlesPage() {
               <div style={{ padding: 16, borderRadius: 12, background: "rgba(0,0,0,0.02)", border: "1px solid var(--glass-border)" }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Bài viết</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>{commentArticle.title}</div>
-                <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>Tác giả: {commentArticle.penName}</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>Tác giả: {getDisplayedPenName(commentArticle.penName)}</div>
               </div>
 
               <div style={{ maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, paddingRight: 4 }}>
@@ -1808,7 +1839,7 @@ export default function ArticlesPage() {
                   comments.map((c) => (
                     <div key={c.id} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-blue)" }}>{c.penName}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-blue)" }}>{getDisplayedPenName(c.penName)}</span>
                         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{new Date(c.createdAt).toLocaleString("vi-VN")}</span>
                       </div>
                       <div style={{ whiteSpace: "pre-wrap", fontSize: 13, color: "var(--text-main)", lineHeight: 1.5 }}>{c.content}</div>
@@ -2023,7 +2054,7 @@ export default function ArticlesPage() {
           collaboratorsLoading={collaboratorsLoading}
           collaborators={collaborators}
           articleStatusOptions={ARTICLE_STATUS_OPTIONS}
-          articleTypeOptions={ARTICLE_TYPE_OPTIONS}
+          articleTypeOptions={visibleArticleTypeOptions}
           contentTypeOptions={CONTENT_TYPE_OPTIONS}
           monthOptions={MONTH_OPTIONS}
           yearOptions={YEAR_OPTIONS}

@@ -327,6 +327,7 @@ body {
   bottom: 0;
   width: 1px;
   background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.1), transparent);
+  pointer-events: none;
 }
 
 .sidebar-nav-item {
@@ -347,6 +348,10 @@ body {
   background: none;
   width: calc(100% - 24px);
   text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: auto;
+  z-index: 1;
 }
 
 .sidebar-nav-item:hover {
@@ -375,6 +380,16 @@ body {
 
 .sidebar-nav-item:active {
   transform: scale(0.96) translateX(4px);
+}
+
+.sidebar-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border-radius: var(--radius-ios-md);
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--glass-border);
 }
 
 /* Obsidian Glass (legacy compat) */

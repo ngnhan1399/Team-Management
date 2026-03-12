@@ -59,14 +59,14 @@ export const articles = pgTable("articles", {
   title: text("title").notNull(),
   penName: text("pen_name").notNull(),
   createdByUserId: integer("created_by_user_id"),
-  category: text("category", { enum: ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "Khác"] }).notNull().default("ICT"),
+  category: text("category", { enum: ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "SEO AI", "Khác"] }).notNull().default("ICT"),
   articleType: text("article_type", {
     enum: [
       "Mô tả SP ngắn", "Mô tả SP dài", "Bài dịch Review SP",
       "Bài SEO ICT", "Bài SEO Gia dụng",
       "Bài SEO ICT 1K5", "Bài SEO Gia dụng 1K5",
       "Bài SEO ICT 2K", "Bài SEO Gia dụng 2K",
-      "Thủ thuật",
+      "Thủ thuật", "SEO AI",
     ],
   }).notNull().default("Bài SEO ICT"),
   contentType: text("content_type", { enum: ["Viết mới", "Viết lại"] }).notNull().default("Viết mới"),

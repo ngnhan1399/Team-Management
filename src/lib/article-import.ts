@@ -734,6 +734,7 @@ function mapArticleType(articleTypeValue: string, category: string, wordCountRan
   if (folded.includes("mo ta") && folded.includes("ngan")) return "Mô tả SP ngắn";
   if (folded.includes("mo ta") && folded.includes("dai")) return "Mô tả SP dài";
   if (folded.includes("review") || folded.includes("dich")) return "Bài dịch Review SP";
+  if (folded.includes("seo ai")) return "SEO AI";
   if (folded.includes("thu thuat")) return "Thủ thuật";
   if (folded.includes("gia dung") && folded.includes("2k")) return "Bài SEO Gia dụng 2K";
   if (folded.includes("gia dung") && folded.includes("1k5")) return "Bài SEO Gia dụng 1K5";

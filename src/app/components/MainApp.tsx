@@ -268,6 +268,7 @@ export default function MainApp() {
                 <div className="text-[11px] text-[var(--text-muted)] font-bold uppercase tracking-wider mb-2 mt-6 px-2">{section}</div>
                 {items.map(item => (
                   <button
+                    type="button"
                     key={item.id}
                     data-testid={`nav-${item.id}`}
                     onMouseEnter={() => preloadPage(item.id as Page)}
@@ -289,7 +290,7 @@ export default function MainApp() {
         </nav>
 
         <div className="p-4 border-t border-white/5">
-          <div className="sidebar-nav-item" style={{ marginTop: 8, padding: "8px 12px" }}>
+          <div className="sidebar-user-card" style={{ marginTop: 8, padding: "8px 12px" }}>
             <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {user?.collaborator?.avatar ? (
                 <Image src={user.collaborator.avatar} alt="Avatar" width={34} height={34} unoptimized className="w-full h-full object-cover" />
@@ -301,7 +302,7 @@ export default function MainApp() {
               <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</p>
               <p style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</p>
             </div>
-            <button onClick={logout} className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--text-muted)", cursor: "pointer" }}>logout</button>
+            <button type="button" onClick={logout} className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--text-muted)", cursor: "pointer", border: "none", background: "transparent", padding: 0 }}>logout</button>
           </div>
         </div>
       </aside>
