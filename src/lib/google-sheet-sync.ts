@@ -107,6 +107,7 @@ type GoogleSheetSyncSharedState = {
   existingArticleIds: Set<number>;
   articleRowsById: Map<number, ExistingArticleRow>;
   articleIdMap: Map<string, ExistingArticleRow>;
+  ambiguousArticleIds: Set<string>;
   compositeMap: Map<string, ExistingArticleRow>;
   titlePenNameMap: Map<string, ExistingArticleRow>;
   linkMap: Map<string, ExistingArticleRow>;
@@ -347,6 +348,30 @@ function normalizeTitlePenNameKey(title: string, penName: string) {
 
 function normalizeLinkKey(link: string) {
   return link.toLowerCase().trim();
+}
+
+type ArticleIdentityLike = {
+  title: string;
+  penName: string;
+  date: string;
+  link?: string | null;
+};
+
+function hasSameCompositeIdentity(existing: ArticleIdentityLike, next: ArticleIdentityLike) {
+  return normalizeCompositeKey(existing.title, existing.penName, existing.date)
+    === normalizeCompositeKey(next.title, next.penName, next.date);
+}
+
+function hasSameLinkIdentity(existing: ArticleIdentityLike, next: ArticleIdentityLike) {
+  const existingLink = existing.link?.trim();
+  const nextLink = next.link?.trim();
+  if (!existingLink || !nextLink) return false;
+
+  return normalizeLinkKey(existingLink) === normalizeLinkKey(nextLink);
+}
+
+function isConsistentArticleIdIdentity(existing: ArticleIdentityLike, next: ArticleIdentityLike) {
+  return hasSameCompositeIdentity(existing, next) || hasSameLinkIdentity(existing, next);
 }
 
 function buildSheetFallbackDate(month: number, year: number) {
@@ -634,6 +659,7 @@ function upsertSharedArticleRow(sharedState: GoogleSheetSyncSharedState, row: Ex
   sharedState.existingArticleIds.add(row.id);
   setLookupMaps(
     sharedState.articleIdMap,
+    sharedState.ambiguousArticleIds,
     sharedState.compositeMap,
     sharedState.titlePenNameMap,
     sharedState.linkMap,
@@ -680,6 +706,20 @@ function removeSharedSyncLinksByArticleIds(sharedState: GoogleSheetSyncSharedSta
   }
 }
 
+function hasSyncLinkOnDifferentSheet(sharedState: GoogleSheetSyncSharedState, articleId: number, sheetName: string) {
+  for (const [existingSheetName, sheetMap] of sharedState.syncLinksBySheet.entries()) {
+    if (existingSheetName === sheetName) continue;
+
+    for (const syncLink of sheetMap.values()) {
+      if (Number(syncLink.articleIdRef || 0) === articleId) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function removeSharedArticles(sharedState: GoogleSheetSyncSharedState, articleIds: number[]) {
   if (articleIds.length === 0) return;
 
@@ -722,13 +762,14 @@ async function createGoogleSheetSyncSharedState(
 
   const articleRowsById = new Map<number, ExistingArticleRow>();
   const articleIdMap = new Map<string, ExistingArticleRow>();
+  const ambiguousArticleIds = new Set<string>();
   const compositeMap = new Map<string, ExistingArticleRow>();
   const titlePenNameMap = new Map<string, ExistingArticleRow>();
   const linkMap = new Map<string, ExistingArticleRow>();
 
   for (const row of existingArticles) {
     articleRowsById.set(row.id, row);
-    setLookupMaps(articleIdMap, compositeMap, titlePenNameMap, linkMap, row);
+    setLookupMaps(articleIdMap, ambiguousArticleIds, compositeMap, titlePenNameMap, linkMap, row);
   }
 
   const existingArticleIds = new Set(articleRowsById.keys());
@@ -757,6 +798,7 @@ async function createGoogleSheetSyncSharedState(
       existingArticleIds,
       articleRowsById,
       articleIdMap,
+      ambiguousArticleIds,
       compositeMap,
       titlePenNameMap,
       linkMap,
@@ -770,6 +812,7 @@ async function createGoogleSheetSyncSharedState(
     existingArticleIds,
     articleRowsById,
     articleIdMap,
+    ambiguousArticleIds,
     compositeMap,
     titlePenNameMap,
     linkMap,
@@ -811,6 +854,7 @@ function buildPreparedRowLookup(
 ): PreparedRowLookup {
   const bySourceRowKey = new Map<string, PreparedRowLookupEntry>();
   const byArticleId = new Map<string, PreparedRowLookupEntry>();
+  const ambiguousArticleIds = new Set<string>();
   const byComposite = new Map<string, PreparedRowLookupEntry>();
   const byTitlePenName = new Map<string, PreparedRowLookupEntry>();
   const byLink = new Map<string, PreparedRowLookupEntry>();
@@ -869,8 +913,14 @@ function buildPreparedRowLookup(
     };
 
     bySourceRowKey.set(entry.sourceRowKey, entry);
-    if (articleId && !byArticleId.has(articleId)) {
-      byArticleId.set(articleId, entry);
+    if (articleId && !ambiguousArticleIds.has(articleId)) {
+      const existingEntry = byArticleId.get(articleId);
+      if (!existingEntry) {
+        byArticleId.set(articleId, entry);
+      } else if (!isConsistentArticleIdIdentity(existingEntry.normalized as ArticleIdentityLike, normalized as ArticleIdentityLike)) {
+        byArticleId.delete(articleId);
+        ambiguousArticleIds.add(articleId);
+      }
     }
     if (link) {
       const linkKey = normalizeLinkKey(link);
@@ -947,14 +997,21 @@ function findPreparedRowForArticle(
 
 function setLookupMaps(
   articleIdMap: Map<string, ExistingArticleRow>,
+  ambiguousArticleIds: Set<string>,
   compositeMap: Map<string, ExistingArticleRow>,
   titlePenNameMap: Map<string, ExistingArticleRow>,
   linkMap: Map<string, ExistingArticleRow>,
   row: ExistingArticleRow
 ) {
   const articleId = row.articleId?.trim();
-  if (articleId) {
-    articleIdMap.set(articleId, row);
+  if (articleId && !ambiguousArticleIds.has(articleId)) {
+    const existingRow = articleIdMap.get(articleId);
+    if (!existingRow) {
+      articleIdMap.set(articleId, row);
+    } else if (!isConsistentArticleIdIdentity(existingRow, row)) {
+      articleIdMap.delete(articleId);
+      ambiguousArticleIds.add(articleId);
+    }
   }
   compositeMap.set(normalizeCompositeKey(row.title, row.penName, row.date), row);
   titlePenNameMap.set(normalizeTitlePenNameKey(row.title, row.penName), row);
@@ -1321,6 +1378,7 @@ export async function executeGoogleSheetSync(
     options.allowedPenNames || []
   );
   const articleIdMap = sharedState.articleIdMap;
+  const ambiguousArticleIds = sharedState.ambiguousArticleIds;
   const compositeMap = sharedState.compositeMap;
   const linkMap = sharedState.linkMap;
   const existingSyncLinkMap = getSharedSheetSyncLinkMap(sharedState, selectedSheet.name);
@@ -1382,13 +1440,21 @@ export async function executeGoogleSheetSync(
       const articleId = normalized.articleId?.trim() || null;
       const link = normalized.link?.trim() || null;
       const sourceRowKey = buildSourceRowKey({ ...normalized, articleId: articleId ?? undefined, link: link ?? undefined });
+      const existingLink = existingSyncLinkMap.get(sourceRowKey);
       seenSourceRowKeys.add(sourceRowKey);
       const compositeKey = normalizeCompositeKey(normalized.title, normalized.penName, normalized.date as string);
       const resolvedTeamId = resolveImportedArticleTeamId(normalized.penName, collaboratorDirectory, options.teamId);
-      const matchedByArticleId = articleId ? articleIdMap.get(articleId) : undefined;
+      const matchedByCurrentSheet = existingLink?.articleIdRef ? sharedState.articleRowsById.get(Number(existingLink.articleIdRef)) : undefined;
+      const matchedByArticleId = articleId && !ambiguousArticleIds.has(articleId) ? articleIdMap.get(articleId) : undefined;
       const matchedByComposite = compositeMap.get(compositeKey);
       const matchedByLink = link ? linkMap.get(normalizeLinkKey(link)) : undefined;
-      const target = matchedByArticleId ?? matchedByLink ?? matchedByComposite;
+      const initialTarget = matchedByCurrentSheet ?? matchedByLink ?? matchedByComposite ?? matchedByArticleId;
+      const shouldSplitSharedTarget = Boolean(
+        initialTarget
+        && hasSyncLinkOnDifferentSheet(sharedState, initialTarget.id, selectedSheet.name)
+        && (!existingLink || Number(existingLink.articleIdRef || 0) === initialTarget.id)
+      );
+      const target = shouldSplitSharedTarget ? undefined : initialTarget;
 
       let resolvedArticleId = target?.id ?? null;
       const nextPayload = buildArticlePayload({ ...normalized, articleId: articleId ?? undefined }, mappedFields);
@@ -1460,7 +1526,6 @@ export async function executeGoogleSheetSync(
         inserted += 1;
       }
 
-      const existingLink = existingSyncLinkMap.get(sourceRowKey);
       if (Number.isInteger(resolvedArticleId) && Number(resolvedArticleId) > 0) {
         seenArticleIds.add(Number(resolvedArticleId));
       }
