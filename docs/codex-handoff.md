@@ -1,5 +1,25 @@
 # Codex Handoff
 
+## Update 2026-03-13 (phase 2 refactor an toàn cho Google Sheets sync)
+
+- `src/lib/google-sheet-sync.ts` đã được gom bớt logic chuẩn bị trùng lặp để giảm rủi ro lệch hành vi giữa các entrypoint sync:
+  - helper resolve `sourceUrl`
+  - helper normalize `identityCandidates`
+  - helper nạp `collaboratorPenNames + collaboratorDirectory`
+  - helper dựng/reuse `sharedState`
+- Refactor này không đổi thứ tự match hiện tại và không đụng vào guard xóa batch đã thêm trước đó.
+- Mục tiêu là giảm chi phí bảo trì cho các vòng tối ưu tiếp theo, đồng thời giữ an toàn cho push GitHub và redeploy Vercel.
+
+### File đã động vào
+
+- `src/lib/google-sheet-sync.ts`
+- `docs/optimization-memory.md`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npm run verify:safe` ✅
+
 ## Update 2026-03-13 (tooling nhẹ hơn + sync guard + deploy hygiene)
 
 - Thu hẹp phạm vi lint/typecheck để không quét lan toàn repo:
