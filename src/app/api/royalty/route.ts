@@ -1,6 +1,7 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { royaltyRates, articles, monthlyBudgets, collaborators, users } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getCurrentUserContext } from "@/lib/auth";
+import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import {
     filterBudgetEligibleRoyaltyArticles,
@@ -21,8 +22,10 @@ type RoyaltyBreakdown = Record<string, { count: number; unitPrice: number; total
 type RoyaltySourceArticle = {
     teamId: number | null;
     penName: string;
+    category: string;
     articleType: string;
     contentType: string;
+    wordCountRange: string | null;
     date: string;
 };
 
@@ -51,8 +54,10 @@ async function selectRoyaltyArticles(options?: { ownerCandidates?: string[]; exa
     return db.select({
         teamId: articles.teamId,
         penName: articles.penName,
+        category: articles.category,
         articleType: articles.articleType,
         contentType: articles.contentType,
+        wordCountRange: articles.wordCountRange,
         date: articles.date,
     })
         .from(articles)
@@ -155,13 +160,19 @@ export async function GET(request: NextRequest) {
             const writerAmounts: Record<string, number> = {};
 
             for (const article of budgetEligibleArticles) {
+                const normalizedArticleFields = resolveAppArticleFields({
+                    category: article.category,
+                    articleType: article.articleType,
+                    contentType: article.contentType,
+                    wordCountRange: article.wordCountRange,
+                });
                 const dateParts = parseRoyaltyDateParts(article.date);
                 if (!dateParts) continue;
                 const articleYear = dateParts.year;
                 const articleMonth = dateParts.month;
 
                 const key = `${articleYear}-${articleMonth}`;
-                const price = rateMap.get(`${article.articleType}|${article.contentType}`) || 0;
+                const price = rateMap.get(`${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`) || 0;
 
                 if (!monthlyMap[key]) {
                     monthlyMap[key] = { month: articleMonth, year: articleYear, totalAmount: 0, totalArticles: 0 };
@@ -200,7 +211,14 @@ export async function GET(request: NextRequest) {
             const currentPeriodArticles = budgetEligibleArticles.filter((article) =>
                 matchesRoyaltyMonthYear(article.date, currentMonth, currentYear)
             );
-            const contentBalance = summarizeRoyaltyContentBalance(currentPeriodArticles);
+            const contentBalance = summarizeRoyaltyContentBalance(
+                currentPeriodArticles.map((article) => resolveAppArticleFields({
+                    category: article.category,
+                    articleType: article.articleType,
+                    contentType: article.contentType,
+                    wordCountRange: article.wordCountRange,
+                }))
+            );
 
             const topWriters = Object.entries(writerAmounts)
                 .map(([penName, amount]) => ({ penName, amount }))
@@ -271,6 +289,12 @@ export async function GET(request: NextRequest) {
             }> = {};
 
             for (const article of filtered) {
+                const normalizedArticleFields = resolveAppArticleFields({
+                    category: article.category,
+                    articleType: article.articleType,
+                    contentType: article.contentType,
+                    wordCountRange: article.wordCountRange,
+                });
                 if (!paymentByWriter[article.penName]) {
                     paymentByWriter[article.penName] = {
                         penName: article.penName,
@@ -281,13 +305,13 @@ export async function GET(request: NextRequest) {
                 }
 
                 const writer = paymentByWriter[article.penName];
-                const key = `${article.articleType}|${article.contentType}`;
+                const key = `${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`;
                 const price = rateMap.get(key) || 0;
 
                 writer.totalArticles += 1;
                 writer.totalAmount += price;
 
-                const breakdownKey = `${article.articleType} (${article.contentType})`;
+                const breakdownKey = `${normalizedArticleFields.articleType} (${normalizedArticleFields.contentType})`;
                 if (!writer.breakdown[breakdownKey]) {
                     writer.breakdown[breakdownKey] = { count: 0, unitPrice: price, total: 0 };
                 }

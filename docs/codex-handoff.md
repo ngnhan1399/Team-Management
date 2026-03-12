@@ -1,5 +1,54 @@
 # Codex Handoff
 
+## Update 2026-03-13 (fix lệch SEO 1K5 + nhuận bút)
+
+- Đã sửa lệch nghiệp vụ `SEO ICT/Gia dụng 1K5`:
+  - trước đó code đang hiểu `1K5` theo `1000-1500`, làm nhiều bài `1500-2000` bị giữ ở type thường thay vì `1K5`
+  - điều này kéo sai lookup rate trong `royalty` và `payments`
+- Đã gom luật canonicalization vào `resolveAppArticleFields()` trong `src/lib/google-sheet-article-mapping.ts` và dùng chung cho:
+  - import/sync từ Google Sheets
+  - create/update article
+  - royalty dashboard/calculate
+  - payment generation
+  - mirror ngược ra Google Sheets
+- `Articles API` cũng đã được tăng độ chắc trong phần phân loại `CTV` / `Biên tập/Admin` bằng fallback identity matching theo team khi exact pen name không khớp.
+- Thêm script `scripts/repair-seo-classification.mjs`:
+  - dry-run mặc định
+  - `--apply` để sửa dữ liệu thật
+  - chỉ refresh `payments.status = pending` đã tồn tại, không tự tạo payment mới
+
+### Dữ liệu đã sửa trên DB hiện tại
+
+- Đã chạy `node scripts/repair-seo-classification.mjs --apply`
+- Kết quả:
+  - sửa `767` bài SEO `ICT/Gia dụng` bị lệch `articleType` / `wordCountRange`
+  - refresh `7` payment `pending`
+  - check lại sau sửa: `articleFixCount = 0`
+
+### Ghi chú vận hành
+
+- Script vẫn báo còn `missingPendingCalculationCount = 18`
+  - đây không phải payment bị sửa sai thêm
+  - đây là các kỳ/bút danh có dữ liệu nguồn để tính nhưng hiện chưa có payment `pending` tương ứng
+  - vì lý do an toàn, script không tự tạo thêm payment mới; nếu muốn sinh thêm thì dùng luồng generate payment bình thường sau khi code mới đã lên production
+
+### File đã động vào
+
+- `src/lib/google-sheet-article-mapping.ts`
+- `src/app/api/articles/route.ts`
+- `src/app/api/royalty/route.ts`
+- `src/app/api/payments/route.ts`
+- `scripts/repair-seo-classification.mjs`
+- `package.json`
+- `docs/optimization-memory.md`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npm run verify:safe` ✅
+- `node scripts/repair-seo-classification.mjs` ✅
+- `node scripts/repair-seo-classification.mjs --apply` ✅
+
 ## Update 2026-03-13 (phase 2 refactor an toàn cho Google Sheets sync)
 
 - `src/lib/google-sheet-sync.ts` đã được gom bớt logic chuẩn bị trùng lặp để giảm rủi ro lệch hành vi giữa các entrypoint sync:

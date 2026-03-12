@@ -5,6 +5,7 @@ import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications";
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
+import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import {
   filterBudgetEligibleRoyaltyArticles,
   isBudgetEligibleContributor,
@@ -32,8 +33,10 @@ type CalcRow = {
 type PaymentSourceArticle = {
   teamId: number | null;
   penName: string;
+  category: string;
   articleType: string;
   contentType: string;
+  wordCountRange: string | null;
   date: string;
 };
 
@@ -81,8 +84,10 @@ async function selectPaymentSourceArticles(options?: { exactPenName?: string; ow
   return db.select({
     teamId: articles.teamId,
     penName: articles.penName,
+    category: articles.category,
     articleType: articles.articleType,
     contentType: articles.contentType,
+    wordCountRange: articles.wordCountRange,
     date: articles.date,
   })
     .from(articles)
@@ -132,6 +137,12 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
   const byWriter: Record<string, CalcRow> = {};
 
   for (const article of eligibleSourceArticles) {
+    const normalizedArticleFields = resolveAppArticleFields({
+      category: article.category,
+      articleType: article.articleType,
+      contentType: article.contentType,
+      wordCountRange: article.wordCountRange,
+    });
     const contributorProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
     const canonicalPenName = resolveRoyaltyContributorPenName(article.penName, contributorProfiles) || article.penName;
 
@@ -146,13 +157,13 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
     }
 
     const row = byWriter[canonicalPenName];
-    const key = `${article.articleType}|${article.contentType}`;
+    const key = `${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`;
     const price = rateMap.get(key) || 0;
 
     row.totalArticles += 1;
     row.totalAmount += price;
 
-    const detailKey = `${article.articleType} (${article.contentType})`;
+    const detailKey = `${normalizedArticleFields.articleType} (${normalizedArticleFields.contentType})`;
     if (!row.details[detailKey]) {
       row.details[detailKey] = { count: 0, unitPrice: price, total: 0 };
     }

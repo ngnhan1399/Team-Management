@@ -8,7 +8,7 @@ import {
   type GoogleSheetArticleSnapshot,
   type GoogleSheetSyncLinkSnapshot,
 } from "@/lib/google-sheet-mutation";
-import { resolveArticleCategory } from "@/lib/article-category";
+import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
@@ -217,6 +217,7 @@ async function attachArticleResponseMetadata<
       ? db
           .select({
             teamId: collaborators.teamId,
+            name: collaborators.name,
             penName: collaborators.penName,
             role: collaborators.role,
             linkedUserRole: users.role,
@@ -251,6 +252,13 @@ async function attachArticleResponseMetadata<
       profile,
     ])
   );
+  const collaboratorProfilesByTeam = new Map<number, typeof collaboratorProfiles>();
+  for (const profile of collaboratorProfiles) {
+    const teamKey = Number(profile.teamId || 0);
+    const existingProfiles = collaboratorProfilesByTeam.get(teamKey) || [];
+    existingProfiles.push(profile);
+    collaboratorProfilesByTeam.set(teamKey, existingProfiles);
+  }
   const creatorRoleById = new Map(
     creatorProfiles.map((profile) => [Number(profile.id), profile.role])
   );
@@ -264,6 +272,11 @@ async function attachArticleResponseMetadata<
       const normalizedPenName = normalizeString(row.penName).toLowerCase();
       const collaboratorProfile = collaboratorProfileByKey.get(
         `${Number(row.teamId || 0)}::${normalizedPenName}`
+      ) || (collaboratorProfilesByTeam.get(Number(row.teamId || 0)) || []).find((profile) =>
+        matchesIdentityCandidate(
+          [profile.penName, profile.name || ""].filter(Boolean) as string[],
+          row.penName
+        )
       );
 
       if (collaboratorProfile) {
@@ -883,8 +896,12 @@ export async function POST(request: NextRequest) {
     const finalPenName = canManageArticles ? normalizeString(body.penName) : ownPenName || "";
     const title = normalizeString(body.title);
     const date = normalizeString(body.date);
-    const normalizedArticleType = normalizeString(body.articleType) || "Bài SEO ICT";
-    const normalizedCategory = resolveArticleCategory(normalizeString(body.category), normalizedArticleType);
+    const normalizedArticleFields = resolveAppArticleFields({
+      category: normalizeString(body.category),
+      articleType: normalizeString(body.articleType) || "Bài SEO ICT",
+      contentType: normalizeString(body.contentType) || "Viết mới",
+      wordCountRange: normalizeString(body.wordCountRange) || undefined,
+    });
     const requestedTeamId = normalizeTeamId(body.teamId);
     const linkedCollaborator = finalPenName
       ? await db
@@ -927,10 +944,10 @@ export async function POST(request: NextRequest) {
         title,
         penName: finalPenName,
         createdByUserId: context.user.id,
-        category: normalizedCategory as never,
-        articleType: normalizedArticleType as never,
-        contentType: (normalizeString(body.contentType) || "Viết mới") as never,
-        wordCountRange: (normalizeString(body.wordCountRange) || undefined) as never,
+        category: normalizedArticleFields.category as never,
+        articleType: normalizedArticleFields.articleType as never,
+        contentType: normalizedArticleFields.contentType as never,
+        wordCountRange: (normalizedArticleFields.wordCountRange || undefined) as never,
         status: (normalizeString(body.status) || "Submitted") as never,
         link: normalizeString(body.link) || undefined,
         reviewLink: normalizeArticleReviewLink(normalizeString(body.reviewLink)) || undefined,
@@ -1055,6 +1072,10 @@ export async function PUT(request: NextRequest) {
     if (typeof updateData.reviewerName === "string") updateData.reviewerName = updateData.reviewerName.trim() || undefined;
     if (typeof updateData.penName === "string") updateData.penName = updateData.penName.trim();
     if (typeof updateData.date === "string") updateData.date = updateData.date.trim();
+    if (typeof updateData.category === "string") updateData.category = (updateData.category.trim() || undefined) as never;
+    if (typeof updateData.articleType === "string") updateData.articleType = (updateData.articleType.trim() || undefined) as never;
+    if (typeof updateData.contentType === "string") updateData.contentType = (updateData.contentType.trim() || undefined) as never;
+    if (typeof updateData.wordCountRange === "string") updateData.wordCountRange = (updateData.wordCountRange.trim() || undefined) as never;
     if (typeof updateData.penName === "string" && updateData.penName) {
       const nextCollaborator = await db
         .select({ id: collaborators.id, teamId: collaborators.teamId })
@@ -1070,8 +1091,22 @@ export async function PUT(request: NextRequest) {
         updateData.teamId = nextCollaborator.teamId;
       }
     }
-    if (Object.prototype.hasOwnProperty.call(body, "category") || Object.prototype.hasOwnProperty.call(body, "articleType")) {
-      updateData.category = resolveArticleCategory(updateData.category, updateData.articleType ?? existing.articleType) as never;
+    if (
+      Object.prototype.hasOwnProperty.call(body, "category")
+      || Object.prototype.hasOwnProperty.call(body, "articleType")
+      || Object.prototype.hasOwnProperty.call(body, "contentType")
+      || Object.prototype.hasOwnProperty.call(body, "wordCountRange")
+    ) {
+      const normalizedArticleFields = resolveAppArticleFields({
+        category: updateData.category ?? existing.category,
+        articleType: updateData.articleType ?? existing.articleType,
+        contentType: updateData.contentType ?? existing.contentType,
+        wordCountRange: updateData.wordCountRange ?? existing.wordCountRange,
+      });
+      updateData.category = normalizedArticleFields.category as never;
+      updateData.articleType = normalizedArticleFields.articleType as never;
+      updateData.contentType = normalizedArticleFields.contentType as never;
+      updateData.wordCountRange = (normalizedArticleFields.wordCountRange || undefined) as never;
     }
     updateData.updatedAt = new Date().toISOString();
     const shouldMirrorToGoogleSheet = [

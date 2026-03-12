@@ -54,17 +54,24 @@ function extractNumberTokens(value: string) {
   );
 }
 
+function inferSpecialSeoWordCountRangeFromArticleType(value: string): AppWordCountRange | null {
+  const compact = value.replace(/\s+/g, "");
+  if (compact.includes("1k5")) return "1500-2000";
+  if (compact.includes("2k")) return "Từ 2000 trở lên";
+  return null;
+}
+
 function inferWordCountRangeFromFoldedText(value: string): AppWordCountRange | null {
   if (!value) return null;
 
-  const compact = value.replace(/\s+/g, "");
-  if (compact.includes("1k5")) return "1000-1500";
-  if (compact.includes("2k")) return "Từ 2000 trở lên";
+  const inferredFromArticleType = inferSpecialSeoWordCountRangeFromArticleType(value);
+  if (inferredFromArticleType) return inferredFromArticleType;
 
   const numericTokens = extractNumberTokens(value);
   if (numericTokens.includes(800) && numericTokens.includes(1000)) return "800-1000";
   if (numericTokens.includes(1000) && numericTokens.includes(1500)) return "1000-1500";
   if (numericTokens.includes(1500) && numericTokens.includes(2000)) return "1500-2000";
+  if (numericTokens.includes(1500)) return "1500-2000";
 
   const hasUpperBoundHint =
     value.includes("tro len")
@@ -101,25 +108,35 @@ export function normalizeWordCountRangeToApp(value: unknown): AppWordCountRange 
 function mapSeoArticleType(category: AppArticleCategory, wordCountRange: AppWordCountRange | null): AppArticleType {
   if (category === "Gia dụng") {
     if (wordCountRange === "Từ 2000 trở lên") return "Bài SEO Gia dụng 2K";
-    if (wordCountRange === "1000-1500") return "Bài SEO Gia dụng 1K5";
+    if (wordCountRange === "1500-2000") return "Bài SEO Gia dụng 1K5";
     return "Bài SEO Gia dụng";
   }
 
   if (wordCountRange === "Từ 2000 trở lên") return "Bài SEO ICT 2K";
-  if (wordCountRange === "1000-1500") return "Bài SEO ICT 1K5";
+  if (wordCountRange === "1500-2000") return "Bài SEO ICT 1K5";
   return "Bài SEO ICT";
 }
 
-export function mapGoogleSheetArticleToApp(input: {
+function resolveCanonicalWordCountRange(input: {
+  articleType: unknown;
+  wordCountRange?: unknown;
+}) {
+  const foldedArticleType = foldGoogleSheetArticleText(input.articleType);
+  return (
+    inferSpecialSeoWordCountRangeFromArticleType(foldedArticleType)
+    ?? normalizeWordCountRangeToApp(input.wordCountRange)
+    ?? inferWordCountRangeFromFoldedText(foldedArticleType)
+  );
+}
+
+export function resolveAppArticleFields(input: {
   articleType: unknown;
   category?: unknown;
   wordCountRange?: unknown;
   contentType?: unknown;
 }) {
   const foldedArticleType = foldGoogleSheetArticleText(input.articleType);
-  const inferredWordCountRange =
-    normalizeWordCountRangeToApp(input.wordCountRange)
-    ?? inferWordCountRangeFromFoldedText(foldedArticleType);
+  const inferredWordCountRange = resolveCanonicalWordCountRange(input);
   const inferredContentType = normalizeAppContentType(input.contentType || input.articleType);
   const category = resolveArticleCategory(input.category, input.articleType) as AppArticleCategory;
 
@@ -190,6 +207,15 @@ export function mapGoogleSheetArticleToApp(input: {
   };
 }
 
+export function mapGoogleSheetArticleToApp(input: {
+  articleType: unknown;
+  category?: unknown;
+  wordCountRange?: unknown;
+  contentType?: unknown;
+}) {
+  return resolveAppArticleFields(input);
+}
+
 export function formatWordCountRangeForGoogleSheet(value: unknown) {
   const normalized = normalizeWordCountRangeToApp(value);
   return normalized ? GOOGLE_SHEET_WORD_COUNT_LABELS[normalized] : "";
@@ -198,63 +224,71 @@ export function formatWordCountRangeForGoogleSheet(value: unknown) {
 export function mapAppArticleToGoogleSheet(input: {
   articleType: unknown;
   contentType?: unknown;
+  category?: unknown;
   wordCountRange?: unknown;
 }) {
-  const articleType = normalizeText(input.articleType);
+  const canonical = resolveAppArticleFields({
+    articleType: input.articleType,
+    category: input.category,
+    contentType: input.contentType,
+    wordCountRange: input.wordCountRange,
+  });
+  const articleType = normalizeText(canonical.articleType);
   const foldedArticleType = foldGoogleSheetArticleText(articleType);
-  const contentType = normalizeAppContentType(input.contentType);
+  const contentType = canonical.contentType;
+  const wordCountRange = canonical.wordCountRange;
 
   if (foldedArticleType.includes("seo ai")) {
     return {
       articleType: "SEO AI",
-      wordCountRange: formatWordCountRangeForGoogleSheet(input.wordCountRange),
+      wordCountRange: formatWordCountRangeForGoogleSheet(wordCountRange),
     };
   }
 
   if (foldedArticleType.includes("thu thuat")) {
     return {
       articleType: "Thủ thuật",
-      wordCountRange: formatWordCountRangeForGoogleSheet(input.wordCountRange),
+      wordCountRange: formatWordCountRangeForGoogleSheet(wordCountRange),
     };
   }
 
   if (foldedArticleType.includes("mo ta") && foldedArticleType.includes("ngan")) {
     return {
       articleType: "Mô tả ngắn",
-      wordCountRange: formatWordCountRangeForGoogleSheet(input.wordCountRange),
+      wordCountRange: formatWordCountRangeForGoogleSheet(wordCountRange),
     };
   }
 
   if (foldedArticleType.includes("mo ta")) {
     return {
       articleType: "Mô tả dài",
-      wordCountRange: formatWordCountRangeForGoogleSheet(input.wordCountRange),
+      wordCountRange: formatWordCountRangeForGoogleSheet(wordCountRange),
     };
   }
 
   if (foldedArticleType.includes("review") || foldedArticleType.includes("dich")) {
     return {
       articleType: "Bài dịch Review SP",
-      wordCountRange: formatWordCountRangeForGoogleSheet(input.wordCountRange),
+      wordCountRange: formatWordCountRangeForGoogleSheet(wordCountRange),
     };
   }
 
   if (foldedArticleType.includes("gia dung")) {
     return {
       articleType: contentType === "Viết lại" ? "Gia dụng Viết lại" : "Gia dụng Viết mới",
-      wordCountRange: formatWordCountRangeForGoogleSheet(input.wordCountRange),
+      wordCountRange: formatWordCountRangeForGoogleSheet(wordCountRange),
     };
   }
 
   if (foldedArticleType.includes("ict") || foldedArticleType.includes("seo") || !foldedArticleType) {
     return {
       articleType: contentType === "Viết lại" ? "ICT Viết lại" : "ICT Viết mới",
-      wordCountRange: formatWordCountRangeForGoogleSheet(input.wordCountRange),
+      wordCountRange: formatWordCountRangeForGoogleSheet(wordCountRange),
     };
   }
 
   return {
     articleType,
-    wordCountRange: formatWordCountRangeForGoogleSheet(input.wordCountRange),
+    wordCountRange: formatWordCountRangeForGoogleSheet(wordCountRange),
   };
 }
