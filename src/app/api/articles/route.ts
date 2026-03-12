@@ -381,23 +381,32 @@ async function ensureGoogleSheetDeleteConsistency(
 ) {
   const warnings: string[] = [];
 
-  for (const target of targets) {
-    try {
-      const result = await mirrorArticleDeleteToGoogleSheet({
-        articleId: target.article.id,
-        actorUserId,
-        actorDisplayName,
-        reason,
-        snapshot: target.article,
-        syncLink: target.syncLink,
-      });
+  for (let index = 0; index < targets.length; index += 4) {
+    const batch = targets.slice(index, index + 4);
+    const batchWarnings = await Promise.all(
+      batch.map(async (target) => {
+        try {
+          const result = await mirrorArticleDeleteToGoogleSheet({
+            articleId: target.article.id,
+            actorUserId,
+            actorDisplayName,
+            reason,
+            snapshot: target.article,
+            syncLink: target.syncLink,
+          });
 
-      if (!result.success && !result.skipped) {
-        warnings.push(`${target.article.title}: ${result.message}`);
-      }
-    } catch {
-      warnings.push(`${target.article.title}: Lỗi kết nối Google Sheet`);
-    }
+          if (!result.success && !result.skipped) {
+            return `${target.article.title}: ${result.message}`;
+          }
+
+          return null;
+        } catch {
+          return `${target.article.title}: Lỗi kết nối Google Sheet`;
+        }
+      })
+    );
+
+    warnings.push(...batchWarnings.filter((warning): warning is string => Boolean(warning)));
   }
 
   return warnings;
@@ -1074,6 +1083,9 @@ export async function PUT(request: NextRequest) {
       "title",
       "penName",
       "date",
+      "articleType",
+      "contentType",
+      "wordCountRange",
     ].some((field) => Object.prototype.hasOwnProperty.call(body, field));
 
     await db.update(articles)
@@ -1179,15 +1191,24 @@ export async function DELETE(request: NextRequest) {
         }
       }
 
-      const sheetSyncWarnings = await ensureGoogleSheetDeleteConsistency(
-        [deleteTarget],
-        context.user.id,
-        actorDisplayName,
-        "article_delete"
-      );
-
       const deleted = await deleteArticlesByIds([articleId]);
       scheduleBackgroundWork(async () => {
+        const sheetSyncWarnings = await ensureGoogleSheetDeleteConsistency(
+          [deleteTarget],
+          context.user.id,
+          actorDisplayName,
+          "article_delete"
+        );
+
+        if (sheetSyncWarnings.length > 0) {
+          await notifyGoogleSheetSyncIssue(
+            context.user.id,
+            sheetSyncWarnings.length === 1
+              ? sheetSyncWarnings[0]
+              : `Google Sheet chưa xóa kịp ${sheetSyncWarnings.length} bài. Hệ thống đã lưu log để bạn kiểm tra lại.`
+          );
+        }
+
         await runNonBlockingStep(
           () =>
             writeAuditLog({
@@ -1212,7 +1233,13 @@ export async function DELETE(request: NextRequest) {
         );
       });
 
-      return NextResponse.json({ success: true, deletedCount: deleted.deletedArticles, sheetSyncWarnings, ...deleted });
+      return NextResponse.json({
+        success: true,
+        deletedCount: deleted.deletedArticles,
+        backgroundSyncQueued: true,
+        sheetSyncWarnings: [],
+        ...deleted,
+      });
     }
 
     if (!canManageArticles) {
@@ -1253,15 +1280,24 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const sheetSyncWarnings = await ensureGoogleSheetDeleteConsistency(
-      deleteTargets,
-      context.user.id,
-      actorDisplayName,
-      "articles_bulk_delete"
-    );
-
     const deleted = await deleteArticlesByIds(deleteTargets.map((target) => target.article.id));
     scheduleBackgroundWork(async () => {
+      const sheetSyncWarnings = await ensureGoogleSheetDeleteConsistency(
+        deleteTargets,
+        context.user.id,
+        actorDisplayName,
+        "articles_bulk_delete"
+      );
+
+      if (sheetSyncWarnings.length > 0) {
+        await notifyGoogleSheetSyncIssue(
+          context.user.id,
+          sheetSyncWarnings.length === 1
+            ? sheetSyncWarnings[0]
+            : `Google Sheet chưa xóa kịp ${sheetSyncWarnings.length} bài. Hệ thống đã lưu log để bạn kiểm tra lại.`
+        );
+      }
+
       await runNonBlockingStep(
         () =>
           writeAuditLog({
@@ -1290,7 +1326,8 @@ export async function DELETE(request: NextRequest) {
       scope,
       criteria,
       deletedCount: deleted.deletedArticles,
-      sheetSyncWarnings,
+      backgroundSyncQueued: true,
+      sheetSyncWarnings: [],
       ...deleted,
     });
   } catch (error) {

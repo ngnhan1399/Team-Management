@@ -9,7 +9,7 @@ import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { canAccessTeam } from "@/lib/teams";
 import { eq, desc, and } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
 function canAccessArticleReview(
     context: CurrentUserContext,
@@ -44,6 +44,26 @@ function canCreateArticleReview(
     }
 
     return article.status === "Submitted" || matchesIdentityCandidate(getContextIdentityCandidates(context), article.reviewerName);
+}
+
+function scheduleBackgroundWork(task: () => Promise<void>) {
+    after(async () => {
+        try {
+            await task();
+        } catch (error) {
+            console.error("[articles.review.background]", error);
+        }
+    });
+}
+
+async function notifyGoogleSheetSyncIssue(userId: number, message: string) {
+    await publishRealtimeEvent({
+        channels: ["articles"],
+        userIds: [userId],
+        toastTitle: "Google Sheet chưa kịp đồng bộ",
+        toastMessage: message,
+        toastVariant: "warning",
+    });
 }
 
 export async function GET(request: NextRequest) {
@@ -171,21 +191,26 @@ export async function POST(request: NextRequest) {
             payload: { errorNotes },
         });
 
-        const sheetSync = await mirrorArticleUpdateToGoogleSheet({
-            articleId,
-            actorUserId: context.user.id,
-            actorDisplayName: reviewerDisplayName,
-            reason: "article_review_created",
-            overrides: {
-                status: "NeedsFix",
-                reviewerName: reviewerDisplayName,
-                notes: String(errorNotes || "").trim(),
-            },
+        await publishRealtimeEvent(["articles", "dashboard"]);
+        scheduleBackgroundWork(async () => {
+            const sheetSync = await mirrorArticleUpdateToGoogleSheet({
+                articleId,
+                actorUserId: context.user.id,
+                actorDisplayName: reviewerDisplayName,
+                reason: "article_review_created",
+                overrides: {
+                    status: "NeedsFix",
+                    reviewerName: reviewerDisplayName,
+                    notes: String(errorNotes || "").trim(),
+                },
+            });
+
+            if (sheetSync.skipped || !sheetSync.success) {
+                await notifyGoogleSheetSyncIssue(context.user.id, sheetSync.message);
+            }
         });
 
-        await publishRealtimeEvent(["articles", "dashboard"]);
-
-        return NextResponse.json({ success: true, sheetSync });
+        return NextResponse.json({ success: true, backgroundSyncQueued: true });
     } catch (error) {
         return handleServerError("articles.review.post", error);
     }
@@ -271,20 +296,25 @@ export async function PUT(request: NextRequest) {
             payload: { articleId: review.articleId },
         });
 
-        const sheetSync = await mirrorArticleUpdateToGoogleSheet({
-            articleId: review.articleId,
-            actorUserId: context.user.id,
-            actorDisplayName: getContextDisplayName(context),
-            reason: "article_review_fixed",
-            overrides: {
-                status: "Submitted",
-                notes: String(ctvResponse || "").trim(),
-            },
+        await publishRealtimeEvent(["articles", "dashboard"]);
+        scheduleBackgroundWork(async () => {
+            const sheetSync = await mirrorArticleUpdateToGoogleSheet({
+                articleId: review.articleId,
+                actorUserId: context.user.id,
+                actorDisplayName: getContextDisplayName(context),
+                reason: "article_review_fixed",
+                overrides: {
+                    status: "Submitted",
+                    notes: String(ctvResponse || "").trim(),
+                },
+            });
+
+            if (sheetSync.skipped || !sheetSync.success) {
+                await notifyGoogleSheetSyncIssue(context.user.id, sheetSync.message);
+            }
         });
 
-        await publishRealtimeEvent(["articles", "dashboard"]);
-
-        return NextResponse.json({ success: true, sheetSync });
+        return NextResponse.json({ success: true, backgroundSyncQueued: true });
     } catch (error) {
         return handleServerError("articles.review.put", error);
     }

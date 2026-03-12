@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { articleSyncLinks, articles } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
+import { mapAppArticleToGoogleSheet } from "@/lib/google-sheet-article-mapping";
 import { isApprovedArticleStatus } from "@/lib/article-status";
 import { DEFAULT_GOOGLE_SHEET_SOURCE_URL } from "@/lib/google-sheet-sync";
 import { desc, eq } from "drizzle-orm";
@@ -117,35 +118,6 @@ function mapArticleStatusToGoogleSheetStatus(status: unknown) {
   }
 }
 
-function mapArticleTypeToGoogleSheetValue(articleType: string, contentType: string) {
-  const normalizedArticleType = normalizeText(articleType);
-  const isRewrite = normalizeText(contentType) === "Viết lại";
-
-  if (normalizedArticleType === "Thủ thuật") return "Thủ thuật";
-  if (normalizedArticleType === "Mô tả SP dài" || normalizedArticleType === "Mô tả SP ngắn") return "Mô tả dài";
-  if (normalizedArticleType.includes("Gia dụng")) return isRewrite ? "Gia dụng Viết lại" : "Gia dụng Viết mới";
-  if (normalizedArticleType.includes("SEO") || normalizedArticleType.includes("ICT") || !normalizedArticleType) {
-    return isRewrite ? "ICT Viết lại" : "ICT Viết mới";
-  }
-
-  return normalizedArticleType;
-}
-
-function mapWordCountRangeToGoogleSheetValue(wordCountRange: unknown) {
-  switch (normalizeText(wordCountRange)) {
-    case "800-1000":
-      return "800 - 1000 chữ";
-    case "1000-1500":
-      return "1000 - 1500 chữ";
-    case "1500-2000":
-      return "1500 - 2000 chữ";
-    case "Từ 2000 trở lên":
-      return "Từ 2000 chữ trở lên";
-    default:
-      return "";
-  }
-}
-
 function normalizeLinkKey(link: string) {
   return link.toLowerCase().trim();
 }
@@ -187,6 +159,11 @@ function buildArticlePayload(article: GoogleSheetArticleSnapshot, options: Mirro
   );
   const resolvedNotes = normalizeText(options.overrides?.notes ?? article.notes);
   const resolvedLink = normalizeText(options.overrides?.link ?? article.link);
+  const mappedArticleFields = mapAppArticleToGoogleSheet({
+    articleType: article.articleType,
+    contentType: article.contentType,
+    wordCountRange: article.wordCountRange,
+  });
 
   return {
     articleId: normalizeText(article.articleId),
@@ -198,8 +175,8 @@ function buildArticlePayload(article: GoogleSheetArticleSnapshot, options: Mirro
     reviewerName: resolvedReviewerName,
     notes: resolvedNotes,
     link: resolvedLink,
-    articleType: mapArticleTypeToGoogleSheetValue(article.articleType, article.contentType),
-    wordCountRange: mapWordCountRangeToGoogleSheetValue(article.wordCountRange),
+    articleType: mappedArticleFields.articleType,
+    wordCountRange: mappedArticleFields.wordCountRange,
   };
 }
 

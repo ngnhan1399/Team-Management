@@ -633,8 +633,10 @@ export default function ArticlesPage() {
         "Da xoa bai viet",
         data.sheetSyncWarnings?.length
           ? `Da xoa ${data.deletedCount} bai viet. Co ${data.sheetSyncWarnings.length} canh bao dong bo Google Sheet.`
+          : data.backgroundSyncQueued
+            ? `Da xoa ${data.deletedCount} bai viet. Google Sheet dang dong bo nen.`
           : `Da xoa ${data.deletedCount} bai viet va reset du lieu nhuận but lien quan.`,
-        data.sheetSyncWarnings?.length ? "warning" : "success"
+        data.sheetSyncWarnings?.length ? "warning" : data.backgroundSyncQueued ? "info" : "success"
       );
       fetchArticles(1, search, filters);
     } catch (error) {
@@ -678,8 +680,10 @@ export default function ArticlesPage() {
         "Da xoa bai viet",
         data.sheetSyncWarnings?.length
           ? `Da xoa "${article.title}". Google Sheet con ${data.sheetSyncWarnings.length} canh bao can kiem tra.`
+          : data.backgroundSyncQueued
+            ? `Da xoa "${article.title}". Google Sheet dang dong bo nen.`
           : `Da xoa "${article.title}".`,
-        data.sheetSyncWarnings?.length ? "warning" : "success"
+        data.sheetSyncWarnings?.length ? "warning" : data.backgroundSyncQueued ? "info" : "success"
       );
       fetchArticles(pagination.page, search, filters);
     } catch (error) {
@@ -792,6 +796,14 @@ export default function ArticlesPage() {
         mergeSavedArticleIntoList(data.article as Article, isEditing);
       } else {
         fetchArticles(pagination.page || 1, search, filters);
+      }
+      if (data.backgroundSyncQueued) {
+        const savedTitle = String(data.article?.title || formData.title || "bài viết");
+        showUiToast(
+          isEditing ? "Da cap nhat bai viet" : "Da luu bai viet",
+          `"${savedTitle}" da luu. Google Sheet dang dong bo nen.`,
+          "info"
+        );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -1,5 +1,8 @@
 import * as XLSX from "xlsx";
-import { resolveArticleCategory } from "@/lib/article-category";
+import {
+  mapGoogleSheetArticleToApp,
+  normalizeAppContentType,
+} from "@/lib/google-sheet-article-mapping";
 
 export type ImportFieldId =
   | "articleId"
@@ -696,26 +699,6 @@ function normalizeArticleText(value: unknown): string {
   return normalizeWhitespace(String(value || ""));
 }
 
-function mapContentType(value: string): "Viết mới" | "Viết lại" {
-  const folded = foldText(value);
-  if (folded.includes("viet lai") || folded.includes("rewrite") || folded.includes("rework")) {
-    return "Viết lại";
-  }
-  return "Viết mới";
-}
-
-function mapWordCountRange(value: string): "800-1000" | "1000-1500" | "1500-2000" | "Từ 2000 trở lên" | null {
-  const folded = foldText(value);
-  if (!folded) return null;
-  if (folded.includes("2000") && (folded.includes("tro len") || folded.includes("2k"))) return "Từ 2000 trở lên";
-  if (folded.includes("1500") && folded.includes("2000")) return "1500-2000";
-  if (folded.includes("1000") && folded.includes("1500")) return "1000-1500";
-  if (folded.includes("800") && folded.includes("1000")) return "800-1000";
-  if (folded.includes("1k5")) return "1000-1500";
-  if (folded.includes("2k")) return "Từ 2000 trở lên";
-  return null;
-}
-
 function mapStatus(
   value: string
 ): "Draft" | "Submitted" | "Reviewing" | "NeedsFix" | "Approved" | "Published" | "Rejected" {
@@ -726,30 +709,6 @@ function mapStatus(
   if (["needsfix", "sua loi", "can sua", "fix"].some((keyword) => folded.includes(keyword))) return "NeedsFix";
   if (["rejected", "tu choi"].some((keyword) => folded.includes(keyword))) return "Rejected";
   return "Draft";
-}
-
-function mapArticleType(articleTypeValue: string, category: string, wordCountRange: string | null): string {
-  const folded = foldText(articleTypeValue);
-
-  if (folded.includes("mo ta") && folded.includes("ngan")) return "Mô tả SP ngắn";
-  if (folded.includes("mo ta") && folded.includes("dai")) return "Mô tả SP dài";
-  if (folded.includes("review") || folded.includes("dich")) return "Bài dịch Review SP";
-  if (folded.includes("seo ai")) return "SEO AI";
-  if (folded.includes("thu thuat")) return "Thủ thuật";
-  if (folded.includes("gia dung") && folded.includes("2k")) return "Bài SEO Gia dụng 2K";
-  if (folded.includes("gia dung") && folded.includes("1k5")) return "Bài SEO Gia dụng 1K5";
-  if (folded.includes("gia dung")) return "Bài SEO Gia dụng";
-  if (folded.includes("ict") && folded.includes("2k")) return "Bài SEO ICT 2K";
-  if (folded.includes("ict") && folded.includes("1k5")) return "Bài SEO ICT 1K5";
-  if (folded.includes("seo")) return folded.includes("gia dung") ? "Bài SEO Gia dụng" : "Bài SEO ICT";
-
-  if (category === "Gia dụng" && wordCountRange === "Từ 2000 trở lên") return "Bài SEO Gia dụng 2K";
-  if (category === "Gia dụng" && wordCountRange === "1000-1500") return "Bài SEO Gia dụng 1K5";
-  if (category === "Gia dụng") return "Bài SEO Gia dụng";
-  if (wordCountRange === "Từ 2000 trở lên") return "Bài SEO ICT 2K";
-  if (wordCountRange === "1000-1500") return "Bài SEO ICT 1K5";
-
-  return "Bài SEO ICT";
 }
 
 export function fuzzyMatchPenName(rawName: string, collaboratorPenNames: string[]): string {
@@ -818,12 +777,16 @@ export function normalizeImportedArticleRow(
   }
 
   const penName = fuzzyMatchPenName(rawPenName, collaboratorPenNames);
-  const contentTypeSource = rawContentType || rawArticleType;
-
-  const category = resolveArticleCategory(rawCategory, rawArticleType);
-  const wordCountRange = mapWordCountRange(rawWordCountRange);
-  const contentType = mapContentType(contentTypeSource);
-  const articleType = mapArticleType(rawArticleType, category, wordCountRange);
+  const mappedArticleFields = mapGoogleSheetArticleToApp({
+    articleType: rawArticleType,
+    category: rawCategory,
+    wordCountRange: rawWordCountRange,
+    contentType: rawContentType,
+  });
+  const category = mappedArticleFields.category;
+  const wordCountRange = mappedArticleFields.wordCountRange;
+  const contentType = rawContentType ? normalizeAppContentType(rawContentType) : mappedArticleFields.contentType;
+  const articleType = mappedArticleFields.articleType;
   const status = mapStatus(rawStatus);
   const reviewerName = rawReviewerName ? fuzzyMatchPenName(rawReviewerName, collaboratorPenNames) : "";
 
