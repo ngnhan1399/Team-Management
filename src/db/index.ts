@@ -42,6 +42,19 @@ function resolveDatabaseUrl() {
 const databaseUrl = resolveDatabaseUrl();
 const shouldUseSsl = /sslmode=require/i.test(databaseUrl) || process.env.DATABASE_SSL === "require";
 
+type DatabaseBootstrapMode = "full" | "skip";
+
+function resolveDatabaseBootstrapMode(): DatabaseBootstrapMode {
+  const rawMode = process.env.DATABASE_BOOTSTRAP_MODE?.trim().toLowerCase();
+  if (!rawMode) {
+    return "full";
+  }
+
+  return ["0", "false", "off", "skip", "disabled"].includes(rawMode) ? "skip" : "full";
+}
+
+const databaseBootstrapMode = resolveDatabaseBootstrapMode();
+
 declare global {
   var __ctvManagementPgPool: Pool | undefined;
   var __ctvManagementPgDb: NodePgDatabase<typeof schema> | undefined;
@@ -429,6 +442,10 @@ async function getOrCreateDefaultTeamId() {
 }
 
 export async function initializeDatabase() {
+  if (databaseBootstrapMode === "skip") {
+    return;
+  }
+
   await pool.query(RUNTIME_META_TABLE_SQL);
 
   const bootstrapMeta = await pool.query(
@@ -535,4 +552,12 @@ export function ensureDatabaseInitialized() {
 
 export function closeDatabaseConnection() {
   return pool.end();
+}
+
+export function getDatabaseBootstrapMode() {
+  return databaseBootstrapMode;
+}
+
+export async function pingDatabase() {
+  await pool.query("SELECT 1");
 }

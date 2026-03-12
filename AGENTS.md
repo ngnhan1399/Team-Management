@@ -7,6 +7,7 @@ Giữ các thread Codex gọn, dễ nối tiếp, và tránh kẹt ở bước "
 ## Bắt đầu ở đâu
 
 - Đọc `docs/codex-handoff.md` trước khi quét mã nguồn.
+- Nếu task liên quan tối ưu hiệu năng, build, deploy, hoặc dọn repo, đọc thêm `docs/optimization-memory.md` để tránh lặp lại các tối ưu đã làm.
 - Chỉ mở đúng thư mục hoặc file liên quan tới task đang làm.
 - Khi cần hiểu luồng bài viết + Google Sheet, ưu tiên:
   - `src/app/api/articles/route.ts`
@@ -31,6 +32,7 @@ Giữ các thread Codex gọn, dễ nối tiếp, và tránh kẹt ở bước "
 ## Handoff bắt buộc
 
 - Sau mỗi thay đổi đáng kể, cập nhật `docs/codex-handoff.md`.
+- Nếu thay đổi liên quan hiệu năng/build/runtime/sync hygiene, cập nhật thêm `docs/optimization-memory.md`.
 - Nếu thread đã dài hoặc vừa chạy nhiều lệnh đọc file, dừng để ghi handoff trước khi tiếp tục.
 - Handoff nên ngắn và chỉ gồm:
   - trạng thái hiện tại

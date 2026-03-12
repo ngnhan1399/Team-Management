@@ -121,7 +121,19 @@ type CollaboratorDirectoryEntry = {
   teamId: number | null;
 };
 
+type SyncDeletionGuardDecision = {
+  allowed: boolean;
+  warning?: string;
+};
+
 const REQUIRED_FIELDS: ImportFieldId[] = ["date", "title", "penName"];
+const DEFAULT_GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT = 20;
+const DEFAULT_GOOGLE_SHEETS_SYNC_MAX_DELETE_RATIO = 0.35;
+
+type GoogleSheetSyncCollaboratorContext = {
+  collaboratorPenNames: string[];
+  collaboratorDirectory: CollaboratorDirectoryEntry[];
+};
 
 function foldText(value: string): string {
   return value
@@ -131,6 +143,65 @@ function foldText(value: string): string {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parsePositiveRatio(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 1 ? parsed : fallback;
+}
+
+function getGoogleSheetDeleteGuardConfig() {
+  return {
+    maxDeleteCount: parsePositiveInteger(
+      process.env.GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT,
+      DEFAULT_GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT
+    ),
+    maxDeleteRatio: parsePositiveRatio(
+      process.env.GOOGLE_SHEETS_SYNC_MAX_DELETE_RATIO,
+      DEFAULT_GOOGLE_SHEETS_SYNC_MAX_DELETE_RATIO
+    ),
+  };
+}
+
+function assessGoogleSheetDeleteSafety(options: {
+  candidateDeleteCount: number;
+  referenceRowCount: number;
+  rowsUsingFallbackDate?: number;
+  scopeLabel: string;
+}): SyncDeletionGuardDecision {
+  const { candidateDeleteCount, referenceRowCount, rowsUsingFallbackDate = 0, scopeLabel } = options;
+  if (candidateDeleteCount <= 0) {
+    return { allowed: true };
+  }
+
+  if (rowsUsingFallbackDate > 0) {
+    return {
+      allowed: false,
+      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì sheet đang có ${rowsUsingFallbackDate} dòng phải gán ngày tạm. Hãy kiểm tra lại cột "Ngày viết" rồi đồng bộ lại.`,
+    };
+  }
+
+  const { maxDeleteCount, maxDeleteRatio } = getGoogleSheetDeleteGuardConfig();
+  if (candidateDeleteCount > maxDeleteCount) {
+    return {
+      allowed: false,
+      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì vượt ngưỡng an toàn ${maxDeleteCount} bài mỗi lần sync. Có thể tăng ngưỡng bằng GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT nếu đây là thay đổi chủ đích.`,
+    };
+  }
+
+  if (referenceRowCount > 0 && (candidateDeleteCount / referenceRowCount) > maxDeleteRatio) {
+    return {
+      allowed: false,
+      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì vượt ${Math.round(maxDeleteRatio * 100)}% số dòng đang đọc từ sheet. Hãy rà lại dữ liệu nguồn trước khi sync tiếp.`,
+    };
+  }
+
+  return { allowed: true };
 }
 
 export function parseSpreadsheetId(url: string): string | null {
@@ -263,7 +334,7 @@ export function pickSheetTab(
 }
 
 async function downloadGoogleSheetWorkbook(sourceUrlInput?: string) {
-  const sourceUrl = sourceUrlInput?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+  const sourceUrl = resolveGoogleSheetSourceUrl(sourceUrlInput);
   const exportUrl = buildSpreadsheetExportUrl(sourceUrl);
   const response = await fetch(exportUrl, { cache: "no-store" });
 
@@ -318,7 +389,7 @@ export async function loadGoogleSheetImport(options: {
   workbook?: XLSX.WorkBook;
 }) {
   if (options.workbook) {
-    const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+    const sourceUrl = resolveGoogleSheetSourceUrl(options.sourceUrl);
     return loadGoogleSheetImportFromWorkbook({
       sourceUrl,
       workbook: options.workbook,
@@ -338,6 +409,16 @@ export async function loadGoogleSheetImport(options: {
     year: options.year,
     collaboratorPenNames: options.collaboratorPenNames,
   });
+}
+
+function resolveGoogleSheetSourceUrl(sourceUrlInput?: string) {
+  return sourceUrlInput?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+}
+
+function normalizeGoogleSheetSyncIdentityCandidates(values?: string[]) {
+  return Array.from(
+    new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))
+  );
 }
 
 function normalizeCompositeKey(title: string, penName: string, date: string) {
@@ -582,6 +663,24 @@ async function getCollaboratorDirectory(teamId?: number | null) {
     .from(collaborators)
     .where(teamId ? eq(collaborators.teamId, teamId) : undefined)
     .all() as Promise<CollaboratorDirectoryEntry[]>;
+}
+
+async function getGoogleSheetSyncCollaboratorContext(
+  options: Pick<ExecuteGoogleSheetSyncOptions, "teamId" | "_collaboratorPenNames" | "_collaboratorDirectory">
+): Promise<GoogleSheetSyncCollaboratorContext> {
+  const [collaboratorPenNames, collaboratorDirectory] = await Promise.all([
+    options._collaboratorPenNames
+      ? Promise.resolve(options._collaboratorPenNames)
+      : getCollaboratorPenNames(options.teamId),
+    options._collaboratorDirectory
+      ? Promise.resolve(options._collaboratorDirectory)
+      : getCollaboratorDirectory(options.teamId),
+  ]);
+
+  return {
+    collaboratorPenNames,
+    collaboratorDirectory,
+  };
 }
 
 function buildAllowedPenNameSet(values: string[]) {
@@ -831,6 +930,21 @@ async function createGoogleSheetSyncSharedState(
     linkMap,
     syncLinksBySheet,
   } satisfies GoogleSheetSyncSharedState;
+}
+
+async function getGoogleSheetSyncSharedState(
+  options: Pick<ExecuteGoogleSheetSyncOptions, "_sharedState" | "allowedPenNames" | "identityCandidates" | "sourceUrl" | "teamId">
+) {
+  if (options._sharedState) {
+    return options._sharedState;
+  }
+
+  return createGoogleSheetSyncSharedState(
+    resolveGoogleSheetSourceUrl(options.sourceUrl),
+    normalizeGoogleSheetSyncIdentityCandidates(options.identityCandidates),
+    options.teamId,
+    options.allowedPenNames || []
+  );
 }
 
 function resolvePreparedGoogleSheetMapping(
@@ -1092,46 +1206,50 @@ export async function refreshScopedArticlesFromGoogleSheet(
     throw new Error("Chưa có bài viết nào trong danh sách đang lọc để đồng bộ nhanh.");
   }
 
-  const collaboratorPenNames = await getCollaboratorPenNames(options.teamId);
-  const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
-  const targetArticles = await db
-    .select({
-      id: articles.id,
-      teamId: articles.teamId,
-      articleId: articles.articleId,
-      title: articles.title,
-      penName: articles.penName,
-      date: articles.date,
-      link: articles.link,
-      category: articles.category,
-      articleType: articles.articleType,
-      contentType: articles.contentType,
-      wordCountRange: articles.wordCountRange,
-      status: articles.status,
-      reviewerName: articles.reviewerName,
-      notes: articles.notes,
-    })
-    .from(articles)
-    .where(inArray(articles.id, targetArticleIds))
-    .all();
+  const sourceUrl = resolveGoogleSheetSourceUrl(options.sourceUrl);
+  const [collaboratorPenNames, workbookPayload, targetArticles, syncLinks] = await Promise.all([
+    getCollaboratorPenNames(options.teamId),
+    downloadGoogleSheetWorkbook(sourceUrl),
+    db
+      .select({
+        id: articles.id,
+        teamId: articles.teamId,
+        articleId: articles.articleId,
+        title: articles.title,
+        penName: articles.penName,
+        date: articles.date,
+        link: articles.link,
+        category: articles.category,
+        articleType: articles.articleType,
+        contentType: articles.contentType,
+        wordCountRange: articles.wordCountRange,
+        status: articles.status,
+        reviewerName: articles.reviewerName,
+        notes: articles.notes,
+      })
+      .from(articles)
+      .where(inArray(articles.id, targetArticleIds))
+      .all(),
+    db
+      .select({
+        id: articleSyncLinks.id,
+        sourceRowKey: articleSyncLinks.sourceRowKey,
+        articleIdRef: articleSyncLinks.articleIdRef,
+        sourceUrl: articleSyncLinks.sourceUrl,
+        sheetName: articleSyncLinks.sheetName,
+        sheetMonth: articleSyncLinks.sheetMonth,
+        sheetYear: articleSyncLinks.sheetYear,
+      })
+      .from(articleSyncLinks)
+      .where(inArray(articleSyncLinks.articleIdRef, targetArticleIds))
+      .all() as Promise<SyncLinkRow[]>,
+  ]);
+  const { workbook } = workbookPayload;
 
   if (targetArticles.length === 0) {
     throw new Error("Không tìm thấy bài viết nào trong hệ thống để đồng bộ nhanh.");
   }
-
-  const syncLinks = await db
-    .select({
-      id: articleSyncLinks.id,
-      sourceRowKey: articleSyncLinks.sourceRowKey,
-      articleIdRef: articleSyncLinks.articleIdRef,
-      sourceUrl: articleSyncLinks.sourceUrl,
-      sheetName: articleSyncLinks.sheetName,
-      sheetMonth: articleSyncLinks.sheetMonth,
-      sheetYear: articleSyncLinks.sheetYear,
-    })
-    .from(articleSyncLinks)
-    .where(inArray(articleSyncLinks.articleIdRef, targetArticleIds))
-    .all() as SyncLinkRow[];
+  const targetArticleById = new Map(targetArticles.map((article) => [article.id, article]));
 
   const syncLinkByArticleId = new Map<number, SyncLinkRow>();
   for (const syncLink of syncLinks) {
@@ -1197,6 +1315,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
       month: group.month,
       year: group.year,
       collaboratorPenNames,
+      workbook,
     });
     const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
     const lookup = buildPreparedRowLookup(
@@ -1215,7 +1334,13 @@ export async function refreshScopedArticlesFromGoogleSheet(
     resultMonth = resultMonth ?? selectedSheet.month;
     resultYear = resultYear ?? selectedSheet.year;
 
-    const groupArticles = targetArticles.filter((article) => group.articleIds.includes(article.id));
+    const groupArticles = group.articleIds.reduce<typeof targetArticles>((accumulator, articleId) => {
+      const article = targetArticleById.get(articleId);
+      if (article) {
+        accumulator.push(article);
+      }
+      return accumulator;
+    }, []);
     for (const article of groupArticles) {
       const syncLink = syncLinkByArticleId.get(article.id) ?? null;
       const matchedRow = findPreparedRowForArticle(article, lookup, syncLink);
@@ -1361,35 +1486,30 @@ export async function executeGoogleSheetSync(
     await ensureDatabaseInitialized();
   }
 
-  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames(options.teamId);
-  const collaboratorDirectory = options._collaboratorDirectory ?? await getCollaboratorDirectory(options.teamId);
+  const { collaboratorPenNames, collaboratorDirectory } = await getGoogleSheetSyncCollaboratorContext(options);
   const allowedPenNameSet = buildAllowedPenNameSet(options.allowedPenNames || []);
   const restrictToAllowedPenNames = allowedPenNameSet.size > 0;
-  const identityCandidates = Array.from(
-    new Set((options.identityCandidates || []).map((value) => String(value || "").trim()).filter(Boolean))
-  );
+  const identityCandidates = normalizeGoogleSheetSyncIdentityCandidates(options.identityCandidates);
   const restrictToIdentityScope = identityCandidates.length > 0;
 
-  const { prepared, selectedSheet, sourceUrl } = await loadGoogleSheetImport({
-    sourceUrl: options.sourceUrl,
-    sheetName: options.sheetName,
-    month: options.month,
-    year: options.year,
-    collaboratorPenNames,
-    workbook: options._workbook,
-  });
+  const [importPayload, sharedState] = await Promise.all([
+    loadGoogleSheetImport({
+      sourceUrl: options.sourceUrl,
+      sheetName: options.sheetName,
+      month: options.month,
+      year: options.year,
+      collaboratorPenNames,
+      workbook: options._workbook,
+    }),
+    getGoogleSheetSyncSharedState(options),
+  ]);
+  const { prepared, selectedSheet, sourceUrl } = importPayload;
 
   if (prepared.rawRows.length === 0) {
     throw new Error("Tab Google Sheets đang chọn chưa có dòng dữ liệu hợp lệ để đồng bộ.");
   }
 
   const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
-  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(
-    sourceUrl,
-    identityCandidates,
-    options.teamId,
-    options.allowedPenNames || []
-  );
   const articleIdMap = sharedState.articleIdMap;
   const ambiguousArticleIds = sharedState.ambiguousArticleIds;
   const compositeMap = sharedState.compositeMap;
@@ -1624,9 +1744,20 @@ export async function executeGoogleSheetSync(
   }
 
   if (staleArticleIds.length > 0) {
-    const deletedResult = await deleteArticlesForSync(staleArticleIds);
-    deleted = deletedResult.deletedArticles;
-    removeSharedArticles(sharedState, staleArticleIds);
+    const deleteSafety = assessGoogleSheetDeleteSafety({
+      candidateDeleteCount: staleArticleIds.length,
+      referenceRowCount: Math.max(prepared.rawRows.length - ignoredOutsideScope, 0),
+      rowsUsingFallbackDate,
+      scopeLabel: `tab ${selectedSheet.name}`,
+    });
+
+    if (!deleteSafety.allowed) {
+      runtimeWarnings.push(deleteSafety.warning || "Đã chặn xóa bài do sync phát hiện bất thường.");
+    } else {
+      const deletedResult = await deleteArticlesForSync(staleArticleIds);
+      deleted = deletedResult.deletedArticles;
+      removeSharedArticles(sharedState, staleArticleIds);
+    }
   }
 
   return {
@@ -1655,18 +1786,12 @@ export async function executeGoogleSheetWorkbookSync(
 ): Promise<GoogleSheetSyncExecutionResult> {
   await ensureDatabaseInitialized();
 
-  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames(options.teamId);
-  const collaboratorDirectory = options._collaboratorDirectory ?? await getCollaboratorDirectory(options.teamId);
-  const identityCandidates = Array.from(
-    new Set((options.identityCandidates || []).map((value) => String(value || '').trim()).filter(Boolean))
-  );
-  const { sourceUrl, workbook } = await downloadGoogleSheetWorkbook(options.sourceUrl);
-  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(
-    sourceUrl,
-    identityCandidates,
-    options.teamId,
-    options.allowedPenNames || []
-  );
+  const { collaboratorPenNames, collaboratorDirectory } = await getGoogleSheetSyncCollaboratorContext(options);
+  const [workbookPayload, sharedState] = await Promise.all([
+    downloadGoogleSheetWorkbook(options.sourceUrl),
+    getGoogleSheetSyncSharedState(options),
+  ]);
+  const { sourceUrl, workbook } = workbookPayload;
   const allMonthlyTabs = listMonthlySheetTabs(workbook.SheetNames);
   const tabs = listPreferredSheetTabs(workbook.SheetNames);
   const skippedDuplicateTabs = Math.max(0, allMonthlyTabs.length - tabs.length);

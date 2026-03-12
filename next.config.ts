@@ -10,6 +10,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  serverExternalPackages: ["bcryptjs", "pg", "xlsx"],
   async headers() {
     return [
       {

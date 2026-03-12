@@ -10,6 +10,7 @@
 
 # Next.js
 /.next/
+/.next_stale_build/
 /out/
 
 # Production
@@ -36,6 +37,11 @@
 /tmp/
 /playwright-report/
 /.codex-deploy-temp/
+.codex-next-dev.log
+/.agent/
+/.rune/
+/coverage/
+.eslintcache
 
 # Debug
 npm-debug.log*
@@ -47,6 +53,8 @@ yarn-error.log*
 .DS_Store
 *.pem
 Thumbs.db
+*.bak
+*-DESKTOP-*
 
 # TypeScript
 *.tsbuildinfo
@@ -59,3 +67,5 @@ next-env.d.ts
 .playwright-cli/
 
 .vercel
+rune.config.json
+rune.config.local.json

@@ -13,6 +13,9 @@ import { NextRequest, NextResponse } from "next/server";
 const DEFAULT_WEBHOOK_SECRET_SHA256 =
   "454ca66696d097b715dcc1ddb931b887a49686905b750a1c65552d8f44063c67";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 function normalizeText(value: unknown) {
   return String(value || "").trim();
 }

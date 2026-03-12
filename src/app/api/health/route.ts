@@ -1,4 +1,4 @@
-import { ensureDatabaseInitialized } from "@/db";
+import { ensureDatabaseInitialized, getDatabaseBootstrapMode, pingDatabase } from "@/db";
 import { diagnoseRuntimeError, validateDatabaseUrl, validateJwtSecret } from "@/lib/runtime-diagnostics";
 import { NextResponse } from "next/server";
 
@@ -34,10 +34,17 @@ export async function GET() {
       );
     }
 
-    await ensureDatabaseInitialized();
+    const databaseBootstrapMode = getDatabaseBootstrapMode();
+    if (databaseBootstrapMode === "skip") {
+      await pingDatabase();
+    } else {
+      await ensureDatabaseInitialized();
+    }
+
     return NextResponse.json({
       ok: true,
       service: "ctv-management",
+      databaseBootstrapMode,
       checkedAt: new Date().toISOString(),
     });
   } catch (error) {

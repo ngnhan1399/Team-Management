@@ -1,5 +1,105 @@
 # Codex Handoff
 
+## Update 2026-03-13 (phase 2 refactor an toàn cho Google Sheets sync)
+
+- `src/lib/google-sheet-sync.ts` đã được gom bớt logic chuẩn bị trùng lặp để giảm rủi ro lệch hành vi giữa các entrypoint sync:
+  - helper resolve `sourceUrl`
+  - helper normalize `identityCandidates`
+  - helper nạp `collaboratorPenNames + collaboratorDirectory`
+  - helper dựng/reuse `sharedState`
+- Refactor này không đổi thứ tự match hiện tại và không đụng vào guard xóa batch đã thêm trước đó.
+- Mục tiêu là giảm chi phí bảo trì cho các vòng tối ưu tiếp theo, đồng thời giữ an toàn cho push GitHub và redeploy Vercel.
+
+### File đã động vào
+
+- `src/lib/google-sheet-sync.ts`
+- `docs/optimization-memory.md`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npm run verify:safe` ✅
+
+## Update 2026-03-13 (tooling nhẹ hơn + sync guard + deploy hygiene)
+
+- Thu hẹp phạm vi lint/typecheck để không quét lan toàn repo:
+  - `lint` giờ chỉ quét `src`, `scripts`, và các file config chính, đồng thời bật `.eslintcache`
+  - `tsconfig.json` bỏ `allowJs`, bỏ `.next/dev/types`, và exclude thêm `.agent`, `.vercel`, `docs`, `logs`, `output`, `tmp`, `data`
+- Thêm `typecheck` script riêng và giữ `verify:safe = lint + typecheck`.
+- Tăng hygiene cho repo/deploy:
+  - `.gitignore` thêm `.agent/`, `.rune/`, `coverage/`, `.eslintcache`, `rune.config.local.json`
+  - thêm `.vercelignore` để local/CLI deploy không đẩy theo docs, logs, output, tmp, generated AI context
+  - `next.config.ts` thêm `serverExternalPackages` cho `bcryptjs`, `pg`, `xlsx`
+  - CI thêm `concurrency`, cache `.next/cache` + Playwright, và dùng `npm run verify:safe`
+- Gia cố Google Sheets sync nhưng vẫn giữ đồng bộ liên tục:
+  - thêm guard chặn xóa hàng loạt đáng ngờ trong `executeGoogleSheetSync`
+  - guard sẽ chặn nếu số bài định xóa vượt ngưỡng env hoặc nếu sheet đang phải dùng fallback date
+  - `refreshScopedArticlesFromGoogleSheet` giờ tải workbook Google Sheets một lần rồi reuse cho toàn bộ group trong request, thay vì tải lặp lại theo từng group
+  - env mới trong `.env.example`:
+    - `GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT`
+    - `GOOGLE_SHEETS_SYNC_MAX_DELETE_RATIO`
+  - `POST /api/articles/google-sync` và webhook đều được thêm `dynamic = "force-dynamic"` + `maxDuration = 60` để chạy ổn định hơn trên Vercel
+- `ArticlesPage.tsx` thêm `AbortController` để hủy request danh sách bài cũ khi người dùng lọc/search/paginate nhanh, tránh request chồng và state cập nhật lệch
+- Tạo `docs/optimization-memory.md` làm bộ nhớ tối ưu hóa lâu dài; `AGENTS.md` giờ trỏ rõ vào tài liệu này để các thread sau không lặp lại cùng vòng tối ưu
+- `google-sheet-sync.ts` được tối ưu thêm theo hướng giảm latency chuẩn bị:
+  - scoped sync tải workbook một lần rồi reuse cho toàn bộ group
+  - các bước DB/network độc lập trong `refreshScopedArticlesFromGoogleSheet`, `executeGoogleSheetSync`, `executeGoogleSheetWorkbookSync` được chạy song song bằng `Promise.all`
+- `ArticlesPage.tsx` được tối ưu thêm phần link-health polling:
+  - dùng `linkHealthRef` để tránh effect kiểm tra link chạy lại chỉ vì `linkHealth` vừa đổi
+- Dọn local AI config không cần commit:
+  - xóa `rune.config.json`
+  - thêm ignore để worktree sạch hơn
+
+### File đã động vào
+
+- `.env.example`
+- `.gitignore`
+- `.github/workflows/ci.yml`
+- `.vercelignore`
+- `docs/codex-handoff.md`
+- `docs/optimization-memory.md`
+- `AGENTS.md`
+- `eslint.config.mjs`
+- `next.config.ts`
+- `package.json`
+- `.gitignore`
+- `src/app/api/articles/google-sync/route.ts`
+- `src/app/api/articles/google-sync/webhook/route.ts`
+- `src/app/components/ArticlesPage.tsx`
+- `src/lib/google-sheet-sync.ts`
+- `tsconfig.json`
+
+### Kiểm tra đã chạy
+
+- `npm run lint` ✅
+- `npm run typecheck` ✅
+- `npm run verify:safe` ✅
+- `npm run build` ⏳ chưa hoàn tất được trên máy local hiện tại dù đã tăng timeout lên hơn 7 phút; nhiều khả năng vẫn bị ảnh hưởng bởi môi trường workspace trên ổ `J:` hơn là lỗi TypeScript/lint
+
+## Update 2026-03-12 (repo hygiene + safe verification)
+
+- Removed tracked stale build artifacts and OneDrive conflict copies from the repo so GitHub/Vercel stops receiving backup noise.
+- Tightened `.gitignore` to keep `.next_stale_build`, Codex logs, `*.bak`, and `*-DESKTOP-*` files out of future commits.
+- Tightened `eslint.config.mjs` ignores so local lint does not scan stale build output, temp folders, or generated artifacts.
+- Added `npm run verify:safe` for a no-database baseline check: lint + `tsc --noEmit`.
+- Added optional `DATABASE_BOOTSTRAP_MODE=skip` so stable production environments can skip runtime schema bootstrap queries; `/api/health` still performs a lightweight DB ping in that mode.
+- After moving the repo to `J:`, verified that the drive is `exFAT`; `next build` with Turbopack can fail there because it cannot create Windows junction points for `node_modules`.
+- Added `npm run build:compat` (`next build --webpack`) as an extra option, but left full builds separate because both Turbopack and webpack can still hit `exFAT` filesystem limitations on Windows.
+- Added `npm run verify:full` for environments where full production build verification is available.
+- Baseline checks on this machine:
+  - `npm run lint` passes after ignore cleanup
+  - `npx tsc --noEmit --pretty false` passes
+  - `npm run build` passes
+  - `npm run test:smoke` still requires a reachable PostgreSQL instance and currently fails locally with `ECONNREFUSED 127.0.0.1:5432`
+  - a later `npm run build` rerun inside the OneDrive workspace hit `EPERM ... .next\\static\\...` during unlink, which points to a local file-lock/sync issue rather than a TypeScript or Next.js compile failure
+
+## Current status
+
+- Repo commit history is aligned with `origin/main`.
+- There is an existing unstaged user change in `src/lib/google-sheet-sync.ts`; keep it intact while doing repo optimization.
+- Next recommended pass: review runtime/database hotspots before broader refactors that might affect Nile quota usage.
+- Workspace move checklist for leaving OneDrive is documented in `docs/workspace-move-checklist.md`.
+
 ## Update 2026-03-12
 
 - Đã nhận bộ biến môi trường Nile và chuyển `.env.local` sang dùng Nile thay vì Neon.
