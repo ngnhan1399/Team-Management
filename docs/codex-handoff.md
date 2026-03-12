@@ -2,6 +2,60 @@
 
 ## Update 2026-03-12
 
+- Đã nhận bộ biến môi trường Nile và chuyển `.env.local` sang dùng Nile thay vì Neon.
+- Runtime và tooling đã hiểu thêm các biến:
+  - `DATABASE_POSTGRES_URL`
+  - `DATABASE_NILEDB_URL`
+  - `DATABASE_NILEDB_POSTGRES_URL` + `DATABASE_NILEDB_USER` + `DATABASE_NILEDB_PASSWORD`
+- `src/lib/runtime-diagnostics.ts` cũng đã hiểu bộ biến Nile; health/runtime error message không còn giả định chỉ có `DATABASE_URL`.
+- Đã migrate dữ liệu local từ `data/ctv-management.db` sang Nile `ctv_management`.
+- Nile không hỗ trợ `TRUNCATE ... CASCADE`, `setval`, `nextval`, và một số `ALTER TABLE` kiểu Postgres chuẩn, nên script migrate đã được đổi sang:
+  - import theo lô nhỏ
+  - để Nile tự sinh `id`
+  - remap lại foreign keys cho `users`, `collaborators`, `articles`, `notifications`, `comments`, `payments`, `feedback`, `audit_logs`
+  - chạy `postImportNormalize` riêng để tạo `Team mặc định` và backfill `team_id`
+- Trạng thái DB Nile sau migrate:
+  - `teams=1`
+  - `collaborators=10`
+  - `users=2`
+  - `articles=256`
+  - `article_comments=9`
+  - `editorial_tasks=12`
+  - `royalty_rates=18`
+  - `payments=9`
+  - `notifications=4`
+  - `monthly_budgets=1`
+  - `audit_logs=173`
+  - `realtime_events=72`
+  - `app_runtime_meta=1`
+- So với SQLite nguồn:
+  - các bảng nghiệp vụ chính đã khớp số lượng
+  - `audit_logs` và `realtime_events` trên Nile cao hơn `+2`, do đã phát sinh thêm `login_failed/login_success` và 2 event `audit` mới ngay sau migrate, không phải mất dữ liệu
+- Vẫn còn một snapshot local cũ ở `.vercel/.env.production.local` đang chứa Neon; đây chỉ là file pull từ Vercel CLI, không phải source of truth. Nếu cần đồng bộ local với dashboard hiện tại, chạy lại `vercel env pull`.
+- Kiểm tra integrity sau migrate:
+  - `users_without_team=0`
+  - `collaborators_without_team=0`
+  - `articles_without_team=0`
+  - không có orphan ở `article_comments -> articles/users`
+  - không có orphan ở `notifications -> users/articles`
+
+- Rà lại nguồn dữ liệu sau khi rời Neon để chuẩn bị chuyển sang Nile.
+- `scripts/migrate-neon-to-nile.mjs` đã được viết lại thành migrate tổng quát:
+  - nhận source từ `SOURCE_DATABASE_URL` / `NEON_DATABASE_URL`
+  - hoặc `SOURCE_SQLITE_PATH`
+  - hoặc `SOURCE_JSON_PATH`
+  - nhận target từ `TARGET_DATABASE_URL` / `NILE_DATABASE_URL`
+  - với Postgres thường có thể giữ `id`; với Nile sẽ để DB tự sinh `id`, remap foreign key, rồi backfill team scope tối thiểu
+- `scripts/db-bootstrap.mjs` đã được nâng lên khớp schema hiện tại (`teams`, `feedback_entries`, `app_runtime_meta`, team-scoped columns, `review_link`, `is_leader`).
+- Đã thêm script npm: `npm run db:migrate-nile`.
+- Guardrail mới: nếu `DATABASE_URL` vẫn đang là Neon mà chưa set `TARGET_DATABASE_URL` hoặc `NILE_DATABASE_URL`, script sẽ dừng ngay thay vì ghi nhầm vào DB cũ.
+- Kiểm tra nguồn dữ liệu còn lại:
+  - `.env.local` hiện đã đổi sang Nile; `.vercel/.env.production.local` vẫn là snapshot local Neon cũ
+  - kết nối Neon hiện lỗi `password authentication failed`
+  - `data/ctv-management.db` hiện có dữ liệu local lớn nhất còn truy cập được: `users=2`, `collaborators=10`, `articles=256`, `article_comments=9`, `editorial_tasks=12`, `royalty_rates=18`, `payments=9`, `notifications=4`, `audit_logs=171`, `realtime_events=70`
+  - `output/backups/ctv-management-before-article-reset-2026-03-07T09-07-35-451Z.db` là bản backup cũ hơn
+  - chưa tìm thấy connection string Nile trong workspace hoặc các thư mục backup cũ
+
 - Google Sheet sync khong con tu suy luan `Published` khi cot trang thai de trong.
 - Import sheet cung khong con tu suy `articleId` tu slug link neu o `ID bai viet` trong sheet dang trong.
 - Da reconcile production DB bang logic sync moi de keo du lieu web ve dung theo sheet goc.

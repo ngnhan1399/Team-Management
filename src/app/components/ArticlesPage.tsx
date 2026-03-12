@@ -43,7 +43,7 @@ const IMPORT_FIELD_OPTIONS = [
 
 const REQUIRED_IMPORT_FIELDS = ["date", "title", "penName"];
 const IMPORTANT_IMPORT_FIELDS = ["articleId", "date", "title", "penName", "status", "link"];
-const CATEGORY_OPTIONS = ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "Khác"];
+const CATEGORY_OPTIONS = ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "SEO AI", "Khác"];
 const ARTICLE_TYPE_OPTIONS = ["Mô tả SP ngắn", "Mô tả SP dài", "Bài dịch Review SP", "Bài SEO ICT", "Bài SEO Gia dụng", "Bài SEO ICT 1K5", "Bài SEO Gia dụng 1K5", "Bài SEO ICT 2K", "Bài SEO Gia dụng 2K", "Thủ thuật"];
 const CONTENT_TYPE_OPTIONS = ["Viết mới", "Viết lại"];
 const WORD_COUNT_RANGE_OPTIONS = [
@@ -153,7 +153,10 @@ export default function ArticlesPage() {
   const [previewArticle, setPreviewArticle] = useState<Article | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({ penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" });
+  const [filters, setFilters] = useState(() => {
+    const now = new Date();
+    return { penName: "", status: "", category: "", articleType: "", contentType: "", month: String(now.getMonth() + 1), year: String(now.getFullYear()) };
+  });
   const [linkHealth, setLinkHealth] = useState<Record<string, LinkHealthEntry>>({});
   const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [commentArticle, setCommentArticle] = useState<Article | null>(null);
@@ -301,8 +304,8 @@ export default function ArticlesPage() {
 
   const handleSearch = (e?: React.FormEvent) => { e?.preventDefault(); fetchArticles(1, search, filters); };
   const applyFilter = (key: string, val: string) => { const f = { ...filters, [key]: val }; setFilters(f); fetchArticles(1, search, f); };
-  const clearFilters = () => { const f = { penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" }; setFilters(f); fetchArticles(1, search, f); };
-  const activeFilterCount = Object.values(filters).filter(v => v !== "").length;
+  const clearFilters = () => { const now = new Date(); const f = { penName: "", status: "", category: "", articleType: "", contentType: "", month: String(now.getMonth() + 1), year: String(now.getFullYear()) }; setFilters(f); fetchArticles(1, search, f); };
+  const activeFilterCount = Object.entries(filters).filter(([k, v]) => v !== "" && k !== "month" && k !== "year").length;
   const currentFilterDeleteCriteria: ArticleDeleteCriteria = {
     search,
     titleQuery: "",
@@ -1480,7 +1483,7 @@ export default function ArticlesPage() {
             </a>
           )}
           {canCreateArticles && (
-            <button className="btn-ios-pill btn-ios-primary" onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}>
+            <button className="btn-ios-pill btn-ios-primary" onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? "Đình Nhân" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
               Thêm bài viết
             </button>

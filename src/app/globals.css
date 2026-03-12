@@ -342,6 +342,11 @@ body {
   transition: all var(--duration-fast) var(--ease-apple);
   position: relative;
   overflow: hidden;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: calc(100% - 24px);
+  text-align: left;
 }
 
 .sidebar-nav-item:hover {

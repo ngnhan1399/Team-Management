@@ -3,7 +3,43 @@ import { Pool, type QueryResult } from "pg";
 import * as schema from "./schema";
 
 const DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/ctv_management";
-const databaseUrl = process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
+
+function buildConnectionString(baseUrl: string, user?: string, password?: string) {
+  const parsed = new URL(baseUrl);
+  if (parsed.username || parsed.password) {
+    return baseUrl;
+  }
+  if (!user || !password) {
+    return baseUrl;
+  }
+
+  parsed.username = encodeURIComponent(user);
+  parsed.password = encodeURIComponent(password);
+  return parsed.toString();
+}
+
+function resolveDatabaseUrl() {
+  const directUrl = process.env.DATABASE_URL?.trim()
+    || process.env.DATABASE_POSTGRES_URL?.trim()
+    || process.env.DATABASE_NILEDB_URL?.trim();
+
+  if (directUrl) {
+    return directUrl;
+  }
+
+  const nileBaseUrl = process.env.DATABASE_NILEDB_POSTGRES_URL?.trim();
+  if (nileBaseUrl) {
+    return buildConnectionString(
+      nileBaseUrl,
+      process.env.DATABASE_NILEDB_USER?.trim(),
+      process.env.DATABASE_NILEDB_PASSWORD?.trim()
+    );
+  }
+
+  return DEFAULT_DATABASE_URL;
+}
+
+const databaseUrl = resolveDatabaseUrl();
 const shouldUseSsl = /sslmode=require/i.test(databaseUrl) || process.env.DATABASE_SSL === "require";
 
 declare global {

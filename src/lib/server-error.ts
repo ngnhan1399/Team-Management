@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const GENERIC_ERROR_MESSAGE = "Hệ thống đang gặp lỗi. Vui lòng thử lại sau.";
-const DATABASE_QUOTA_EXCEEDED_MESSAGE = "Cơ sở dữ liệu Neon đã vượt quota băng thông của chu kỳ hiện tại, nên tạm thời chưa thể đăng nhập hoặc tải dữ liệu. Bạn cần nâng gói Neon hoặc chờ quota reset rồi thử lại.";
+const DATABASE_QUOTA_EXCEEDED_MESSAGE = "Cơ sở dữ liệu hiện đã vượt quota băng thông của chu kỳ hiện tại, nên tạm thời chưa thể đăng nhập hoặc tải dữ liệu. Bạn cần kiểm tra lại gói database hoặc chờ quota reset rồi thử lại.";
 
 function isDatabaseQuotaExceededError(error: unknown) {
   if (!error || typeof error !== "object") {

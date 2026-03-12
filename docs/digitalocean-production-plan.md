@@ -99,10 +99,15 @@ Toi khong khuyen chay app chinh tren host rieng o giai doan nay. Nen dung host d
 ## Bien moi truong toi thieu
 
 - `JWT_SECRET`
-- `DATABASE_URL`
+- `DATABASE_URL` hoac `DATABASE_POSTGRES_URL`
 - `APP_ORIGIN`
 
 Neu database yeu cau SSL va URL chua kem `sslmode=require`, them `DATABASE_SSL=require`.
+
+Neu dung Nile, co the truyen mot trong hai cach:
+
+- `DATABASE_POSTGRES_URL` hoac `DATABASE_NILEDB_URL`
+- hoac bo ba `DATABASE_NILEDB_POSTGRES_URL`, `DATABASE_NILEDB_USER`, `DATABASE_NILEDB_PASSWORD`
 
 ## Chot huong di
 

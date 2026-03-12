@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:seed": "node scripts/seed-db.mjs",
     "db:migrate-sqlite": "node scripts/migrate-sqlite-to-postgres.mjs",
+    "db:migrate-nile": "node scripts/migrate-neon-to-nile.mjs",
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:e2e-smoke": "npm run build && node scripts/e2e-smoke.mjs"
   },

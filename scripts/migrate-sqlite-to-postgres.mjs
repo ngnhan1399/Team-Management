@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { Pool } from "pg";
-import { initializeDatabase } from "./db-bootstrap.mjs";
+import { initializeDatabase, resolveDatabaseUrl } from "./db-bootstrap.mjs";
 
 const SQLITE_PATH = process.env.SQLITE_PATH?.trim() || "./data/ctv-management.db";
-const DATABASE_URL = process.env.DATABASE_URL?.trim();
+const DATABASE_URL = resolveDatabaseUrl();
 
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL is required");

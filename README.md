@@ -60,19 +60,30 @@ Tài liệu triển khai chi tiết nằm tại [docs/digitalocean-production-pl
 Tạo file `.env.local` từ `.env.example`, sau đó cấu hình tối thiểu:
 
 - `JWT_SECRET`
-- `DATABASE_URL`
+- `DATABASE_URL` hoặc `DATABASE_POSTGRES_URL`
 - `APP_ORIGIN`
 
 Biến bổ sung khi cần:
 
 - `APP_ORIGINS`
 - `DATABASE_SSL`
+- `DATABASE_NILEDB_URL`
+- `DATABASE_NILEDB_POSTGRES_URL`
+- `DATABASE_NILEDB_USER`
+- `DATABASE_NILEDB_PASSWORD`
 - `SEED_ADMIN_EMAIL`
 - `SEED_ADMIN_PASSWORD`
 
 ## Cài đặt và chạy local
 
 Trước khi chạy, bạn cần có PostgreSQL local hoặc một PostgreSQL server mà bạn có quyền kết nối tới.
+
+Repo hiện resolve kết nối database theo thứ tự:
+
+- `DATABASE_URL`
+- `DATABASE_POSTGRES_URL`
+- `DATABASE_NILEDB_URL`
+- hoặc ghép từ `DATABASE_NILEDB_POSTGRES_URL` + `DATABASE_NILEDB_USER` + `DATABASE_NILEDB_PASSWORD`
 
 Ví dụ mặc định của dự án:
 

@@ -8,6 +8,45 @@ type ErrorWithCode = Error & {
   errno?: number;
 };
 
+function buildConnectionString(baseUrl: string, user?: string, password?: string) {
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.username || parsed.password) {
+      return baseUrl;
+    }
+    if (!user || !password) {
+      return baseUrl;
+    }
+
+    parsed.username = encodeURIComponent(user);
+    parsed.password = encodeURIComponent(password);
+    return parsed.toString();
+  } catch {
+    return baseUrl;
+  }
+}
+
+function resolveDatabaseUrl() {
+  const directUrl = process.env.DATABASE_URL?.trim()
+    || process.env.DATABASE_POSTGRES_URL?.trim()
+    || process.env.DATABASE_NILEDB_URL?.trim();
+
+  if (directUrl) {
+    return directUrl;
+  }
+
+  const nileBaseUrl = process.env.DATABASE_NILEDB_POSTGRES_URL?.trim();
+  if (nileBaseUrl) {
+    return buildConnectionString(
+      nileBaseUrl,
+      process.env.DATABASE_NILEDB_USER?.trim(),
+      process.env.DATABASE_NILEDB_PASSWORD?.trim()
+    );
+  }
+
+  return "";
+}
+
 export function validateJwtSecret(): RuntimeIssue | null {
   const jwtSecret = process.env.JWT_SECRET?.trim();
 
@@ -29,19 +68,19 @@ export function validateJwtSecret(): RuntimeIssue | null {
 }
 
 export function validateDatabaseUrl(): RuntimeIssue | null {
-  const databaseUrl = process.env.DATABASE_URL?.trim();
+  const databaseUrl = resolveDatabaseUrl();
 
   if (!databaseUrl) {
     return {
       code: "missing_database_url",
-      message: "Thiếu DATABASE_URL. Hãy dán chuỗi kết nối PostgreSQL/Neon vào .env.local hoặc môi trường deploy.",
+      message: "Thiếu cấu hình PostgreSQL. Hãy đặt DATABASE_URL hoặc bộ biến Nile trong môi trường chạy.",
     };
   }
 
   if (databaseUrl.startsWith("file:")) {
     return {
       code: "invalid_database_url",
-      message: "DATABASE_URL hiện đang là SQLite file URL, nhưng app này đang chạy với PostgreSQL/Neon.",
+      message: "Cấu hình database hiện đang là SQLite file URL, nhưng app này đang chạy với PostgreSQL.",
     };
   }
 
@@ -70,7 +109,7 @@ export function diagnoseRuntimeError(error: unknown): RuntimeIssue {
       code: "database_unreachable",
       message: looksLikeLocalFallback(message)
         ? "Khong ket noi duoc PostgreSQL tai 127.0.0.1:5432. Thuong do DATABASE_URL production dang thieu hoac sai."
-        : "Khong ket noi duoc PostgreSQL. Kiem tra DATABASE_URL, DATABASE_SSL va trang thai database server.",
+        : "Khong ket noi duoc PostgreSQL. Kiem tra DATABASE_URL hoac bo bien Nile, DATABASE_SSL va trang thai database server.",
     };
   }
 
@@ -84,7 +123,7 @@ export function diagnoseRuntimeError(error: unknown): RuntimeIssue {
   if (code === "28P01" || normalizedMessage.includes("password authentication failed")) {
     return {
       code: "database_auth_failed",
-      message: "Xac thuc PostgreSQL that bai. Kiem tra user/password trong DATABASE_URL.",
+      message: "Xac thuc PostgreSQL that bai. Kiem tra user/password trong DATABASE_URL hoac bo bien Nile.",
     };
   }
 
