@@ -78,6 +78,7 @@ export default function MainApp() {
   const [isPageTransitionPending, startPageTransition] = useTransition();
   const seenRealtimeIdsRef = useRef<number[]>([]);
   const seenNotificationToastIdsRef = useRef<number[]>([]);
+  const pointerDrivenNavRef = useRef<Page | null>(null);
   const lastUnreadCountRef = useRef(0);
   const unreadBaselineReadyRef = useRef(false);
   const navigationRequestIdRef = useRef(0);
@@ -231,6 +232,22 @@ export default function MainApp() {
     void loader().catch(() => { }).finally(commitNavigation);
   }, [page]);
 
+  const handleSidebarPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>, nextPage: Page) => {
+    pointerDrivenNavRef.current = nextPage;
+    event.preventDefault();
+    event.stopPropagation();
+    navigateToPage(nextPage);
+  }, [navigateToPage]);
+
+  const handleSidebarClick = useCallback((nextPage: Page) => {
+    if (pointerDrivenNavRef.current === nextPage) {
+      pointerDrivenNavRef.current = null;
+      return;
+    }
+
+    navigateToPage(nextPage);
+  }, [navigateToPage]);
+
   const navItems = [
     { id: "dashboard", label: "Tổng quan", icon: "dashboard", section: "Tổng quan" },
     { id: "notifications", label: "Thông báo", icon: "notifications", section: "Tổng quan", count: unreadCount },
@@ -274,7 +291,8 @@ export default function MainApp() {
                     onMouseEnter={() => preloadPage(item.id as Page)}
                     onFocus={() => preloadPage(item.id as Page)}
                     onTouchStart={() => preloadPage(item.id as Page)}
-                    onClick={() => navigateToPage(item.id as Page)}
+                    onPointerDown={(event) => handleSidebarPointerDown(event, item.id as Page)}
+                    onClick={() => handleSidebarClick(item.id as Page)}
                     className={`sidebar-nav-item ${page === item.id ? "active" : ""}`}
                   >
                     <span className="material-symbols-outlined">{item.icon}</span>
