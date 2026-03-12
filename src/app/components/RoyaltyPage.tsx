@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import CustomSelect from "./CustomSelect";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
@@ -38,7 +38,6 @@ export default function RoyaltyPage() {
   const [paymentActionId, setPaymentActionId] = useState<number | null>(null);
   const [forceGenerate, setForceGenerate] = useState(false);
   const [expandedPaymentId, setExpandedPaymentId] = useState<number | null>(null);
-  const imbalanceAlertKeyRef = useRef("");
   const isAdmin = user?.role === "admin";
   const isLeader = Boolean(isAdmin && user?.isLeader);
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
@@ -56,7 +55,6 @@ export default function RoyaltyPage() {
   const yearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
   const monthSelectOptions = monthNames.map((label, index) => ({ value: String(index + 1), label }));
   const yearSelectOptions = yearOptions.map((year) => ({ value: String(year), label: String(year) }));
-  const overviewPeriodLabel = monthNames[overviewMonth - 1] || `Tháng ${overviewMonth}`;
   const collaboratorSelectOptions = [
     { value: "", label: "Tất cả" },
     ...collaborators.filter((c) => c.role === "writer").map((c) => ({ value: c.penName, label: c.penName })),
@@ -139,35 +137,6 @@ export default function RoyaltyPage() {
   }, [fetchCalculation, fetchDashboard, fetchPayments, tab]);
 
   useRealtimeRefresh(["royalty", "dashboard", "articles"], refreshRoyaltyView);
-
-  useEffect(() => {
-    if (tab !== "overview" || !dashboard?.contentBalance?.isImbalanced) {
-      return;
-    }
-
-    const alertKey = [
-      overviewPeriodLabel,
-      overviewYear,
-      isAdmin ? "admin" : user?.id ?? "guest",
-      dashboard.contentBalance.dominantType ?? "balanced",
-      dashboard.contentBalance.differencePercentage,
-      dashboard.contentBalance.totalArticles,
-    ].join(":");
-
-    if (imbalanceAlertKeyRef.current === alertKey) {
-      return;
-    }
-
-    imbalanceAlertKeyRef.current = alertKey;
-    const scopeLabel = isAdmin
-      ? "tổng bài của CTV"
-      : `bài của ${collaboratorLabel}`;
-    const warningMessage = dashboard.contentBalance.warningMessage || "Tỷ lệ bài viết mới và viết lại đang chênh lệch cao.";
-
-    window.alert(
-      `Canh bao ty le bai viet\n\n${warningMessage}\nKy ${overviewPeriodLabel}/${overviewYear} dang tinh tren ${scopeLabel}, khong gom admin/bien tap vien.`
-    );
-  }, [collaboratorLabel, dashboard, isAdmin, overviewPeriodLabel, overviewYear, tab, user?.id]);
 
   const handleSetBudget = async () => {
     const amount = parseInt(budgetInput);
