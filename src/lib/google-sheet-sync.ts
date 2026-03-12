@@ -1461,7 +1461,7 @@ export async function executeGoogleSheetSync(
       const matchedByArticleId = articleId && !ambiguousArticleIds.has(articleId) ? articleIdMap.get(articleId) : undefined;
       const matchedByComposite = compositeMap.get(compositeKey);
       const matchedByLink = link ? linkMap.get(normalizeLinkKey(link)) : undefined;
-      const initialTarget = matchedByCurrentSheet ?? matchedByLink ?? matchedByComposite ?? matchedByArticleId;
+      const initialTarget = matchedByCurrentSheet ?? matchedByArticleId ?? matchedByComposite ?? matchedByLink;
       const shouldSplitSharedTarget = Boolean(
         initialTarget
         && hasSyncLinkOnDifferentSheet(sharedState, initialTarget.id, selectedSheet.name)
