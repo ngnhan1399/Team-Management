@@ -1158,48 +1158,50 @@ export async function refreshScopedArticlesFromGoogleSheet(
     throw new Error("Chưa có bài viết nào trong danh sách đang lọc để đồng bộ nhanh.");
   }
 
-  const collaboratorPenNames = await getCollaboratorPenNames(options.teamId);
   const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
-  const { workbook } = await downloadGoogleSheetWorkbook(sourceUrl);
-  const targetArticles = await db
-    .select({
-      id: articles.id,
-      teamId: articles.teamId,
-      articleId: articles.articleId,
-      title: articles.title,
-      penName: articles.penName,
-      date: articles.date,
-      link: articles.link,
-      category: articles.category,
-      articleType: articles.articleType,
-      contentType: articles.contentType,
-      wordCountRange: articles.wordCountRange,
-      status: articles.status,
-      reviewerName: articles.reviewerName,
-      notes: articles.notes,
-    })
-    .from(articles)
-    .where(inArray(articles.id, targetArticleIds))
-    .all();
+  const [collaboratorPenNames, workbookPayload, targetArticles, syncLinks] = await Promise.all([
+    getCollaboratorPenNames(options.teamId),
+    downloadGoogleSheetWorkbook(sourceUrl),
+    db
+      .select({
+        id: articles.id,
+        teamId: articles.teamId,
+        articleId: articles.articleId,
+        title: articles.title,
+        penName: articles.penName,
+        date: articles.date,
+        link: articles.link,
+        category: articles.category,
+        articleType: articles.articleType,
+        contentType: articles.contentType,
+        wordCountRange: articles.wordCountRange,
+        status: articles.status,
+        reviewerName: articles.reviewerName,
+        notes: articles.notes,
+      })
+      .from(articles)
+      .where(inArray(articles.id, targetArticleIds))
+      .all(),
+    db
+      .select({
+        id: articleSyncLinks.id,
+        sourceRowKey: articleSyncLinks.sourceRowKey,
+        articleIdRef: articleSyncLinks.articleIdRef,
+        sourceUrl: articleSyncLinks.sourceUrl,
+        sheetName: articleSyncLinks.sheetName,
+        sheetMonth: articleSyncLinks.sheetMonth,
+        sheetYear: articleSyncLinks.sheetYear,
+      })
+      .from(articleSyncLinks)
+      .where(inArray(articleSyncLinks.articleIdRef, targetArticleIds))
+      .all() as Promise<SyncLinkRow[]>,
+  ]);
+  const { workbook } = workbookPayload;
 
   if (targetArticles.length === 0) {
     throw new Error("Không tìm thấy bài viết nào trong hệ thống để đồng bộ nhanh.");
   }
   const targetArticleById = new Map(targetArticles.map((article) => [article.id, article]));
-
-  const syncLinks = await db
-    .select({
-      id: articleSyncLinks.id,
-      sourceRowKey: articleSyncLinks.sourceRowKey,
-      articleIdRef: articleSyncLinks.articleIdRef,
-      sourceUrl: articleSyncLinks.sourceUrl,
-      sheetName: articleSyncLinks.sheetName,
-      sheetMonth: articleSyncLinks.sheetMonth,
-      sheetYear: articleSyncLinks.sheetYear,
-    })
-    .from(articleSyncLinks)
-    .where(inArray(articleSyncLinks.articleIdRef, targetArticleIds))
-    .all() as SyncLinkRow[];
 
   const syncLinkByArticleId = new Map<number, SyncLinkRow>();
   for (const syncLink of syncLinks) {
@@ -1436,35 +1438,43 @@ export async function executeGoogleSheetSync(
     await ensureDatabaseInitialized();
   }
 
-  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames(options.teamId);
-  const collaboratorDirectory = options._collaboratorDirectory ?? await getCollaboratorDirectory(options.teamId);
+  const [collaboratorPenNames, collaboratorDirectory] = await Promise.all([
+    options._collaboratorPenNames ? Promise.resolve(options._collaboratorPenNames) : getCollaboratorPenNames(options.teamId),
+    options._collaboratorDirectory ? Promise.resolve(options._collaboratorDirectory) : getCollaboratorDirectory(options.teamId),
+  ]);
   const allowedPenNameSet = buildAllowedPenNameSet(options.allowedPenNames || []);
   const restrictToAllowedPenNames = allowedPenNameSet.size > 0;
   const identityCandidates = Array.from(
     new Set((options.identityCandidates || []).map((value) => String(value || "").trim()).filter(Boolean))
   );
   const restrictToIdentityScope = identityCandidates.length > 0;
+  const requestedSourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
 
-  const { prepared, selectedSheet, sourceUrl } = await loadGoogleSheetImport({
-    sourceUrl: options.sourceUrl,
-    sheetName: options.sheetName,
-    month: options.month,
-    year: options.year,
-    collaboratorPenNames,
-    workbook: options._workbook,
-  });
+  const [importPayload, sharedState] = await Promise.all([
+    loadGoogleSheetImport({
+      sourceUrl: options.sourceUrl,
+      sheetName: options.sheetName,
+      month: options.month,
+      year: options.year,
+      collaboratorPenNames,
+      workbook: options._workbook,
+    }),
+    options._sharedState
+      ? Promise.resolve(options._sharedState)
+      : createGoogleSheetSyncSharedState(
+        requestedSourceUrl,
+        identityCandidates,
+        options.teamId,
+        options.allowedPenNames || []
+      ),
+  ]);
+  const { prepared, selectedSheet, sourceUrl } = importPayload;
 
   if (prepared.rawRows.length === 0) {
     throw new Error("Tab Google Sheets đang chọn chưa có dòng dữ liệu hợp lệ để đồng bộ.");
   }
 
   const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
-  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(
-    sourceUrl,
-    identityCandidates,
-    options.teamId,
-    options.allowedPenNames || []
-  );
   const articleIdMap = sharedState.articleIdMap;
   const ambiguousArticleIds = sharedState.ambiguousArticleIds;
   const compositeMap = sharedState.compositeMap;
@@ -1741,18 +1751,26 @@ export async function executeGoogleSheetWorkbookSync(
 ): Promise<GoogleSheetSyncExecutionResult> {
   await ensureDatabaseInitialized();
 
-  const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames(options.teamId);
-  const collaboratorDirectory = options._collaboratorDirectory ?? await getCollaboratorDirectory(options.teamId);
+  const [collaboratorPenNames, collaboratorDirectory] = await Promise.all([
+    options._collaboratorPenNames ? Promise.resolve(options._collaboratorPenNames) : getCollaboratorPenNames(options.teamId),
+    options._collaboratorDirectory ? Promise.resolve(options._collaboratorDirectory) : getCollaboratorDirectory(options.teamId),
+  ]);
   const identityCandidates = Array.from(
     new Set((options.identityCandidates || []).map((value) => String(value || '').trim()).filter(Boolean))
   );
-  const { sourceUrl, workbook } = await downloadGoogleSheetWorkbook(options.sourceUrl);
-  const sharedState = options._sharedState ?? await createGoogleSheetSyncSharedState(
-    sourceUrl,
-    identityCandidates,
-    options.teamId,
-    options.allowedPenNames || []
-  );
+  const requestedSourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+  const [workbookPayload, sharedState] = await Promise.all([
+    downloadGoogleSheetWorkbook(options.sourceUrl),
+    options._sharedState
+      ? Promise.resolve(options._sharedState)
+      : createGoogleSheetSyncSharedState(
+        requestedSourceUrl,
+        identityCandidates,
+        options.teamId,
+        options.allowedPenNames || []
+      ),
+  ]);
+  const { sourceUrl, workbook } = workbookPayload;
   const allMonthlyTabs = listMonthlySheetTabs(workbook.SheetNames);
   const tabs = listPreferredSheetTabs(workbook.SheetNames);
   const skippedDuplicateTabs = Math.max(0, allMonthlyTabs.length - tabs.length);

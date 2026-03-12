@@ -21,6 +21,9 @@
   - `POST /api/articles/google-sync` và webhook đều được thêm `dynamic = "force-dynamic"` + `maxDuration = 60` để chạy ổn định hơn trên Vercel
 - `ArticlesPage.tsx` thêm `AbortController` để hủy request danh sách bài cũ khi người dùng lọc/search/paginate nhanh, tránh request chồng và state cập nhật lệch
 - Tạo `docs/optimization-memory.md` làm bộ nhớ tối ưu hóa lâu dài; `AGENTS.md` giờ trỏ rõ vào tài liệu này để các thread sau không lặp lại cùng vòng tối ưu
+- `google-sheet-sync.ts` được tối ưu thêm theo hướng giảm latency chuẩn bị:
+  - scoped sync tải workbook một lần rồi reuse cho toàn bộ group
+  - các bước DB/network độc lập trong `refreshScopedArticlesFromGoogleSheet`, `executeGoogleSheetSync`, `executeGoogleSheetWorkbookSync` được chạy song song bằng `Promise.all`
 
 ### File đã động vào
 
