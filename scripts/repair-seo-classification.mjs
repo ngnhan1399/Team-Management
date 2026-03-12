@@ -1,6 +1,7 @@
 import { createPoolFromEnv } from "./db-bootstrap.mjs";
 
 const APPLY = process.argv.includes("--apply");
+const CREATE_MISSING_PENDING = process.argv.includes("--create-missing-pending");
 
 function foldText(value) {
   return String(value || "")
@@ -275,6 +276,7 @@ async function main() {
 
     console.log(JSON.stringify({
       apply: APPLY,
+      createMissingPending: CREATE_MISSING_PENDING,
       articleFixCount: articleFixes.length,
       paymentUpdateCount: paymentUpdates.length,
       missingPendingCalculationCount: missingPendingCalculations.length,
@@ -331,6 +333,19 @@ async function main() {
         `,
         [row.existingPaymentId, row.penName, row.totalArticles, row.totalAmount, details]
       );
+    }
+
+    if (CREATE_MISSING_PENDING) {
+      for (const row of missingPendingCalculations) {
+        const details = JSON.stringify(row.details);
+        await pool.query(
+          `
+            insert into payments (team_id, month, year, pen_name, total_articles, total_amount, details, status)
+            values ($1, $2, $3, $4, $5, $6, $7, 'pending')
+          `,
+          [row.teamId, row.month, row.year, row.penName, row.totalArticles, row.totalAmount, details]
+        );
+      }
     }
 
     await pool.query("COMMIT");

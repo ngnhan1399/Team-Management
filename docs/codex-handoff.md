@@ -15,7 +15,8 @@
 - Thêm script `scripts/repair-seo-classification.mjs`:
   - dry-run mặc định
   - `--apply` để sửa dữ liệu thật
-  - chỉ refresh `payments.status = pending` đã tồn tại, không tự tạo payment mới
+  - mặc định chỉ refresh `payments.status = pending` đã tồn tại
+  - nếu muốn sinh nốt payment thiếu thì chạy thêm `--create-missing-pending`
 
 ### Dữ liệu đã sửa trên DB hiện tại
 
@@ -24,13 +25,16 @@
   - sửa `767` bài SEO `ICT/Gia dụng` bị lệch `articleType` / `wordCountRange`
   - refresh `7` payment `pending`
   - check lại sau sửa: `articleFixCount = 0`
+- Đã chạy tiếp `node scripts/repair-seo-classification.mjs --apply --create-missing-pending`
+  - tạo thêm `18` payment `pending` còn thiếu
+  - check lại sau đó: `missingPendingCalculationCount = 0`
 
 ### Ghi chú vận hành
 
-- Script vẫn báo còn `missingPendingCalculationCount = 18`
-  - đây không phải payment bị sửa sai thêm
-  - đây là các kỳ/bút danh có dữ liệu nguồn để tính nhưng hiện chưa có payment `pending` tương ứng
-  - vì lý do an toàn, script không tự tạo thêm payment mới; nếu muốn sinh thêm thì dùng luồng generate payment bình thường sau khi code mới đã lên production
+- Script đã có 2 mức an toàn rõ ràng:
+  - `--apply`: sửa classification + refresh pending đang có
+  - `--apply --create-missing-pending`: tạo thêm pending còn thiếu khi thật sự muốn đồng bộ đủ sổ payment
+- Sau khi chạy đủ 2 bước trên DB hiện tại, phần payment thiếu đã được lấp đầy.
 
 ### File đã động vào
 
@@ -48,6 +52,7 @@
 - `npm run verify:safe` ✅
 - `node scripts/repair-seo-classification.mjs` ✅
 - `node scripts/repair-seo-classification.mjs --apply` ✅
+- `node scripts/repair-seo-classification.mjs --apply --create-missing-pending` ✅
 
 ## Update 2026-03-13 (phase 2 refactor an toàn cho Google Sheets sync)
 
