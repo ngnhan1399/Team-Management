@@ -2,6 +2,7 @@ import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articles, collaborators, editorialTasks, notifications, payments, users } from "@/db/schema";
 import { getCurrentUserContext, hashPassword, generatePassword } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { resolvePreferredCollaboratorName, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -55,14 +56,25 @@ function normalizeCollaboratorRole(value: unknown): "writer" | "reviewer" | unde
     throw new Error("Vai trò cộng tác viên không hợp lệ");
 }
 
-function mapCollaboratorForResponse<T extends { role?: string | null }>(collaborator: T): T {
-    if (collaborator.role === "editor") {
-        return { ...collaborator, role: "reviewer" };
-    }
-    return collaborator;
+function mapCollaboratorForResponse<T extends { role?: string | null; name?: string | null; penName?: string | null }>(collaborator: T): T {
+    const preferredName = resolvePreferredCollaboratorName(
+        [collaborator.name, collaborator.penName],
+        collaborator.name ?? null
+    );
+    const preferredPenName = resolvePreferredCollaboratorPenName(
+        [collaborator.penName, collaborator.name],
+        collaborator.penName ?? null
+    );
+
+    return {
+        ...collaborator,
+        role: collaborator.role === "editor" ? "reviewer" : collaborator.role,
+        name: preferredName ?? collaborator.name,
+        penName: preferredPenName ?? collaborator.penName,
+    };
 }
 
-function attachLinkedUsers<T extends { id: number; role?: string | null }>(
+function attachLinkedUsers<T extends { id: number; role?: string | null; name?: string | null; penName?: string | null }>(
     collaboratorRows: T[],
     userRows: LinkedUserSummary[],
 ) {

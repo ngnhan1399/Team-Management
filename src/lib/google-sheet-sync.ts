@@ -3,6 +3,7 @@ import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments } from "@/db/schema";
 import { normalizeImportedArticleRow, prepareArticleImportFromWorkbook, type ImportFieldId } from "./article-import";
 import { matchesIdentityCandidate } from "./auth";
+import { buildCollaboratorIdentityVariants, expandCollaboratorIdentityValues } from "./collaborator-identity";
 import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 
 export const DEFAULT_GOOGLE_SHEET_SOURCE_URL =
@@ -115,6 +116,7 @@ type GoogleSheetSyncSharedState = {
 };
 
 type CollaboratorDirectoryEntry = {
+  name: string | null;
   penName: string;
   teamId: number | null;
 };
@@ -573,12 +575,20 @@ async function getCollaboratorPenNames(teamId?: number | null) {
 async function getCollaboratorDirectory(teamId?: number | null) {
   return db
     .select({
+      name: collaborators.name,
       penName: collaborators.penName,
       teamId: collaborators.teamId,
     })
     .from(collaborators)
     .where(teamId ? eq(collaborators.teamId, teamId) : undefined)
     .all() as Promise<CollaboratorDirectoryEntry[]>;
+}
+
+function buildAllowedPenNameSet(values: string[]) {
+  const expandedValues = values.flatMap((value) => expandCollaboratorIdentityValues([value]));
+  return new Set(
+    expandedValues.flatMap((value) => buildCollaboratorIdentityVariants(value)).filter(Boolean)
+  );
 }
 
 async function getAllExistingArticles(teamId?: number | null) {
@@ -612,7 +622,9 @@ function resolveImportedArticleTeamId(
   const normalizedPenName = foldText(penName);
   if (!normalizedPenName) return fallbackTeamId ?? null;
 
-  const exactMatches = collaboratorDirectory.filter((entry) => foldText(entry.penName) === normalizedPenName);
+  const exactMatches = collaboratorDirectory.filter((entry) =>
+    matchesIdentityCandidate([entry.penName, entry.name || ""], penName)
+  );
   if (fallbackTeamId && exactMatches.some((entry) => Number(entry.teamId || 0) === Number(fallbackTeamId))) {
     return fallbackTeamId;
   }
@@ -747,7 +759,7 @@ async function createGoogleSheetSyncSharedState(
   allowedPenNames: string[] = []
 ) {
   const restrictToIdentityScope = identityCandidates.length > 0;
-  const allowedPenNameSet = new Set(allowedPenNames.map((value) => foldText(value)).filter(Boolean));
+  const allowedPenNameSet = buildAllowedPenNameSet(allowedPenNames);
   const restrictToAllowedPenNames = allowedPenNameSet.size > 0;
   const allExistingArticles = await getAllExistingArticles(teamId);
   const existingArticles = allExistingArticles.filter((row) => {
@@ -1350,7 +1362,7 @@ export async function executeGoogleSheetSync(
 
   const collaboratorPenNames = options._collaboratorPenNames ?? await getCollaboratorPenNames(options.teamId);
   const collaboratorDirectory = options._collaboratorDirectory ?? await getCollaboratorDirectory(options.teamId);
-  const allowedPenNameSet = new Set((options.allowedPenNames || []).map((value) => foldText(value)).filter(Boolean));
+  const allowedPenNameSet = buildAllowedPenNameSet(options.allowedPenNames || []);
   const restrictToAllowedPenNames = allowedPenNameSet.size > 0;
   const identityCandidates = Array.from(
     new Set((options.identityCandidates || []).map((value) => String(value || "").trim()).filter(Boolean))

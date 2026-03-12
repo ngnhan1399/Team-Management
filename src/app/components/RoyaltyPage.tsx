@@ -57,7 +57,10 @@ export default function RoyaltyPage() {
   const yearSelectOptions = yearOptions.map((year) => ({ value: String(year), label: String(year) }));
   const collaboratorSelectOptions = [
     { value: "", label: "Tất cả" },
-    ...collaborators.filter((c) => c.role === "writer").map((c) => ({ value: c.penName, label: c.penName })),
+    ...collaborators.filter((c) => c.role === "writer").map((c) => ({
+      value: c.penName,
+      label: c.name && c.name !== c.penName ? `${c.penName} (${c.name})` : c.penName,
+    })),
   ];
   const paymentStatusOptions = [
     { value: "", label: "Tất cả" },

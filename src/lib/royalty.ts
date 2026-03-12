@@ -1,4 +1,5 @@
 import { matchesIdentityCandidate } from "@/lib/auth";
+import { resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 
 const ROYALTY_ELIGIBLE_STATUSES = new Set(["Published", "Approved"]);
 
@@ -113,6 +114,17 @@ export function resolveRoyaltyContributorProfile(
       articleIdentity
     )
   ) || null;
+}
+
+export function resolveRoyaltyContributorPenName(
+  articlePenName: unknown,
+  profiles: RoyaltyContributorProfile[]
+) {
+  const profile = resolveRoyaltyContributorProfile(articlePenName, profiles);
+  return resolvePreferredCollaboratorPenName(
+    [profile?.penName, profile?.name, articlePenName],
+    profile?.penName ?? String(articlePenName || "").trim()
+  );
 }
 
 export function filterBudgetEligibleRoyaltyArticles<T extends RoyaltyScopedArticle>(

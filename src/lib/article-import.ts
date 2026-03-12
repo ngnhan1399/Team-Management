@@ -3,6 +3,11 @@ import {
   mapGoogleSheetArticleToApp,
   normalizeAppContentType,
 } from "@/lib/google-sheet-article-mapping";
+import {
+  buildCollaboratorIdentityVariants,
+  expandCollaboratorIdentityValues,
+  resolvePreferredCollaboratorPenName,
+} from "@/lib/collaborator-identity";
 
 export type ImportFieldId =
   | "articleId"
@@ -136,6 +141,22 @@ function foldText(value: string): string {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function matchesCollaboratorIdentity(candidate: string, rawValue: string) {
+  const candidateVariants = new Set(buildCollaboratorIdentityVariants(candidate));
+  const rawVariants = buildCollaboratorIdentityVariants(rawValue);
+  return rawVariants.some((variant) => candidateVariants.has(variant));
+}
+
+function matchesCollaboratorIdentityPartial(candidate: string, rawValue: string) {
+  const candidateVariants = buildCollaboratorIdentityVariants(candidate);
+  const rawVariants = buildCollaboratorIdentityVariants(rawValue);
+  return rawVariants.some((rawVariant) =>
+    candidateVariants.some((candidateVariant) =>
+      candidateVariant.includes(rawVariant) || rawVariant.includes(candidateVariant)
+    )
+  );
 }
 
 function normalizeWhitespace(value: string): string {
@@ -378,7 +399,7 @@ function detectHeaderCandidates(worksheet: XLSX.WorkSheet, collaboratorPenNames:
     const verbosePenalty = averageHeaderLength > 40 ? 25 : 0;
     const lowHeaderRatioPenalty = rowHeaderRatio < 0.6 ? 60 : 0;
     const repeatedValuePenalty = uniqueRowValues.size <= 1 ? 80 : 0;
-    const collaboratorHint = headers.some((header) => collaboratorPenNames.some((name) => foldText(header).includes(foldText(name)))) ? 20 : 0;
+    const collaboratorHint = headers.some((header) => collaboratorPenNames.some((name) => matchesCollaboratorIdentityPartial(name, header))) ? 20 : 0;
 
     const score =
       aliasScoreTotal +
@@ -472,7 +493,7 @@ function scoreFieldBySamples(fieldId: ImportFieldId, samples: string[], collabor
   const urlRatio = samples.filter(isLikelyUrl).length / samples.length;
   const numericRatio = samples.filter(isNumericLike).length / samples.length;
   const collaboratorRatio = samples.filter((value) =>
-    collaboratorPenNames.some((penName) => foldText(penName) === foldText(value))
+    collaboratorPenNames.some((penName) => matchesCollaboratorIdentity(penName, value))
   ).length / samples.length;
   const statusRatio = samples.filter((value) => STATUS_VALUES.some((status) => foldText(value).includes(foldText(status)))).length / samples.length;
   const categoryRatio = samples.filter((value) => CATEGORY_VALUES.some((category) => foldText(value).includes(category))).length / samples.length;
@@ -715,15 +736,20 @@ export function fuzzyMatchPenName(rawName: string, collaboratorPenNames: string[
   const foldedName = foldText(rawName);
   if (!foldedName) return rawName;
 
-  const exact = collaboratorPenNames.find((penName) => foldText(penName) === foldedName);
+  const expandedValues = expandCollaboratorIdentityValues([rawName]);
+  const preferredPenName = resolvePreferredCollaboratorPenName(expandedValues, rawName) || rawName;
+
+  const exact = collaboratorPenNames.find((penName) =>
+    expandedValues.some((value) => matchesCollaboratorIdentity(penName, value))
+  );
   if (exact) return exact;
 
   const partial = collaboratorPenNames.find((penName) =>
-    foldText(penName).includes(foldedName) || foldedName.includes(foldText(penName))
+    expandedValues.some((value) => matchesCollaboratorIdentityPartial(penName, value))
   );
   if (partial) return partial;
 
-  return rawName;
+  return preferredPenName;
 }
 
 export function normalizeImportedArticleRow(

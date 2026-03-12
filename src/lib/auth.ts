@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { db, ensureDatabaseInitialized } from "@/db";
 import { users, collaborators, teams, type User, type Collaborator, type Team } from "@/db/schema";
+import { buildCollaboratorIdentityVariants, expandCollaboratorIdentityValues, foldCollaboratorIdentity } from "@/lib/collaborator-identity";
 import { eq } from "drizzle-orm";
 
 const COOKIE_NAME = "ctv_auth_token";
@@ -86,38 +87,11 @@ export function hasArticleReviewAccess(context: CurrentUserContext | null | unde
 }
 
 function normalizeIdentityValue(value: unknown): string {
-    return String(value || "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/\s+/g, " ")
-        .trim();
+    return foldCollaboratorIdentity(value);
 }
 
 function buildIdentityVariants(value: unknown): string[] {
-    const raw = String(value || "").trim();
-    if (!raw) return [];
-
-    const normalized = normalizeIdentityValue(raw);
-    if (!normalized) return [];
-
-    const variants = new Set<string>([normalized]);
-    const tokens = normalized.split(" ").filter(Boolean);
-
-    if (raw.includes("@")) {
-        const [localPart] = raw.split("@");
-        const normalizedLocalPart = normalizeIdentityValue(localPart.replace(/[._-]+/g, " "));
-        if (normalizedLocalPart) {
-            variants.add(normalizedLocalPart);
-        }
-    }
-
-    if (tokens.length >= 2) {
-        variants.add(tokens.slice(-2).join(" "));
-        variants.add(`${tokens[0]} ${tokens[tokens.length - 1]}`);
-    }
-
-    return Array.from(variants);
+    return buildCollaboratorIdentityVariants(value);
 }
 
 export async function getCurrentUserContext(): Promise<CurrentUserContext | null> {
@@ -214,11 +188,13 @@ export function getContextArticleOwnerCandidates(context: CurrentUserContext): s
     const candidates: string[] = [];
 
     for (const value of values) {
-        const trimmed = String(value || "").trim();
-        if (!trimmed) continue;
-        if (seen.has(trimmed)) continue;
-        seen.add(trimmed);
-        candidates.push(trimmed);
+        for (const expandedValue of expandCollaboratorIdentityValues([value])) {
+            const trimmed = String(expandedValue || "").trim();
+            if (!trimmed) continue;
+            if (seen.has(trimmed)) continue;
+            seen.add(trimmed);
+            candidates.push(trimmed);
+        }
     }
 
     return candidates;

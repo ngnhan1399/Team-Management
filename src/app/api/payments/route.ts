@@ -4,10 +4,12 @@ import { getContextArticleOwnerCandidates, getContextIdentityCandidates, getCurr
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications";
+import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import {
   filterBudgetEligibleRoyaltyArticles,
   isBudgetEligibleContributor,
   matchesRoyaltyMonthYear,
+  resolveRoyaltyContributorPenName,
   resolveRoyaltyContributorProfile,
   type RoyaltyContributorProfile,
 } from "@/lib/royalty";
@@ -37,18 +39,37 @@ type PaymentSourceArticle = {
 
 const ROYALTY_ELIGIBLE_STATUS_VALUES = ["Published", "Approved"] as const;
 
+function expandPenNameCandidates(values: string[]) {
+  return Array.from(
+    new Set(
+      values
+        .flatMap((value) => expandCollaboratorIdentityValues([value]))
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 function buildArticleOwnerWhere(ownerCandidates: string[]): SQL | undefined {
-  const normalizedCandidates = Array.from(new Set(ownerCandidates.map((value) => String(value || "").trim()).filter(Boolean)));
+  const normalizedCandidates = expandPenNameCandidates(ownerCandidates);
   if (normalizedCandidates.length === 0) return undefined;
   if (normalizedCandidates.length === 1) return eq(articles.penName, normalizedCandidates[0] as never);
   return inArray(articles.penName, normalizedCandidates as never[]);
+}
+
+function buildPaymentPenNameWhere(penNames: string[]): SQL | undefined {
+  const normalizedCandidates = expandPenNameCandidates(penNames);
+  if (normalizedCandidates.length === 0) return undefined;
+  if (normalizedCandidates.length === 1) return eq(payments.penName, normalizedCandidates[0] as never);
+  return inArray(payments.penName, normalizedCandidates as never[]);
 }
 
 async function selectPaymentSourceArticles(options?: { exactPenName?: string; ownerCandidates?: string[]; teamId?: number | null }) {
   const conditions: SQL[] = [inArray(articles.status, [...ROYALTY_ELIGIBLE_STATUS_VALUES])];
 
   if (options?.exactPenName) {
-    conditions.push(eq(articles.penName, options.exactPenName));
+    const exactPenNameWhere = buildArticleOwnerWhere([options.exactPenName]);
+    if (exactPenNameWhere) conditions.push(exactPenNameWhere);
   } else if (options?.ownerCandidates?.length) {
     const ownerWhere = buildArticleOwnerWhere(options.ownerCandidates);
     if (ownerWhere) conditions.push(ownerWhere);
@@ -111,17 +132,20 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
   const byWriter: Record<string, CalcRow> = {};
 
   for (const article of eligibleSourceArticles) {
-    if (!byWriter[article.penName]) {
-      byWriter[article.penName] = {
-        teamId: article.teamId ?? options?.teamId ?? null,
-        penName: article.penName,
+    const contributorProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
+    const canonicalPenName = resolveRoyaltyContributorPenName(article.penName, contributorProfiles) || article.penName;
+
+    if (!byWriter[canonicalPenName]) {
+      byWriter[canonicalPenName] = {
+        teamId: contributorProfile?.teamId ?? article.teamId ?? options?.teamId ?? null,
+        penName: canonicalPenName,
         totalArticles: 0,
         totalAmount: 0,
         details: {},
       };
     }
 
-    const row = byWriter[article.penName];
+    const row = byWriter[canonicalPenName];
     const key = `${article.articleType}|${article.contentType}`;
     const price = rateMap.get(key) || 0;
 
@@ -193,7 +217,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, data: [] });
       }
       if (adminTeamId) conditions.push(eq(payments.teamId, adminTeamId));
-      if (penNameFilter) conditions.push(eq(payments.penName, penNameFilter));
+      if (penNameFilter) {
+        const penNameWhere = buildPaymentPenNameWhere([penNameFilter]);
+        if (penNameWhere) conditions.push(penNameWhere);
+      }
     } else if (identityCandidates.length === 0 && ownerCandidates.length === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
@@ -226,11 +253,20 @@ export async function GET(request: NextRequest) {
 
     let data = rawPayments
       .filter((payment) => isBudgetEligibleContributor(resolveRoyaltyContributorProfile(payment.penName, contributorProfiles)))
-      .map((payment) => ({
-        ...payment,
-        details: parsePaymentDetails(payment.details),
-        isEstimated: false,
-      }));
+      .map((payment) => {
+        const contributorProfile = resolveRoyaltyContributorProfile(payment.penName, contributorProfiles);
+        const canonicalPenName = resolvePreferredCollaboratorPenName(
+          [contributorProfile?.penName, contributorProfile?.name, payment.penName],
+          contributorProfile?.penName ?? payment.penName
+        ) || payment.penName;
+
+        return {
+          ...payment,
+          penName: canonicalPenName,
+          details: parsePaymentDetails(payment.details),
+          isEstimated: false,
+        };
+      });
 
     if (context.user.role !== "admin") {
       data = data.filter((payment) => matchesIdentityCandidate(identityCandidates, payment.penName));
@@ -363,7 +399,7 @@ export async function POST(request: NextRequest) {
       const stalePaymentConditions = [
         eq(payments.month, month),
         eq(payments.year, year),
-        penName ? eq(payments.penName, penName) : undefined,
+        penName ? buildPaymentPenNameWhere([penName]) : undefined,
         adminTeamId ? eq(payments.teamId, adminTeamId) : undefined,
       ].filter((c): c is NonNullable<typeof c> => c != null);
       const stalePaymentWhere = and(...stalePaymentConditions);
