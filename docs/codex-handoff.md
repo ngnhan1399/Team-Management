@@ -19,6 +19,7 @@
 - Repo commit history is aligned with `origin/main`.
 - There is an existing unstaged user change in `src/lib/google-sheet-sync.ts`; keep it intact while doing repo optimization.
 - Next recommended pass: review runtime/database hotspots before broader refactors that might affect Nile quota usage.
+- Workspace move checklist for leaving OneDrive is documented in `docs/workspace-move-checklist.md`.
 
 ## Update 2026-03-12
 
