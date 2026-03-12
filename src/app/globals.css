@@ -129,6 +129,8 @@ body {
   display: flex;
   min-height: 100vh;
   overflow: hidden;
+  position: relative;
+  isolation: isolate;
 }
 
 .app-shell-main {
@@ -137,6 +139,9 @@ body {
   overflow-y: auto;
   background: var(--bg-dark);
   transition: margin-left var(--duration-normal) var(--ease-apple);
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
 }
 
 .app-shell-inner {
