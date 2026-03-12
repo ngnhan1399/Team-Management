@@ -10,6 +10,7 @@
 
 # Next.js
 /.next/
+/.next_stale_build/
 /out/
 
 # Production
@@ -36,6 +37,7 @@
 /tmp/
 /playwright-report/
 /.codex-deploy-temp/
+.codex-next-dev.log
 
 # Debug
 npm-debug.log*
@@ -47,6 +49,8 @@ yarn-error.log*
 .DS_Store
 *.pem
 Thumbs.db
+*.bak
+*-DESKTOP-*
 
 # TypeScript
 *.tsbuildinfo

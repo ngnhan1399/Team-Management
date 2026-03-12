@@ -1,5 +1,23 @@
 # Codex Handoff
 
+## Update 2026-03-12 (repo hygiene + safe verification)
+
+- Removed tracked stale build artifacts and OneDrive conflict copies from the repo so GitHub/Vercel stops receiving backup noise.
+- Tightened `.gitignore` to keep `.next_stale_build`, Codex logs, `*.bak`, and `*-DESKTOP-*` files out of future commits.
+- Tightened `eslint.config.mjs` ignores so local lint does not scan stale build output, temp folders, or generated artifacts.
+- Added `npm run verify:safe` for a no-database verification pass: lint + `tsc --noEmit` + production build.
+- Baseline checks on this machine:
+  - `npm run lint` passes after ignore cleanup
+  - `npx tsc --noEmit --pretty false` passes
+  - `npm run build` passes
+  - `npm run test:smoke` still requires a reachable PostgreSQL instance and currently fails locally with `ECONNREFUSED 127.0.0.1:5432`
+
+## Current status
+
+- Repo commit history is aligned with `origin/main`.
+- There is an existing unstaged user change in `src/lib/google-sheet-sync.ts`; keep it intact while doing repo optimization.
+- Next recommended pass: review runtime/database hotspots before broader refactors that might affect Nile quota usage.
+
 ## Update 2026-03-12
 
 - Đã nhận bộ biến môi trường Nile và chuyển `.env.local` sang dùng Nile thay vì Neon.

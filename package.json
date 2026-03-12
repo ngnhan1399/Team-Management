@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "verify:safe": "npm run lint && npx tsc --noEmit --pretty false && npm run build",
     "db:seed": "node scripts/seed-db.mjs",
     "db:migrate-sqlite": "node scripts/migrate-sqlite-to-postgres.mjs",
     "db:migrate-nile": "node scripts/migrate-neon-to-nile.mjs",
