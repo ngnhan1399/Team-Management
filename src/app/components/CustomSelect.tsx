@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { APP_NAVIGATION_START_EVENT } from "./navigation-events";
 
 type SelectOption = { value: string; label: string };
 type MenuPlacement = "top" | "bottom";
@@ -44,6 +45,7 @@ export default function CustomSelect({
   // so admin/CTV flows stay visually consistent without page-level restyling.
   const [isOpen, setIsOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
@@ -80,6 +82,17 @@ export default function CustomSelect({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [disabled, isOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleNavigationStart = () => {
+      setIsOpen(false);
+    };
+
+    window.addEventListener(APP_NAVIGATION_START_EVENT, handleNavigationStart);
+    return () => window.removeEventListener(APP_NAVIGATION_START_EVENT, handleNavigationStart);
+  }, []);
 
   useLayoutEffect(() => {
     if (!isOpen || disabled || typeof window === "undefined" || !ref.current) {
@@ -129,14 +142,29 @@ export default function CustomSelect({
   }, [disabled, isOpen, menuMode]);
 
   const selected = options.find((o) => o.value === value);
+  const resolvePortalTarget = () => {
+    if (typeof document === "undefined") {
+      return null;
+    }
+
+    return (ref.current?.closest(".modal") as HTMLElement | null)
+      ?? (document.querySelector(".app-shell-main") as HTMLElement | null)
+      ?? document.body;
+  };
   const toggleMenu = () => {
     if (disabled) return;
-    setIsOpen((current) => !current);
+    setIsOpen((current) => {
+      if (!current) {
+        setPortalTarget(resolvePortalTarget());
+      }
+      return !current;
+    });
   };
   const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (disabled) return;
     if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
+      setPortalTarget(resolvePortalTarget());
       setIsOpen(true);
       return;
     }
@@ -253,7 +281,7 @@ export default function CustomSelect({
           expand_more
         </span>
       </button>
-      {portalMenu ? createPortal(portalMenu, document.body) : null}
+      {portalMenu && portalTarget ? createPortal(portalMenu, portalTarget) : null}
     </div>
   );
 }

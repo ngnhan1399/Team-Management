@@ -6,6 +6,7 @@ import Image from "next/image";
 import DashboardPage from "./DashboardPage";
 import RealtimeToastLayer from "./RealtimeToastLayer";
 import BrandLogo from "./BrandLogo";
+import { APP_NAVIGATION_START_EVENT } from "./navigation-events";
 import { useAuth } from "./auth-context";
 import { emitRealtimePayload } from "./realtime";
 import type { Page } from "./types";
@@ -204,6 +205,10 @@ export default function MainApp() {
   }, []);
 
   const navigateToPage = useCallback((nextPage: Page) => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(APP_NAVIGATION_START_EVENT));
+    }
+
     setSidebarOpen(false);
     if (nextPage === page) {
       setPendingPage(null);
