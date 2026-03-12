@@ -2,6 +2,15 @@
 
 ## Update 2026-03-12
 
+- Tối ưu lại `ArticlesPage` để giảm cảm giác lag khi vừa mở tab bài viết:
+  - không fetch danh bạ CTV ngay lúc mount nữa; chỉ tải khi admin mở filter, mở form bài viết hoặc mở tool xóa
+  - dùng `useDeferredValue` + `requestIdleCallback` để dời link check sang idle time và chỉ check tối đa 10 URL mỗi đợt
+  - tách modal xóa bài viết ra `ArticleDeleteModal` và lazy-load bằng `next/dynamic`
+- Đã xác nhận lại sau khi gỡ lỗi nhiễu từ OneDrive placeholder:
+  - `npm run lint` pass, còn 2 warning cũ từ `.next_stale_build/*`
+  - `npm run build` pass
+- Lưu ý: `ArticleImportWizard.tsx` đã tồn tại riêng nhưng hiện `ArticlesPage.tsx` vẫn đang dùng modal import inline; chưa wire lazy chunk này vào trang chính trong đợt tối ưu này.
+
 - Google Sheet sync khong con tu suy luan `Published` khi cot trang thai de trong.
 - Import sheet cung khong con tu suy `articleId` tu slug link neu o `ID bai viet` trong sheet dang trong.
 - Da reconcile production DB bang logic sync moi de keo du lieu web ve dung theo sheet goc.
