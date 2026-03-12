@@ -24,6 +24,11 @@
 - `google-sheet-sync.ts` được tối ưu thêm theo hướng giảm latency chuẩn bị:
   - scoped sync tải workbook một lần rồi reuse cho toàn bộ group
   - các bước DB/network độc lập trong `refreshScopedArticlesFromGoogleSheet`, `executeGoogleSheetSync`, `executeGoogleSheetWorkbookSync` được chạy song song bằng `Promise.all`
+- `ArticlesPage.tsx` được tối ưu thêm phần link-health polling:
+  - dùng `linkHealthRef` để tránh effect kiểm tra link chạy lại chỉ vì `linkHealth` vừa đổi
+- Dọn local AI config không cần commit:
+  - xóa `rune.config.json`
+  - thêm ignore để worktree sạch hơn
 
 ### File đã động vào
 
@@ -37,6 +42,7 @@
 - `eslint.config.mjs`
 - `next.config.ts`
 - `package.json`
+- `.gitignore`
 - `src/app/api/articles/google-sync/route.ts`
 - `src/app/api/articles/google-sync/webhook/route.ts`
 - `src/app/components/ArticlesPage.tsx`

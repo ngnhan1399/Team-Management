@@ -57,6 +57,7 @@ export default function ArticlesPage() {
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const articlesRequestAbortRef = React.useRef<AbortController | null>(null);
   const collaboratorsRequestRef = React.useRef<Promise<void> | null>(null);
+  const linkHealthRef = React.useRef<Record<string, LinkHealthEntry>>({});
   const importInputId = React.useId();
   const [articles, setArticles] = useState<Article[]>([]);
   const deferredArticles = useDeferredValue(articles);
@@ -215,6 +216,10 @@ export default function ArticlesPage() {
   }, []);
 
   useEffect(() => {
+    linkHealthRef.current = linkHealth;
+  }, [linkHealth]);
+
+  useEffect(() => {
     const published = deferredArticles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
     if (published.length === 0) {
       setLinkHealth((prev) => (Object.keys(prev).length === 0 ? prev : {}));
@@ -237,7 +242,7 @@ export default function ArticlesPage() {
 
     const now = Date.now();
     const pendingUrls = urls.filter((url) => {
-      const existingEntry = linkHealth[url];
+      const existingEntry = linkHealthRef.current[url];
       if (!existingEntry) return true;
       if (existingEntry.status === "ok") return false;
       return now - existingEntry.checkedAt >= LINK_RECHECK_INTERVAL_MS;
@@ -280,7 +285,7 @@ export default function ArticlesPage() {
         globalThis.clearTimeout(timeoutHandle);
       }
     };
-  }, [deferredArticles, linkHealth]);
+  }, [deferredArticles]);
 
   const handleSearch = (e?: React.FormEvent) => { e?.preventDefault(); fetchArticles(1, search, filters); };
   const applyFilter = (key: string, val: string) => { const f = { ...filters, [key]: val }; setFilters(f); fetchArticles(1, search, f); };
