@@ -23,8 +23,10 @@ Avoid:
 ## Current repo state
 
 - Current branch: `codex/repo-hygiene-safe-verify`
-- Latest pushed commit on that branch: `4e48989` (`perf: make runtime db bootstrap optional`)
-- Previous pushed commit on that branch: `fc2539a` (`chore: clean repo artifacts and add safe verification`)
+- Pushed Codex commits already on that branch:
+  - `fc2539a` (`chore: clean repo artifacts and add safe verification`)
+  - `4e48989` (`perf: make runtime db bootstrap optional`)
+  - `2fb4751` (`docs: add workspace move handoff checklist`)
 - `origin/main` currently points to `9391ea1`
 - Remote repo: `https://github.com/ngnhan1399/Team-Management.git`
 - Suggested PR URL:
@@ -40,7 +42,7 @@ Avoid:
 3. Confirmed `npm run test:smoke` needs a reachable PostgreSQL instance and currently fails locally when no DB is listening on `127.0.0.1:5432`.
 4. Cleaned tracked stale artifacts and conflict-copy files from the repo.
 5. Tightened `.gitignore` and ESLint ignores to avoid scanning/generated noise.
-6. Added `npm run verify:safe` for a no-database validation pass.
+6. Added `npm run verify:safe` for a no-database baseline check (lint + typecheck).
 7. Added optional `DATABASE_BOOTSTRAP_MODE=skip` so stable production can avoid runtime schema bootstrap queries while `/api/health` still performs a lightweight DB ping.
 8. Pushed all Codex-made changes to branch `codex/repo-hygiene-safe-verify`.
 
@@ -81,6 +83,7 @@ If you move by making a fresh clone instead of copying the working directory, re
 6. Run:
    - `npm ci`
    - `npm run verify:safe`
+   - optional on NTFS/internal SSD: `npm run verify:full`
 
 ### Strategy B: Move the whole working copy
 
@@ -93,6 +96,7 @@ If you move by making a fresh clone instead of copying the working directory, re
    - the unstaged change in `src/lib/google-sheet-sync.ts`
 5. Run:
    - `npm run verify:safe`
+   - optional on NTFS/internal SSD: `npm run verify:full`
 
 ## What to send Codex after the move
 
@@ -102,6 +106,7 @@ Send a short message with:
 2. output of `git status --short --branch`
 3. whether `.env.local` was copied
 4. whether `npm run verify:safe` passed
+5. whether `npm run verify:full` passed or failed
 
 Example:
 
@@ -111,6 +116,7 @@ git status:
 ## codex/repo-hygiene-safe-verify...origin/codex/repo-hygiene-safe-verify
  M src/lib/google-sheet-sync.ts
 verify:safe da pass.
+verify:full chua chay.
 ```
 
 ## Next work planned after the move
@@ -118,3 +124,4 @@ verify:safe da pass.
 1. Continue optimization with focus on runtime/database hotspots and Nile quota safety.
 2. Review import/export risk around `xlsx` (`npm audit` currently reports one high-severity advisory with no upstream fix).
 3. Trim local workspace weight further if needed by removing old backup folders from the parent directory.
+4. If full builds remain necessary on the external drive, consider reformatting that drive to `NTFS` or moving the repo to an internal SSD path.

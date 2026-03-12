@@ -5,8 +5,11 @@
 - Removed tracked stale build artifacts and OneDrive conflict copies from the repo so GitHub/Vercel stops receiving backup noise.
 - Tightened `.gitignore` to keep `.next_stale_build`, Codex logs, `*.bak`, and `*-DESKTOP-*` files out of future commits.
 - Tightened `eslint.config.mjs` ignores so local lint does not scan stale build output, temp folders, or generated artifacts.
-- Added `npm run verify:safe` for a no-database verification pass: lint + `tsc --noEmit` + production build.
+- Added `npm run verify:safe` for a no-database baseline check: lint + `tsc --noEmit`.
 - Added optional `DATABASE_BOOTSTRAP_MODE=skip` so stable production environments can skip runtime schema bootstrap queries; `/api/health` still performs a lightweight DB ping in that mode.
+- After moving the repo to `J:`, verified that the drive is `exFAT`; `next build` with Turbopack can fail there because it cannot create Windows junction points for `node_modules`.
+- Added `npm run build:compat` (`next build --webpack`) as an extra option, but left full builds separate because both Turbopack and webpack can still hit `exFAT` filesystem limitations on Windows.
+- Added `npm run verify:full` for environments where full production build verification is available.
 - Baseline checks on this machine:
   - `npm run lint` passes after ignore cleanup
   - `npx tsc --noEmit --pretty false` passes
