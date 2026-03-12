@@ -6,11 +6,13 @@
 - Tightened `.gitignore` to keep `.next_stale_build`, Codex logs, `*.bak`, and `*-DESKTOP-*` files out of future commits.
 - Tightened `eslint.config.mjs` ignores so local lint does not scan stale build output, temp folders, or generated artifacts.
 - Added `npm run verify:safe` for a no-database verification pass: lint + `tsc --noEmit` + production build.
+- Added optional `DATABASE_BOOTSTRAP_MODE=skip` so stable production environments can skip runtime schema bootstrap queries; `/api/health` still performs a lightweight DB ping in that mode.
 - Baseline checks on this machine:
   - `npm run lint` passes after ignore cleanup
   - `npx tsc --noEmit --pretty false` passes
   - `npm run build` passes
   - `npm run test:smoke` still requires a reachable PostgreSQL instance and currently fails locally with `ECONNREFUSED 127.0.0.1:5432`
+  - a later `npm run build` rerun inside the OneDrive workspace hit `EPERM ... .next\\static\\...` during unlink, which points to a local file-lock/sync issue rather than a TypeScript or Next.js compile failure
 
 ## Current status
 
