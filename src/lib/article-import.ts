@@ -736,6 +736,9 @@ export function fuzzyMatchPenName(rawName: string, collaboratorPenNames: string[
   const foldedName = foldText(rawName);
   if (!foldedName) return rawName;
 
+  const exactByFold = collaboratorPenNames.find((penName) => foldText(penName) === foldedName);
+  if (exactByFold) return exactByFold;
+
   const expandedValues = expandCollaboratorIdentityValues([rawName]);
   const preferredPenName = resolvePreferredCollaboratorPenName(expandedValues, rawName) || rawName;
 

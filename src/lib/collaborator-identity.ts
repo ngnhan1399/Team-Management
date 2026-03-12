@@ -6,11 +6,6 @@ type CollaboratorDisplayOverride = {
 
 const KNOWN_COLLABORATOR_DISPLAY_OVERRIDES: CollaboratorDisplayOverride[] = [
   {
-    preferredName: "Đình Khải (S)",
-    preferredPenName: "Khải Đình",
-    aliases: ["Đình Khải (S)", "Đình Khải", "Nguyễn Đình Khải", "Khải Đình"],
-  },
-  {
     preferredName: "Đậu Thị Phương",
     preferredPenName: "Thị Phương",
     aliases: ["Đậu Thị Phương", "Đậu Phương", "Thị Phương"],
@@ -59,18 +54,10 @@ export function buildCollaboratorIdentityVariants(value: unknown): string[] {
   }
 
   const tokens = base.split(" ").filter(Boolean);
-  const longTokens = tokens.filter((token) => token.length > 1);
 
   if (tokens.length >= 2) {
     variants.add(tokens.slice(-2).join(" "));
     variants.add(`${tokens[0]} ${tokens[tokens.length - 1]}`);
-    variants.add([...tokens].sort().join(" "));
-  }
-
-  if (longTokens.length >= 2) {
-    variants.add(longTokens.slice(-2).join(" "));
-    variants.add(`${longTokens[0]} ${longTokens[longTokens.length - 1]}`);
-    variants.add([...longTokens].sort().join(" "));
   }
 
   return Array.from(variants);

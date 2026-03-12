@@ -586,9 +586,10 @@ async function getCollaboratorDirectory(teamId?: number | null) {
 
 function buildAllowedPenNameSet(values: string[]) {
   const expandedValues = values.flatMap((value) => expandCollaboratorIdentityValues([value]));
-  return new Set(
-    expandedValues.flatMap((value) => buildCollaboratorIdentityVariants(value)).filter(Boolean)
-  );
+  return new Set([
+    ...expandedValues.map((value) => foldText(value)).filter(Boolean),
+    ...expandedValues.flatMap((value) => buildCollaboratorIdentityVariants(value)).filter(Boolean),
+  ]);
 }
 
 async function getAllExistingArticles(teamId?: number | null) {
