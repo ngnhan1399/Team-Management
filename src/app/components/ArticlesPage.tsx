@@ -279,7 +279,7 @@ export default function ArticlesPage() {
   useEffect(() => {
     const published = deferredArticles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
     if (published.length === 0) {
-      setLinkHealth({});
+      setLinkHealth((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
     const urls = Array.from(new Set(published.map(a => a.link).filter(Boolean)));
@@ -287,7 +287,14 @@ export default function ArticlesPage() {
       const next = Object.fromEntries(
         Object.entries(prev).filter(([url]) => urls.includes(url))
       );
-      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+      const prevEntries = Object.entries(prev);
+      const nextEntries = Object.entries(next);
+      const hasSameEntries = prevEntries.length === nextEntries.length
+        && prevEntries.every(([url, entry]) => {
+          const nextEntry = next[url];
+          return nextEntry?.status === entry.status && nextEntry?.checkedAt === entry.checkedAt;
+        });
+      return hasSameEntries ? prev : next;
     });
 
     const now = Date.now();
