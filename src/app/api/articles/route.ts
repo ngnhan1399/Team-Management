@@ -114,27 +114,29 @@ function scheduleBackgroundWork(task: () => Promise<void>) {
   });
 }
 
+const articleResponseSelection = {
+  id: articles.id,
+  articleId: articles.articleId,
+  teamId: articles.teamId,
+  date: articles.date,
+  title: articles.title,
+  penName: articles.penName,
+  createdByUserId: articles.createdByUserId,
+  updatedAt: articles.updatedAt,
+  category: articles.category,
+  articleType: articles.articleType,
+  contentType: articles.contentType,
+  wordCountRange: articles.wordCountRange,
+  status: articles.status,
+  link: articles.link,
+  reviewLink: articles.reviewLink,
+  reviewerName: articles.reviewerName,
+  notes: articles.notes,
+};
+
 async function loadArticleResponseRow(articleId: number, currentUserId: number, canManageArticles: boolean): Promise<ArticleResponseRow | null> {
   const row = await db
-    .select({
-      id: articles.id,
-      articleId: articles.articleId,
-      teamId: articles.teamId,
-      date: articles.date,
-      title: articles.title,
-      penName: articles.penName,
-      createdByUserId: articles.createdByUserId,
-      updatedAt: articles.updatedAt,
-      category: articles.category,
-      articleType: articles.articleType,
-      contentType: articles.contentType,
-      wordCountRange: articles.wordCountRange,
-      status: articles.status,
-      link: articles.link,
-      reviewLink: articles.reviewLink,
-      reviewerName: articles.reviewerName,
-      notes: articles.notes,
-    })
+    .select(articleResponseSelection)
     .from(articles)
     .where(eq(articles.id, articleId))
     .get();
@@ -767,7 +769,6 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const mode = normalizeString(searchParams.get("mode"));
-    const splitView = normalizeString(searchParams.get("splitView")) === "true";
     const criteria = readCriteriaFromSearchParams(searchParams);
     const canManageArticles = hasArticleManagerAccess(context);
     const canReviewArticles = hasArticleReviewAccess(context);
@@ -815,35 +816,6 @@ export async function GET(request: NextRequest) {
         ? combineWhereClauses(whereClause, buildArticleReviewScopeWhere(reviewerLabels))
         : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
 
-    if (splitView && (canManageArticles || canReviewArticles)) {
-      const allRows = await db
-        .select()
-        .from(articles)
-        .where(scopedWhereClause)
-        .orderBy(desc(articles.updatedAt), desc(articles.date), desc(articles.id))
-        .all();
-
-      const data = await attachArticleResponseMetadata(
-        allRows.map((row) => ({
-          ...row,
-          reviewLink: normalizeArticleReviewLink(row.reviewLink) || null,
-        })),
-        context.user.id,
-        canManageArticles
-      );
-
-      return NextResponse.json({
-        success: true,
-        data,
-        pagination: {
-          page: 1,
-          limit: data.length,
-          total: data.length,
-          totalPages: data.length > 0 ? 1 : 0,
-        },
-      });
-    }
-
     const [{ count: totalCount }, pagedRows] = await Promise.all([
       db
         .select({ count: sql<number>`count(*)` })
@@ -852,7 +824,7 @@ export async function GET(request: NextRequest) {
         .get()
         .then((row) => ({ count: Number(row?.count || 0) })),
       db
-        .select()
+        .select(articleResponseSelection)
         .from(articles)
         .where(scopedWhereClause)
         .orderBy(desc(articles.updatedAt), desc(articles.date), desc(articles.id))
