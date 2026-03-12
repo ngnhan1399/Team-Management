@@ -16,6 +16,10 @@ const eslintConfig = defineConfig([
     "logs/**",
     "tmp/**",
     "output/**",
+    "docs/**",
+    "data/**",
+    ".agent/**",
+    ".vercel/**",
     "next-env.d.ts",
   ]),
 ]);

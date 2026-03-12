@@ -1,5 +1,52 @@
 # Codex Handoff
 
+## Update 2026-03-13 (tooling nhẹ hơn + sync guard + deploy hygiene)
+
+- Thu hẹp phạm vi lint/typecheck để không quét lan toàn repo:
+  - `lint` giờ chỉ quét `src`, `scripts`, và các file config chính, đồng thời bật `.eslintcache`
+  - `tsconfig.json` bỏ `allowJs`, bỏ `.next/dev/types`, và exclude thêm `.agent`, `.vercel`, `docs`, `logs`, `output`, `tmp`, `data`
+- Thêm `typecheck` script riêng và giữ `verify:safe = lint + typecheck`.
+- Tăng hygiene cho repo/deploy:
+  - `.gitignore` thêm `.agent/`, `.rune/`, `coverage/`, `.eslintcache`, `rune.config.local.json`
+  - thêm `.vercelignore` để local/CLI deploy không đẩy theo docs, logs, output, tmp, generated AI context
+  - `next.config.ts` thêm `serverExternalPackages` cho `bcryptjs`, `pg`, `xlsx`
+  - CI thêm `concurrency`, cache `.next/cache` + Playwright, và dùng `npm run verify:safe`
+- Gia cố Google Sheets sync nhưng vẫn giữ đồng bộ liên tục:
+  - thêm guard chặn xóa hàng loạt đáng ngờ trong `executeGoogleSheetSync`
+  - guard sẽ chặn nếu số bài định xóa vượt ngưỡng env hoặc nếu sheet đang phải dùng fallback date
+  - `refreshScopedArticlesFromGoogleSheet` giờ tải workbook Google Sheets một lần rồi reuse cho toàn bộ group trong request, thay vì tải lặp lại theo từng group
+  - env mới trong `.env.example`:
+    - `GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT`
+    - `GOOGLE_SHEETS_SYNC_MAX_DELETE_RATIO`
+  - `POST /api/articles/google-sync` và webhook đều được thêm `dynamic = "force-dynamic"` + `maxDuration = 60` để chạy ổn định hơn trên Vercel
+- `ArticlesPage.tsx` thêm `AbortController` để hủy request danh sách bài cũ khi người dùng lọc/search/paginate nhanh, tránh request chồng và state cập nhật lệch
+- Tạo `docs/optimization-memory.md` làm bộ nhớ tối ưu hóa lâu dài; `AGENTS.md` giờ trỏ rõ vào tài liệu này để các thread sau không lặp lại cùng vòng tối ưu
+
+### File đã động vào
+
+- `.env.example`
+- `.gitignore`
+- `.github/workflows/ci.yml`
+- `.vercelignore`
+- `docs/codex-handoff.md`
+- `docs/optimization-memory.md`
+- `AGENTS.md`
+- `eslint.config.mjs`
+- `next.config.ts`
+- `package.json`
+- `src/app/api/articles/google-sync/route.ts`
+- `src/app/api/articles/google-sync/webhook/route.ts`
+- `src/app/components/ArticlesPage.tsx`
+- `src/lib/google-sheet-sync.ts`
+- `tsconfig.json`
+
+### Kiểm tra đã chạy
+
+- `npm run lint` ✅
+- `npm run typecheck` ✅
+- `npm run verify:safe` ✅
+- `npm run build` ⏳ chưa hoàn tất được trên máy local hiện tại dù đã tăng timeout lên hơn 7 phút; nhiều khả năng vẫn bị ảnh hưởng bởi môi trường workspace trên ổ `J:` hơn là lỗi TypeScript/lint
+
 ## Update 2026-03-12 (repo hygiene + safe verification)
 
 - Removed tracked stale build artifacts and OneDrive conflict copies from the repo so GitHub/Vercel stops receiving backup noise.

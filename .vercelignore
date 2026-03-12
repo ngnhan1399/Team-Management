@@ -1,0 +1,10 @@
+.agent
+.rune
+.next_stale_build
+data
+docs
+logs
+output
+tmp
+*.log
+IMPLEMENTATION_PROGRESS.md

@@ -38,6 +38,10 @@
 /playwright-report/
 /.codex-deploy-temp/
 .codex-next-dev.log
+/.agent/
+/.rune/
+/coverage/
+.eslintcache
 
 # Debug
 npm-debug.log*
@@ -63,3 +67,4 @@ next-env.d.ts
 .playwright-cli/
 
 .vercel
+rune.config.local.json

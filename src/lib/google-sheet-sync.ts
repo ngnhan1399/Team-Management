@@ -121,7 +121,14 @@ type CollaboratorDirectoryEntry = {
   teamId: number | null;
 };
 
+type SyncDeletionGuardDecision = {
+  allowed: boolean;
+  warning?: string;
+};
+
 const REQUIRED_FIELDS: ImportFieldId[] = ["date", "title", "penName"];
+const DEFAULT_GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT = 20;
+const DEFAULT_GOOGLE_SHEETS_SYNC_MAX_DELETE_RATIO = 0.35;
 
 function foldText(value: string): string {
   return value
@@ -131,6 +138,65 @@ function foldText(value: string): string {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parsePositiveRatio(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 1 ? parsed : fallback;
+}
+
+function getGoogleSheetDeleteGuardConfig() {
+  return {
+    maxDeleteCount: parsePositiveInteger(
+      process.env.GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT,
+      DEFAULT_GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT
+    ),
+    maxDeleteRatio: parsePositiveRatio(
+      process.env.GOOGLE_SHEETS_SYNC_MAX_DELETE_RATIO,
+      DEFAULT_GOOGLE_SHEETS_SYNC_MAX_DELETE_RATIO
+    ),
+  };
+}
+
+function assessGoogleSheetDeleteSafety(options: {
+  candidateDeleteCount: number;
+  referenceRowCount: number;
+  rowsUsingFallbackDate?: number;
+  scopeLabel: string;
+}): SyncDeletionGuardDecision {
+  const { candidateDeleteCount, referenceRowCount, rowsUsingFallbackDate = 0, scopeLabel } = options;
+  if (candidateDeleteCount <= 0) {
+    return { allowed: true };
+  }
+
+  if (rowsUsingFallbackDate > 0) {
+    return {
+      allowed: false,
+      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì sheet đang có ${rowsUsingFallbackDate} dòng phải gán ngày tạm. Hãy kiểm tra lại cột "Ngày viết" rồi đồng bộ lại.`,
+    };
+  }
+
+  const { maxDeleteCount, maxDeleteRatio } = getGoogleSheetDeleteGuardConfig();
+  if (candidateDeleteCount > maxDeleteCount) {
+    return {
+      allowed: false,
+      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì vượt ngưỡng an toàn ${maxDeleteCount} bài mỗi lần sync. Có thể tăng ngưỡng bằng GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT nếu đây là thay đổi chủ đích.`,
+    };
+  }
+
+  if (referenceRowCount > 0 && (candidateDeleteCount / referenceRowCount) > maxDeleteRatio) {
+    return {
+      allowed: false,
+      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì vượt ${Math.round(maxDeleteRatio * 100)}% số dòng đang đọc từ sheet. Hãy rà lại dữ liệu nguồn trước khi sync tiếp.`,
+    };
+  }
+
+  return { allowed: true };
 }
 
 export function parseSpreadsheetId(url: string): string | null {
@@ -1094,6 +1160,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
 
   const collaboratorPenNames = await getCollaboratorPenNames(options.teamId);
   const sourceUrl = options.sourceUrl?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+  const { workbook } = await downloadGoogleSheetWorkbook(sourceUrl);
   const targetArticles = await db
     .select({
       id: articles.id,
@@ -1118,6 +1185,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
   if (targetArticles.length === 0) {
     throw new Error("Không tìm thấy bài viết nào trong hệ thống để đồng bộ nhanh.");
   }
+  const targetArticleById = new Map(targetArticles.map((article) => [article.id, article]));
 
   const syncLinks = await db
     .select({
@@ -1197,6 +1265,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
       month: group.month,
       year: group.year,
       collaboratorPenNames,
+      workbook,
     });
     const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
     const lookup = buildPreparedRowLookup(
@@ -1215,7 +1284,13 @@ export async function refreshScopedArticlesFromGoogleSheet(
     resultMonth = resultMonth ?? selectedSheet.month;
     resultYear = resultYear ?? selectedSheet.year;
 
-    const groupArticles = targetArticles.filter((article) => group.articleIds.includes(article.id));
+    const groupArticles = group.articleIds.reduce<typeof targetArticles>((accumulator, articleId) => {
+      const article = targetArticleById.get(articleId);
+      if (article) {
+        accumulator.push(article);
+      }
+      return accumulator;
+    }, []);
     for (const article of groupArticles) {
       const syncLink = syncLinkByArticleId.get(article.id) ?? null;
       const matchedRow = findPreparedRowForArticle(article, lookup, syncLink);
@@ -1461,7 +1536,7 @@ export async function executeGoogleSheetSync(
       const matchedByArticleId = articleId && !ambiguousArticleIds.has(articleId) ? articleIdMap.get(articleId) : undefined;
       const matchedByComposite = compositeMap.get(compositeKey);
       const matchedByLink = link ? linkMap.get(normalizeLinkKey(link)) : undefined;
-      const initialTarget = matchedByCurrentSheet ?? matchedByLink ?? matchedByComposite ?? matchedByArticleId;
+      const initialTarget = matchedByCurrentSheet ?? matchedByArticleId ?? matchedByComposite ?? matchedByLink;
       const shouldSplitSharedTarget = Boolean(
         initialTarget
         && hasSyncLinkOnDifferentSheet(sharedState, initialTarget.id, selectedSheet.name)
@@ -1624,9 +1699,20 @@ export async function executeGoogleSheetSync(
   }
 
   if (staleArticleIds.length > 0) {
-    const deletedResult = await deleteArticlesForSync(staleArticleIds);
-    deleted = deletedResult.deletedArticles;
-    removeSharedArticles(sharedState, staleArticleIds);
+    const deleteSafety = assessGoogleSheetDeleteSafety({
+      candidateDeleteCount: staleArticleIds.length,
+      referenceRowCount: Math.max(prepared.rawRows.length - ignoredOutsideScope, 0),
+      rowsUsingFallbackDate,
+      scopeLabel: `tab ${selectedSheet.name}`,
+    });
+
+    if (!deleteSafety.allowed) {
+      runtimeWarnings.push(deleteSafety.warning || "Đã chặn xóa bài do sync phát hiện bất thường.");
+    } else {
+      const deletedResult = await deleteArticlesForSync(staleArticleIds);
+      deleted = deletedResult.deletedArticles;
+      removeSharedArticles(sharedState, staleArticleIds);
+    }
   }
 
   return {

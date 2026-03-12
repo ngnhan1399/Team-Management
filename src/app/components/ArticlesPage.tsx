@@ -4,6 +4,31 @@ import React, { useCallback, useDeferredValue, useEffect, useState } from "react
 import { useAuth } from "./auth-context";
 import dynamic from "next/dynamic";
 import CustomSelect from "./CustomSelect";
+import {
+  ARTICLE_PAGE_SIZE,
+  ARTICLE_STATUS_OPTIONS,
+  ARTICLE_TYPE_OPTIONS,
+  IMPORTANT_IMPORT_FIELDS,
+  CATEGORY_OPTIONS,
+  CONTENT_TYPE_OPTIONS,
+  DEFAULT_ARTICLE_STATUS,
+  EDITORIAL_ONLY_ARTICLE_TYPE_OPTIONS,
+  EDITORIAL_ONLY_CATEGORY_OPTIONS,
+  EMPTY_DELETE_CRITERIA,
+  IMPORT_FIELD_OPTIONS,
+  LINK_RECHECK_INTERVAL_MS,
+  MANAGER_DEFAULT_PEN_NAME,
+  MONTH_OPTIONS,
+  REQUIRED_IMPORT_FIELDS,
+  WORD_COUNT_RANGE_OPTIONS,
+  YEAR_OPTIONS,
+  buildApiErrorMessage,
+  createCurrentMonthFilters,
+  getDisplayedPenName,
+  normalizeIdentityValue,
+  normalizeWordCountRangeValue,
+  type ArticleFilters,
+} from "./articles-page-config";
 
 const ArticlePreviewPanel = dynamic(() => import("./ArticlePreviewPanel"), { ssr: false });
 const ArticleDeleteModal = dynamic(() => import("./ArticleDeleteModal"), { ssr: false });
@@ -25,123 +50,12 @@ import type {
   ImportDryRunResult,
 } from "./types";
 
-const IMPORT_FIELD_OPTIONS = [
-  { value: "", label: "— Bỏ qua —" },
-  { value: "articleId", label: "Mã bài viết" },
-  { value: "date", label: "Ngày viết" },
-  { value: "title", label: "Tiêu đề" },
-  { value: "penName", label: "Bút danh" },
-  { value: "category", label: "Danh mục" },
-  { value: "articleType", label: "Loại bài" },
-  { value: "contentType", label: "Loại nội dung" },
-  { value: "wordCountRange", label: "Khoảng từ" },
-  { value: "status", label: "Trạng thái" },
-  { value: "link", label: "Link bài viết" },
-  { value: "reviewerName", label: "Người duyệt" },
-  { value: "notes", label: "Ghi chú" },
-];
-
-const REQUIRED_IMPORT_FIELDS = ["date", "title", "penName"];
-const IMPORTANT_IMPORT_FIELDS = ["articleId", "date", "title", "penName", "status", "link"];
-const CATEGORY_OPTIONS = ["ICT", "Gia dụng", "Thủ thuật", "Giải trí", "Đánh giá", "Khác"];
-const EDITORIAL_ONLY_CATEGORY_OPTIONS = ["SEO AI"];
-const ARTICLE_TYPE_OPTIONS = ["Mô tả SP ngắn", "Mô tả SP dài", "Bài dịch Review SP", "Bài SEO ICT", "Bài SEO Gia dụng", "Bài SEO ICT 1K5", "Bài SEO Gia dụng 1K5", "Bài SEO ICT 2K", "Bài SEO Gia dụng 2K", "Thủ thuật"];
-const EDITORIAL_ONLY_ARTICLE_TYPE_OPTIONS = ["SEO AI"];
-const CONTENT_TYPE_OPTIONS = ["Viết mới", "Viết lại"];
-const WORD_COUNT_RANGE_OPTIONS = [
-  { value: "800-1000", label: "800-1000 chữ" },
-  { value: "1000-1500", label: "1000-1500 chữ" },
-  { value: "1500-2000", label: "1500-2000 chữ" },
-  { value: "Từ 2000 trở lên", label: "Từ 2000 chữ trở lên" },
-];
-const DEFAULT_ARTICLE_STATUS = "Submitted";
-const LINK_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
-const ARTICLE_PAGE_SIZE = 30;
-const ARTICLE_STATUS_OPTIONS = [
-  { value: "", label: "Tất cả" },
-  { value: "Draft", label: "📋 Nháp" },
-  { value: "Submitted", label: "📤 Chờ duyệt" },
-  { value: "Reviewing", label: "🔎 Đang duyệt" },
-  { value: "ApprovedLike", label: "✅ Đã duyệt" },
-  { value: "NeedsFix", label: "⚠️ Sửa lỗi" },
-  { value: "Rejected", label: "⛔ Từ chối" },
-];
-const MONTH_OPTIONS = [{ value: "", label: "Tháng" }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `Tháng ${i + 1}` }))];
-const YEAR_OPTIONS = [{ value: "", label: "Năm" }, ...Array.from({ length: 6 }, (_, i) => {
-  const year = new Date().getFullYear() - 2 + i;
-  return { value: String(year), label: String(year) };
-})];
-const EMPTY_DELETE_CRITERIA: ArticleDeleteCriteria = {
-  search: "",
-  titleQuery: "",
-  penName: "",
-  status: "",
-  category: "",
-  articleType: "",
-  contentType: "",
-  month: "",
-  year: "",
-  reviewerName: "",
-};
-
-type ArticleFilters = Pick<ArticleDeleteCriteria, "penName" | "status" | "category" | "articleType" | "contentType" | "month" | "year">;
-
-const PEN_NAME_DISPLAY_ALIASES: Record<string, string> = {
-  "Nhân BTV": "Đình Nhân",
-};
-const MANAGER_DEFAULT_PEN_NAME = "Nhân BTV";
-
-function createCurrentMonthFilters(): ArticleFilters {
-  const now = new Date();
-  return {
-    penName: "",
-    status: "",
-    category: "",
-    articleType: "",
-    contentType: "",
-    month: String(now.getMonth() + 1),
-    year: String(now.getFullYear()),
-  };
-}
-
-function getDisplayedPenName(value: string | null | undefined) {
-  const normalizedValue = String(value || "").trim();
-  if (!normalizedValue) {
-    return "";
-  }
-
-  return PEN_NAME_DISPLAY_ALIASES[normalizedValue] || normalizedValue;
-}
-
-function normalizeWordCountRangeValue(value: string | null | undefined) {
-  const normalized = String(value || "").trim();
-  switch (normalized) {
-    case "800-1000":
-    case "800 - 1000 chữ":
-      return "800-1000";
-    case "1000-1500":
-    case "1000 - 1500 chữ":
-      return "1000-1500";
-    case "1500-2000":
-    case "1500 - 2000 chữ":
-      return "1500-2000";
-    case "Từ 2000 trở lên":
-    case "Từ 2000 chữ trở lên":
-      return "Từ 2000 trở lên";
-    default:
-      return "";
-  }
-}
-
-function normalizeIdentityValue(value: unknown) {
-  return foldSearchText(value);
-}
-
 export default function ArticlesPage() {
   type LinkHealthStatus = "ok" | "broken" | "unknown";
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
   const { user } = useAuth();
   const importInputRef = React.useRef<HTMLInputElement>(null);
+  const articlesRequestAbortRef = React.useRef<AbortController | null>(null);
   const collaboratorsRequestRef = React.useRef<Promise<void> | null>(null);
   const importInputId = React.useId();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -258,8 +172,11 @@ export default function ArticlesPage() {
   }, [canManageArticles, isWriter, user]);
 
   const fetchArticles = useCallback((p = 1, s = "", f: ArticleFilters = createCurrentMonthFilters()) => {
+    articlesRequestAbortRef.current?.abort();
+    const controller = new AbortController();
+    articlesRequestAbortRef.current = controller;
     setLoading(true);
-    const params = new URLSearchParams({ page: String(p), limit: "30" });
+    const params = new URLSearchParams({ page: String(p), limit: String(ARTICLE_PAGE_SIZE) });
     if (s) params.set("search", s);
     if (isWriter && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
     else if (f.penName) params.set("penName", f.penName);
@@ -269,12 +186,33 @@ export default function ArticlesPage() {
     if (f.contentType) params.set("contentType", f.contentType);
     if (f.month) params.set("month", f.month);
     if (f.year) params.set("year", f.year);
-    fetch(`/api/articles?${params}`, { cache: "no-store" }).then(r => r.json()).then(d => { setArticles(d.data || []); setPagination(d.pagination || {}); setLoading(false); }).catch(() => setLoading(false));
+    fetch(`/api/articles?${params}`, { cache: "no-store", signal: controller.signal })
+      .then(r => r.json())
+      .then(d => {
+        if (controller.signal.aborted) return;
+        setArticles(d.data || []);
+        setPagination(d.pagination || {});
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+      })
+      .finally(() => {
+        if (articlesRequestAbortRef.current === controller) {
+          articlesRequestAbortRef.current = null;
+          setLoading(false);
+        }
+      });
   }, [isWriter, user]);
 
   useEffect(() => {
     fetchArticles(1, "", createCurrentMonthFilters());
   }, [fetchArticles]);
+
+  useEffect(() => () => {
+    articlesRequestAbortRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     const published = deferredArticles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
@@ -374,20 +312,6 @@ export default function ArticlesPage() {
     effectiveDeleteCriteria.year ? `Năm: ${effectiveDeleteCriteria.year}` : null,
     effectiveDeleteCriteria.reviewerName ? `Người duyệt: ${effectiveDeleteCriteria.reviewerName}` : null,
   ].filter(Boolean) as string[];
-
-  const buildApiErrorMessage = (data: unknown, fallback: string) => {
-    const payload = (data && typeof data === "object") ? data as Record<string, unknown> : {};
-    const baseMessage = String(payload.error || payload.message || fallback);
-    const details = Array.isArray(payload.details)
-      ? payload.details.map((item) => String(item || "").trim()).filter(Boolean)
-      : [];
-
-    if (details.length === 0) {
-      return baseMessage;
-    }
-
-    return `${baseMessage}\n\nChi tiết:\n- ${details.slice(0, 5).join("\n- ")}`;
-  };
 
   const analyzeImportFile = useCallback(async (file: File, sheetName?: string, headerRowNumber?: number) => {
     setImporting(true);

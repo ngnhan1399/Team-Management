@@ -8,6 +8,13 @@ on:
       - "codex/**"
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -25,6 +32,22 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Restore Next cache
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*', 'next.config.ts', 'tsconfig.json') }}
+          restore-keys: |
+            ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-
+
+      - name: Restore Playwright cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - name: Prepare environment
         run: |
@@ -61,8 +84,8 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install chromium --with-deps
 
-      - name: Lint
-        run: npm run lint
+      - name: Verify safe
+        run: npm run verify:safe
 
       - name: Smoke test
         run: npm run test:smoke

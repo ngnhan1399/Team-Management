@@ -11,6 +11,9 @@ import { getContextTeamId, isLeader } from "@/lib/teams";
 import { eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 function normalizeText(value: unknown) {
   return String(value || "").trim();
 }
