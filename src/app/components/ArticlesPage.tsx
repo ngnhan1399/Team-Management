@@ -1235,6 +1235,7 @@ export default function ArticlesPage() {
   const showSplitArticleSections = shouldShowSplitArticleSections;
   const ctvArticles = articles.filter((article) => article.authorBucket !== "editorial");
   const editorialArticles = articles.filter((article) => article.authorBucket === "editorial");
+  const articleTableMinWidth = showSplitArticleSections ? 980 : 1040;
   const articleSections = [
     {
       key: "ctv",
@@ -1257,8 +1258,8 @@ export default function ArticlesPage() {
   ] as const;
 
   const renderArticleTable = (rows: Article[], emptyMessage: string) => (
-    <div style={{ overflowX: "auto", maxHeight: showSplitArticleSections ? 460 : "calc(100vh - 320px)", minHeight: showSplitArticleSections ? 220 : 460 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+    <div style={{ overflowX: "auto", position: "relative", zIndex: 0 }}>
+      <table style={{ width: "100%", minWidth: articleTableMinWidth, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
         <colgroup>
           <col style={{ width: "6%" }} />
           <col style={{ width: "10%" }} />
@@ -1269,7 +1270,7 @@ export default function ArticlesPage() {
           <col style={{ width: "5%" }} />
           <col style={{ width: "12%" }} />
         </colgroup>
-        <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+        <thead style={{ pointerEvents: "none" }}>
           <tr style={{ background: "rgba(248, 250, 252, 0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)" }}>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ID</th>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ngày</th>
@@ -1285,8 +1286,8 @@ export default function ArticlesPage() {
           {rows.length === 0 ? (
             <tr>
               <td colSpan={8}>
-                <div style={{ padding: showSplitArticleSections ? 44 : 80, textAlign: "center", color: "var(--text-muted)" }}>
-                  <div style={{ fontSize: showSplitArticleSections ? 28 : 40, marginBottom: 12 }}>📄</div>
+                <div style={{ padding: showSplitArticleSections ? 44 : 72, textAlign: "center", color: "var(--text-muted)" }}>
+                  <div style={{ fontSize: showSplitArticleSections ? 28 : 36, marginBottom: 12 }}>📄</div>
                   <div style={{ fontWeight: 700 }}>{emptyMessage}</div>
                 </div>
               </td>
