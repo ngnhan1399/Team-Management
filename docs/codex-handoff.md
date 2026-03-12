@@ -2,20 +2,6 @@
 
 ## Update 2026-03-12
 
-- Tối ưu lại `ArticlesPage` để giảm cảm giác lag khi vừa mở tab bài viết:
-  - không fetch danh bạ CTV ngay lúc mount nữa; chỉ tải khi admin mở filter, mở form bài viết hoặc mở tool xóa
-  - dùng `useDeferredValue` + `requestIdleCallback` để dời link check sang idle time và chỉ check tối đa 10 URL mỗi đợt
-  - tách modal xóa bài viết ra `ArticleDeleteModal` và lazy-load bằng `next/dynamic`
-  - tách luôn `ArticleImportWizard` khỏi `ArticlesPage` và chỉ load khi mở modal import
-- Sửa nút nghẽn lớn nhất của trang bài viết:
-  - `GET /api/articles` không còn nhánh `splitView=true` kéo toàn bộ tập bài viết đã lọc về client
-  - danh sách bài viết luôn lấy theo phân trang (`30` bài/trang), kể cả admin/reviewer
-  - phân trang đáy giờ vẫn hiện cả khi UI đang tách nhóm CTV / Biên tập trên dữ liệu của trang hiện tại
-  - query list chính ở API chỉ select các cột cần cho bảng + modal chỉnh sửa, không còn `select *`
-- Đã xác nhận lại sau khi gỡ lỗi nhiễu từ OneDrive placeholder:
-  - `npm run lint` pass, còn 2 warning cũ từ `.next_stale_build/*`
-  - `npm run build` pass
-
 - Google Sheet sync khong con tu suy luan `Published` khi cot trang thai de trong.
 - Import sheet cung khong con tu suy `articleId` tu slug link neu o `ID bai viet` trong sheet dang trong.
 - Da reconcile production DB bang logic sync moi de keo du lieu web ve dung theo sheet goc.
