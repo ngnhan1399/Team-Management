@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
 import dynamic from "next/dynamic";
 import CustomSelect from "./CustomSelect";
 
 const ArticlePreviewPanel = dynamic(() => import("./ArticlePreviewPanel"), { ssr: false });
+const ArticleDeleteModal = dynamic(() => import("./ArticleDeleteModal"), { ssr: false });
+const ArticleImportWizard = dynamic(() => import("./ArticleImportWizard"), { ssr: false });
 import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
@@ -109,14 +111,18 @@ export default function ArticlesPage() {
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
   const { user } = useAuth();
   const importInputRef = React.useRef<HTMLInputElement>(null);
+  const collaboratorsRequestRef = React.useRef<Promise<void> | null>(null);
   const importInputId = React.useId();
   const [articles, setArticles] = useState<Article[]>([]);
+  const deferredArticles = useDeferredValue(articles);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 0 });
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
+  const [collaboratorsLoaded, setCollaboratorsLoaded] = useState(false);
   const [formData, setFormData] = useState<Partial<Article>>({});
   const [savingArticle, setSavingArticle] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -163,7 +169,7 @@ export default function ArticlesPage() {
   const canManageArticles = isAdmin;
   const canCreateArticles = isAdmin || isWriter;
   const canSyncArticles = isAdmin || isWriter;
-  const shouldFetchSplitArticles = canManageArticles || isReviewer;
+  const shouldShowSplitArticleSections = canManageArticles || isReviewer;
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
   const reviewerIdentityValues = Array.from(new Set([
     user?.collaborator?.name,
@@ -174,6 +180,33 @@ export default function ArticlesPage() {
   const mappedFields = Object.values(importMapping).filter(Boolean);
   const duplicateMappedFields = mappedFields.filter((field, index) => mappedFields.indexOf(field) !== index);
   const missingRequiredImportFields = REQUIRED_IMPORT_FIELDS.filter((field) => !mappedFields.includes(field));
+
+  const ensureCollaboratorsLoaded = useCallback(async () => {
+    if (!canManageArticles || collaboratorsLoaded) {
+      return;
+    }
+
+    if (collaboratorsRequestRef.current) {
+      await collaboratorsRequestRef.current;
+      return;
+    }
+
+    setCollaboratorsLoading(true);
+    const request = fetch("/api/collaborators?view=directory", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        setCollaborators(d.data || []);
+        setCollaboratorsLoaded(true);
+      })
+      .catch(() => { })
+      .finally(() => {
+        collaboratorsRequestRef.current = null;
+        setCollaboratorsLoading(false);
+      });
+
+    collaboratorsRequestRef.current = request;
+    await request;
+  }, [canManageArticles, collaboratorsLoaded]);
 
   const articleMatchesReviewerScope = useCallback((article: Article) => {
     const normalizedReviewerName = normalizeIdentityValue(article.reviewerName);
@@ -189,7 +222,6 @@ export default function ArticlesPage() {
   const fetchArticles = useCallback((p = 1, s = "", f = { penName: "", status: "", category: "", articleType: "", contentType: "", month: "", year: "" }) => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(p), limit: "30" });
-    if (shouldFetchSplitArticles) params.set("splitView", "true");
     if (s) params.set("search", s);
     if (isWriter && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
     else if (f.penName) params.set("penName", f.penName);
@@ -200,15 +232,14 @@ export default function ArticlesPage() {
     if (f.month) params.set("month", f.month);
     if (f.year) params.set("year", f.year);
     fetch(`/api/articles?${params}`, { cache: "no-store" }).then(r => r.json()).then(d => { setArticles(d.data || []); setPagination(d.pagination || {}); setLoading(false); }).catch(() => setLoading(false));
-  }, [isWriter, shouldFetchSplitArticles, user]);
+  }, [isWriter, user]);
 
   useEffect(() => {
     fetchArticles();
-    fetch("/api/collaborators?view=directory", { cache: "no-store" }).then(r => r.json()).then(d => setCollaborators(d.data || []));
   }, [fetchArticles]);
 
   useEffect(() => {
-    const published = articles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
+    const published = deferredArticles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
     if (published.length === 0) {
       setLinkHealth({});
       return;
@@ -227,26 +258,46 @@ export default function ArticlesPage() {
       if (!existingEntry) return true;
       if (existingEntry.status === "ok") return false;
       return now - existingEntry.checkedAt >= LINK_RECHECK_INTERVAL_MS;
-    });
+    }).slice(0, 10);
     if (pendingUrls.length === 0) {
       return;
     }
-    fetch("/api/check-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: pendingUrls }) })
-      .then(r => r.json())
-      .then(d => {
-        if (d.success && d.results) {
-          const checkedAt = Date.now();
-          const nextEntries = Object.fromEntries(
-            Object.entries(d.results as Record<string, LinkHealthStatus>).map(([url, status]) => [
-              url,
-              { status, checkedAt },
-            ])
-          );
-          setLinkHealth(prev => ({ ...prev, ...nextEntries }));
-        }
-      })
-      .catch(() => { });
-  }, [articles, linkHealth]);
+    const runCheck = () => {
+      fetch("/api/check-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: pendingUrls }) })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.results) {
+            const checkedAt = Date.now();
+            const nextEntries = Object.fromEntries(
+              Object.entries(d.results as Record<string, LinkHealthStatus>).map(([url, status]) => [
+                url,
+                { status, checkedAt },
+              ])
+            );
+            setLinkHealth(prev => ({ ...prev, ...nextEntries }));
+          }
+        })
+        .catch(() => { });
+    };
+
+    const hasIdleCallback = typeof window !== "undefined" && "requestIdleCallback" in window;
+    const idleHandle = hasIdleCallback
+      ? window.requestIdleCallback(runCheck, { timeout: 1500 })
+      : null;
+    const timeoutHandle = hasIdleCallback
+      ? null
+      : globalThis.setTimeout(runCheck, 300);
+
+    return () => {
+      if (idleHandle !== null && hasIdleCallback && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleHandle);
+        return;
+      }
+      if (timeoutHandle !== null) {
+        globalThis.clearTimeout(timeoutHandle);
+      }
+    };
+  }, [deferredArticles, linkHealth]);
 
   const handleSearch = (e?: React.FormEvent) => { e?.preventDefault(); fetchArticles(1, search, filters); };
   const applyFilter = (key: string, val: string) => { const f = { ...filters, [key]: val }; setFilters(f); fetchArticles(1, search, f); };
@@ -373,6 +424,7 @@ export default function ArticlesPage() {
     });
 
   const openDeleteTool = () => {
+    void ensureCollaboratorsLoaded();
     const hasCurrentFilters = search.trim() !== "" || activeFilterCount > 0;
     setDeleteMode(hasCurrentFilters ? "current_filters" : "custom");
     setDeleteCriteria({
@@ -389,6 +441,21 @@ export default function ArticlesPage() {
     setDeletePreview(null);
     setDeleteError("");
     setShowDeleteModal(true);
+  };
+
+  const openArticleModal = (nextFormData: Partial<Article>) => {
+    if (canManageArticles) {
+      void ensureCollaboratorsLoaded();
+    }
+    setFormData(nextFormData);
+    setShowModal(true);
+  };
+
+  const toggleFilters = () => {
+    if (!showFilters && canManageArticles) {
+      void ensureCollaboratorsLoaded();
+    }
+    setShowFilters((prev) => !prev);
   };
 
   const handleDeleteModeChange = (mode: "all" | "current_filters" | "custom") => {
@@ -676,10 +743,10 @@ export default function ArticlesPage() {
 
       setShowModal(false);
       setFormData({});
-      if (data.article && !shouldFetchSplitArticles) {
+      if (data.article) {
         mergeSavedArticleIntoList(data.article as Article, isEditing);
       } else {
-        fetchArticles(shouldFetchSplitArticles ? 1 : pagination.page, search, filters);
+        fetchArticles(pagination.page || 1, search, filters);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1131,7 +1198,7 @@ export default function ArticlesPage() {
     );
   };
 
-  const showSplitArticleSections = shouldFetchSplitArticles;
+  const showSplitArticleSections = shouldShowSplitArticleSections;
   const ctvArticles = articles.filter((article) => article.authorBucket !== "editorial");
   const editorialArticles = articles.filter((article) => article.authorBucket === "editorial");
   const articleSections = [
@@ -1304,7 +1371,7 @@ export default function ArticlesPage() {
                       )}
                     </div>
                     {canEditArticle(a) && (
-                      <button onClick={() => { setFormData({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) }); setShowModal(true); }} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
+                      <button onClick={() => openArticleModal({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) })} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
                         <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                       </button>
                     )}
@@ -1413,7 +1480,7 @@ export default function ArticlesPage() {
             </a>
           )}
           {canCreateArticles && (
-            <button className="btn-ios-pill btn-ios-primary" onClick={() => { setFormData({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" }); setShowModal(true); }}>
+            <button className="btn-ios-pill btn-ios-primary" onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? "" : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
               Thêm bài viết
             </button>
@@ -1442,7 +1509,7 @@ export default function ArticlesPage() {
               style={{ width: "100%", height: 44, padding: "0 16px 0 48px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--glass-border)", borderRadius: 12, color: "var(--text-main)", fontSize: 14 }}
             />
           </div>
-          <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowFilters(!showFilters)} style={{ height: 44 }}>
+          <button className="btn-ios-pill btn-ios-secondary" onClick={toggleFilters} style={{ height: 44 }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>tune</span>
             Bộ lọc {activeFilterCount > 0 && <span style={{ marginLeft: 6, padding: "2px 6px", background: "var(--accent-blue)", color: "white", borderRadius: 6, fontSize: 10, fontWeight: 800 }}>{activeFilterCount}</span>}
           </button>
@@ -1461,8 +1528,8 @@ export default function ArticlesPage() {
                 <CustomSelect
                   value={filters.penName || ""}
                   onChange={(v) => applyFilter("penName", v)}
-                  options={[{ value: "", label: "Tất cả bút danh" }, ...collaborators.map(c => ({ value: c.penName, label: c.penName }))]}
-                  placeholder="Tất cả bút danh"
+                  options={[{ value: "", label: collaboratorsLoading && collaborators.length === 0 ? "Đang tải bút danh..." : "Tất cả bút danh" }, ...collaborators.map(c => ({ value: c.penName, label: c.penName }))]}
+                  placeholder={collaboratorsLoading && collaborators.length === 0 ? "Đang tải bút danh..." : "Tất cả bút danh"}
                   menuMode="portal-bottom"
                 />
               </div>
@@ -1598,7 +1665,7 @@ export default function ArticlesPage() {
           {renderArticleTable(articles, "Chưa có bài viết nào")}
         </div>
       )}
-      {!showSplitArticleSections && pagination.totalPages > 1 && (
+      {pagination.totalPages > 1 && (
         <div className="pagination">
           <button disabled={pagination.page <= 1} onClick={() => fetchArticles(pagination.page - 1)}>← Trước</button>
           <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Trang {pagination.page} / {pagination.totalPages} ({pagination.total} bài)</span>
@@ -1626,7 +1693,8 @@ export default function ArticlesPage() {
                     <CustomSelect
                       value={formData.penName || ""}
                       onChange={v => setFormData({ ...formData, penName: v })}
-                      options={[{ value: "", label: "Chọn CTV" }, ...collaborators.map(c => ({ value: c.penName, label: c.penName }))]}
+                      options={[{ value: "", label: collaboratorsLoading && collaborators.length === 0 ? "Đang tải CTV..." : "Chọn CTV" }, ...collaborators.map(c => ({ value: c.penName, label: c.penName }))]}
+                      placeholder={collaboratorsLoading && collaborators.length === 0 ? "Đang tải CTV..." : "Chọn CTV"}
                     />
                   ) : (
                     <input className="form-input" value={formData.penName || ""} readOnly style={{ background: "rgba(255,255,255,0.01)", opacity: 0.6 }} />
@@ -1941,809 +2009,74 @@ export default function ArticlesPage() {
       )}
 
       {showDeleteModal && canManageArticles && (
-        <div className="modal-overlay" onClick={() => !deleteLoading && !deleteExecuting && setShowDeleteModal(false)}>
-          <div data-testid="article-delete-modal" className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 1080, width: "94vw" }}>
-            <div className="modal-header">
-              <h3 className="modal-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="material-symbols-outlined" style={{ color: "var(--danger)" }}>delete_sweep</span>
-                Công cụ xóa bài viết thông minh
-              </h3>
-              <button className="modal-close" onClick={() => !deleteLoading && !deleteExecuting && setShowDeleteModal(false)}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
-            </div>
-
-            <div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 20 }}>
-              <div style={{ padding: 16, borderRadius: 16, background: "rgba(239, 68, 68, 0.06)", border: "1px solid rgba(239, 68, 68, 0.14)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                  <span className="material-symbols-outlined" style={{ color: "var(--danger)", fontSize: 20 }}>warning</span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: "var(--danger)", textTransform: "uppercase" }}>Thao tác có tác động lớn</span>
-                </div>
-                <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.6 }}>
-                  Khi xóa bài viết, hệ thống cũng xóa comment, review, notification liên quan và reset toàn bộ dữ liệu nhuận bút để tránh lệch số liệu.
-                </div>
-              </div>
-
-              {deleteError && (
-                <div style={{ padding: 16, borderRadius: 16, background: "var(--danger-light)", border: "1px solid rgba(239, 68, 68, 0.18)", color: "var(--danger)", fontSize: 13, fontWeight: 700 }}>
-                  {deleteError}
-                </div>
-              )}
-
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 12 }}>Phạm vi xóa</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                  {[
-                    {
-                      mode: "all" as const,
-                      icon: "database",
-                      title: "Xóa toàn bộ",
-                      description: "Xóa toàn bộ dữ liệu bài viết hiện có.",
-                    },
-                    {
-                      mode: "current_filters" as const,
-                      icon: "filter_alt",
-                      title: "Theo bộ lọc hiện tại",
-                      description: "Dùng chính bộ lọc và ô tìm kiếm đang mở ở trang danh sách.",
-                    },
-                    {
-                      mode: "custom" as const,
-                      icon: "psychology_alt",
-                      title: "Xóa thông minh",
-                      description: "Xóa theo tiêu chí chi tiết như tên bài, bút danh, tháng, năm.",
-                    },
-                  ].map((option) => {
-                    const active = deleteMode === option.mode;
-                    return (
-                      <button
-                        key={option.mode}
-                        type="button"
-                        data-testid={`article-delete-mode-${option.mode}`}
-                        onClick={() => handleDeleteModeChange(option.mode)}
-                        style={{
-                          textAlign: "left",
-                          padding: 16,
-                          borderRadius: 16,
-                          border: active ? "1px solid rgba(239, 68, 68, 0.28)" : "1px solid var(--glass-border)",
-                          background: active ? "rgba(239, 68, 68, 0.06)" : "rgba(255,255,255,0.5)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                          <span className="material-symbols-outlined" style={{ color: active ? "var(--danger)" : "var(--text-muted)", fontSize: 20 }}>{option.icon}</span>
-                          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)" }}>{option.title}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{option.description}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {deleteMode === "all" && (
-                <div style={{ padding: 18, borderRadius: 16, background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Chế độ xóa toàn bộ đang bật</div>
-                  <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.6 }}>
-                    Hệ thống sẽ bỏ qua toàn bộ bộ lọc và xóa tất cả bài viết trong cơ sở dữ liệu. Chỉ nên dùng khi bạn thực sự muốn làm sạch dữ liệu để import lại từ đầu.
-                  </div>
-                </div>
-              )}
-
-              {deleteMode === "current_filters" && (
-                <div style={{ padding: 18, borderRadius: 16, background: "rgba(37, 99, 235, 0.05)", border: "1px solid rgba(37, 99, 235, 0.12)" }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-blue)", marginBottom: 10 }}>Bộ lọc đang áp dụng</div>
-                  {deleteCriteriaSummary.length > 0 ? (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {deleteCriteriaSummary.map((item) => (
-                        <span key={item} className="tag-pill">{item}</span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                      Hiện chưa có bộ lọc hoặc từ khóa tìm kiếm nào trên danh sách bài viết.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {deleteMode === "custom" && (
-                <>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Tiêu chí xóa thông minh</div>
-                      <div style={{ fontSize: 13, color: "var(--text-main)" }}>Có thể kết hợp nhiều điều kiện như tên bài, bút danh, tháng/năm, trạng thái, loại bài.</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button type="button" className="btn-ios-pill btn-ios-secondary" onClick={() => applyDeletePreset("drafts_this_month")}>
-                        Nháp tháng này
-                      </button>
-                      <button type="button" className="btn-ios-pill btn-ios-secondary" onClick={() => applyDeletePreset("needs_fix")}>
-                        Bài cần sửa
-                      </button>
-                      <button type="button" className="btn-ios-pill btn-ios-secondary" onClick={() => applyDeletePreset("clear")}>
-                        Xóa tiêu chí
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Tên bài viết</label>
-                      <input
-                        data-testid="article-delete-title-query"
-                        className="form-input"
-                        value={deleteCriteria.titleQuery}
-                        onChange={(e) => updateDeleteCriteria("titleQuery", e.target.value)}
-                        placeholder="Nhập một phần tiêu đề"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Tìm kiếm tổng quát</label>
-                      <input
-                        data-testid="article-delete-search"
-                        className="form-input"
-                        value={deleteCriteria.search}
-                        onChange={(e) => updateDeleteCriteria("search", e.target.value)}
-                        placeholder="Tiêu đề, mã bài, ghi chú..."
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Bút danh</label>
-                      <CustomSelect
-                        value={deleteCriteria.penName}
-                        onChange={(value) => updateDeleteCriteria("penName", value)}
-                        options={[{ value: "", label: "Tất cả bút danh" }, ...collaborators.map((c) => ({ value: c.penName, label: c.penName }))]}
-                        placeholder="Tất cả bút danh"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Người duyệt</label>
-                      <input
-                        data-testid="article-delete-reviewer"
-                        className="form-input"
-                        value={deleteCriteria.reviewerName}
-                        onChange={(e) => updateDeleteCriteria("reviewerName", e.target.value)}
-                        placeholder="Tên người duyệt"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Trạng thái</label>
-                      <CustomSelect
-                        value={deleteCriteria.status}
-                        onChange={(value) => updateDeleteCriteria("status", value)}
-                        options={ARTICLE_STATUS_OPTIONS}
-                        placeholder="Tất cả"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Danh mục</label>
-                      <input
-                        className="form-input"
-                        value={deleteCriteria.category}
-                        onChange={(e) => updateDeleteCriteria("category", e.target.value)}
-                        placeholder="Ví dụ: ICT, Gia dụng"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Loại bài</label>
-                      <CustomSelect
-                        value={deleteCriteria.articleType}
-                        onChange={(value) => updateDeleteCriteria("articleType", value)}
-                        options={[{ value: "", label: "Tất cả loại bài" }, ...ARTICLE_TYPE_OPTIONS.map((value) => ({ value, label: value }))]}
-                        placeholder="Tất cả loại bài"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Loại nội dung</label>
-                      <CustomSelect
-                        value={deleteCriteria.contentType}
-                        onChange={(value) => updateDeleteCriteria("contentType", value)}
-                        options={[{ value: "", label: "Tất cả loại nội dung" }, ...CONTENT_TYPE_OPTIONS.map((value) => ({ value, label: value }))]}
-                        placeholder="Tất cả loại nội dung"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Tháng</label>
-                      <CustomSelect
-                        value={deleteCriteria.month}
-                        onChange={(value) => updateDeleteCriteria("month", value)}
-                        options={MONTH_OPTIONS}
-                        placeholder="Tháng"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Năm</label>
-                      <CustomSelect
-                        value={deleteCriteria.year}
-                        onChange={(value) => updateDeleteCriteria("year", value)}
-                        options={YEAR_OPTIONS}
-                        placeholder="Năm"
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ padding: 14, borderRadius: 14, background: "rgba(0,0,0,0.02)", border: "1px solid var(--glass-border)", fontSize: 13, color: "var(--text-muted)" }}>
-                    {customDeleteCriteriaCount > 0 ? `Đang có ${customDeleteCriteriaCount} tiêu chí tùy chỉnh.` : "Chưa có tiêu chí nào. Hãy nhập ít nhất một điều kiện hoặc chuyển sang chế độ xóa toàn bộ."}
-                  </div>
-                </>
-              )}
-
-              <div style={{ padding: 18, borderRadius: 18, background: "rgba(255,255,255,0.5)", border: "1px solid var(--glass-border)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Xem trước phạm vi xóa</div>
-                    <div style={{ fontSize: 13, color: "var(--text-main)" }}>Xem trước số bài, dữ liệu liên đới và mẫu bản ghi sẽ bị xóa.</div>
-                  </div>
-                  {deletePreview && (
-                    <span className="tag-pill" style={{ color: deletePreview.total > 0 ? "var(--danger)" : "var(--text-muted)" }}>
-                      {deletePreview.total} bài khớp điều kiện
-                    </span>
-                  )}
-                </div>
-
-                {deletePreview ? (
-                  <>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 16 }}>
-                      {[
-                        { label: "Bài viết", value: deletePreview.total, color: "var(--danger)", icon: "article" },
-                        { label: "Comment", value: deletePreview.related.comments, color: "var(--accent-blue)", icon: "forum" },
-                        { label: "Review", value: deletePreview.related.reviews, color: "var(--accent-orange)", icon: "rate_review" },
-                        { label: "Notification", value: deletePreview.related.notifications, color: "var(--accent-purple)", icon: "notifications" },
-                        { label: "Payment reset", value: deletePreview.related.payments, color: "var(--text-main)", icon: "payments" },
-                      ].map((item) => (
-                        <div key={item.label} style={{ padding: 14, borderRadius: 14, background: "rgba(255,255,255,0.7)", border: "1px solid var(--glass-border)" }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: 20, color: item.color }}>{item.icon}</span>
-                          <div style={{ fontSize: 24, fontWeight: 800, color: item.color, marginTop: 6 }}>{item.value}</div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>{item.label}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {deletePreview.sample.length > 0 ? (
-                      <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid var(--glass-border)" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                          <thead>
-                            <tr style={{ background: "rgba(0,0,0,0.02)" }}>
-                              <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase" }}>Ngày</th>
-                              <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase" }}>Tiêu đề</th>
-                              <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase" }}>Bút danh</th>
-                              <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase" }}>Trạng thái</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {deletePreview.sample.map((item) => (
-                              <tr key={item.id} style={{ borderTop: "1px solid var(--glass-border)" }}>
-                                <td style={{ padding: "10px 12px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{item.date}</td>
-                                <td style={{ padding: "10px 12px", color: "var(--text-main)", fontWeight: 600, minWidth: 320 }}>{item.title}</td>
-                                <td style={{ padding: "10px 12px", color: "var(--accent-blue)", fontWeight: 700 }}>{item.penName}</td>
-                                <td style={{ padding: "10px 12px" }}>{statusBadge(item.status)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div style={{ padding: 20, borderRadius: 14, border: "1px dashed var(--glass-border)", color: "var(--text-muted)" }}>
-                        Không có bài viết nào khớp điều kiện hiện tại.
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ padding: 20, borderRadius: 14, border: "1px dashed var(--glass-border)", color: "var(--text-muted)" }}>
-                    Chưa xem trước. Hãy bấm `Xem trước phạm vi xóa` trước khi thực thi.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowDeleteModal(false)} disabled={deleteExecuting}>
-                Hủy
-              </button>
-              <button data-testid="article-delete-preview-trigger" className="btn-ios-pill btn-ios-secondary" onClick={() => requestDeletePreview()} disabled={deleteLoading || deleteExecuting}>
-                {deleteLoading ? (
-                  <><span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>sync</span> Đang phân tích...</>
-                ) : (
-                  <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>preview</span> Xem trước phạm vi xóa</>
-                )}
-              </button>
-              <button
-                className="btn-ios-pill"
-                data-testid="article-delete-confirm"
-                onClick={executeDelete}
-                disabled={deleteExecuting || deleteLoading || !deletePreview || deletePreview.total === 0}
-                style={{ background: "rgba(239, 68, 68, 0.1)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.18)" }}
-              >
-                {deleteExecuting ? (
-                  <><span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>sync</span> Đang xóa...</>
-                ) : (
-                  <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_forever</span> Xóa dữ liệu đã xem trước</>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ArticleDeleteModal
+          deleteLoading={deleteLoading}
+          deleteExecuting={deleteExecuting}
+          deleteError={deleteError}
+          deleteMode={deleteMode}
+          deleteCriteriaSummary={deleteCriteriaSummary}
+          deleteCriteria={deleteCriteria}
+          customDeleteCriteriaCount={customDeleteCriteriaCount}
+          collaboratorsLoading={collaboratorsLoading}
+          collaborators={collaborators}
+          articleStatusOptions={ARTICLE_STATUS_OPTIONS}
+          articleTypeOptions={ARTICLE_TYPE_OPTIONS}
+          contentTypeOptions={CONTENT_TYPE_OPTIONS}
+          monthOptions={MONTH_OPTIONS}
+          yearOptions={YEAR_OPTIONS}
+          deletePreview={deletePreview}
+          onClose={() => setShowDeleteModal(false)}
+          onDeleteModeChange={handleDeleteModeChange}
+          updateDeleteCriteria={updateDeleteCriteria}
+          applyDeletePreset={applyDeletePreset}
+          requestDeletePreview={() => requestDeletePreview(deleteMode)}
+          executeDelete={executeDelete}
+          statusBadge={statusBadge}
+        />
       )}
 
-      {/* ═══ IMPORT WIZARD MODAL ═══ */}
       {showImportWizard && (
-        <div className="modal-overlay" onClick={() => !importing && setShowImportWizard(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 1040, width: "92vw" }}>
-            <div className="modal-header">
-              <h3 className="modal-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="material-symbols-outlined" style={{ color: "var(--accent-blue)" }}>upload_file</span>
-                Import Excel nâng cao
-              </h3>
-              <button className="modal-close" onClick={() => !importing && setShowImportWizard(false)}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
-            </div>
-
-            {/* Step Indicator */}
-            <div style={{ display: "flex", gap: 12, padding: "16px 24px", borderBottom: "1px solid var(--glass-border)" }}>
-              {[
-                { n: 1, label: "Tải file", icon: "cloud_upload" },
-                { n: 2, label: "Xem trước & Mapping", icon: "table_chart" },
-                { n: 3, label: "Kết quả", icon: "check_circle" }
-              ].map(s => (
-                <div key={s.n} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: importStep >= s.n ? "rgba(37, 99, 235, 0.08)" : "rgba(0,0,0,0.02)", border: `1px solid ${importStep === s.n ? "var(--accent-blue)" : "var(--glass-border)"}`, transition: "all 0.3s" }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: importStep >= s.n ? "var(--accent-blue)" : "var(--text-muted)" }}>{importStep > s.n ? "check_circle" : s.icon}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: importStep >= s.n ? "var(--accent-blue)" : "var(--text-muted)" }}>{s.label}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="modal-body" style={{ maxHeight: "60vh", overflowY: "auto" }}>
-              {importStep === 1 && (
-                importFile ? (
-                  <div style={{ textAlign: "center", padding: 60 }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 48, color: "var(--accent-blue)", animation: "glowPulse 2s infinite" }}>analytics</span>
-                    <p style={{ marginTop: 16, fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>Đang phân tích workbook...</p>
-                    <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>Dò sheet, dòng header, kiểu dữ liệu và gợi ý mapping tự động</p>
-                  </div>
-                ) : (
-                  <div style={{ textAlign: "center", padding: 48 }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 48, color: "var(--accent-blue)" }}>upload_file</span>
-                    <p style={{ marginTop: 14, fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>Chọn file để bắt đầu import</p>
-                    <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>Hỗ trợ `.xlsx`, `.xls`, `.csv`</p>
-                    <button className="btn-ios-pill btn-ios-primary" style={{ marginTop: 20 }} onClick={triggerImportPicker}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>folder_open</span>
-                      Chọn file
-                    </button>
-                  </div>
-                )
-              )}
-
-              {importStep === 2 && importAnalysis && (
-                <>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 20 }}>
-                    <div style={{ padding: 16, borderRadius: 16, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.12)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>File</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{importFile?.name}</div>
-                    </div>
-                    <div style={{ padding: 16, borderRadius: 16, background: "rgba(16, 185, 129, 0.06)", border: "1px solid rgba(16, 185, 129, 0.12)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Dòng dữ liệu</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text-main)" }}>{importAnalysis.dataRowCount}</div>
-                    </div>
-                    <div style={{ padding: 16, borderRadius: 16, background: "rgba(249, 115, 22, 0.06)", border: "1px solid rgba(249, 115, 22, 0.12)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Header hiện tại</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text-main)" }}>Dòng {importAnalysis.headerRowNumber}</div>
-                    </div>
-                    <div style={{ padding: 16, borderRadius: 16, background: "rgba(168, 85, 247, 0.06)", border: "1px solid rgba(168, 85, 247, 0.12)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Ánh xạ</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text-main)" }}>{mappedFields.length}/{importAnalysis.columns.length}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: 20, padding: 14, borderRadius: 14, background: "rgba(59, 130, 246, 0.06)", border: "1px solid rgba(59, 130, 246, 0.14)" }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--accent-blue)", textTransform: "uppercase", marginBottom: 8 }}>Hướng dẫn nhanh</div>
-                    <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.6 }}>
-                      1) Chọn đúng `Sheet` và `Dòng header`.
-                      <br />
-                      2) Kiểm tra các trường quan trọng bên dưới: `Mã bài viết`, `Ngày viết`, `Tiêu đề`, `Bút danh`, `Trạng thái`, `Link bài viết`.
-                      <br />
-                      3) Với file có cả `STT` và `ID bài viết`, hãy map `STT` thành `— Bỏ qua —`, và map cột `ID bài viết` vào `Mã bài viết`.
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>Trường quan trọng cần kiểm tra</h4>
-                      <span className="tag-pill" style={{ fontSize: 11 }}>
-                        {importantFieldInsights.filter((item) => item.mapped).length}/{importantFieldInsights.length} đã map
-                      </span>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
-                      {importantFieldInsights.map((item) => (
-                        <div key={item.field} style={{ padding: 12, borderRadius: 12, border: `1px solid ${item.mapped ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)"}`, background: item.mapped ? "rgba(16, 185, 129, 0.06)" : "rgba(239, 68, 68, 0.05)" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-main)" }}>{item.label}</span>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: item.mapped ? "#10b981" : "var(--danger)", textTransform: "uppercase" }}>
-                              {item.mapped ? "Đã map" : "Chưa map"}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{item.columnLabel}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 24 }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Sheet dữ liệu</label>
-                      <CustomSelect
-                        value={importSheetName}
-                        onChange={async (value) => {
-                          if (!importFile) return;
-                          setImportSheetName(value);
-                          await analyzeImportFile(importFile, value, undefined);
-                        }}
-                        options={importAnalysis.sheets.map(sheet => ({
-                          value: sheet.name,
-                          label: `${sheet.name} (${sheet.totalRows} dòng${sheet.isHidden ? ", ẩn" : ""})`,
-                        }))}
-                        placeholder="Chọn sheet"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Dòng header</label>
-                      <CustomSelect
-                        value={String(importHeaderRowNumber)}
-                        onChange={async (value) => {
-                          if (!importFile) return;
-                          const nextRow = Number(value);
-                          setImportHeaderRowNumber(nextRow);
-                          await analyzeImportFile(importFile, importSheetName, nextRow);
-                        }}
-                        options={importAnalysis.headerCandidates.map(candidate => ({
-                          value: String(candidate.rowNumber),
-                          label: `Dòng ${candidate.rowNumber} • score ${candidate.score}`,
-                        }))}
-                        placeholder="Chọn dòng header"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0, display: "flex", alignItems: "flex-end" }}>
-                      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: 14, borderRadius: 14, border: "1px solid rgba(239, 68, 68, 0.16)", background: "rgba(239, 68, 68, 0.04)", width: "100%", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={replaceExistingImport}
-                          onChange={(e) => {
-                            setReplaceExistingImport(e.target.checked);
-                            setImportDryRun(null);
-                          }}
-                          style={{ marginTop: 2 }}
-                        />
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>Thay thế toàn bộ dữ liệu bài viết cũ</div>
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Khi bật, hệ thống sẽ xóa bài viết, comment/review bài viết, thanh toán sinh từ bài viết và notification gắn bài viết trước khi import.</div>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {importAnalysis.warnings.length > 0 && (
-                    <div style={{ marginBottom: 24, padding: 16, borderRadius: 16, background: "rgba(249, 115, 22, 0.06)", border: "1px solid rgba(249, 115, 22, 0.14)" }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--accent-orange)", textTransform: "uppercase", marginBottom: 10 }}>Cảnh báo phân tích</div>
-                      {importAnalysis.warnings.map((warning, index) => (
-                        <div key={index} style={{ fontSize: 13, color: "var(--text-main)", marginBottom: index === importAnalysis.warnings.length - 1 ? 0 : 8 }}>
-                          • {warning}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {importError && (
-                    <div style={{ marginBottom: 24, padding: 16, borderRadius: 16, background: "var(--danger-light)", border: "1px solid rgba(239, 68, 68, 0.18)", color: "var(--danger)", fontSize: 13, fontWeight: 700 }}>
-                      {importError}
-                    </div>
-                  )}
-
-                  {(missingRequiredImportFields.length > 0 || duplicateMappedFields.length > 0) && (
-                    <div style={{ marginBottom: 24, padding: 16, borderRadius: 16, background: "rgba(239, 68, 68, 0.06)", border: "1px solid rgba(239, 68, 68, 0.14)" }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--danger)", textTransform: "uppercase", marginBottom: 10 }}>Cần xử lý trước khi import</div>
-                      {missingRequiredImportFields.length > 0 && (
-                        <div style={{ fontSize: 13, color: "var(--text-main)", marginBottom: duplicateMappedFields.length > 0 ? 8 : 0 }}>
-                          • Thiếu trường bắt buộc: {missingRequiredImportFields.join(", ")}
-                        </div>
-                      )}
-                      {duplicateMappedFields.length > 0 && (
-                        <div style={{ fontSize: 13, color: "var(--text-main)" }}>
-                          • Có trường đang bị map trùng: {Array.from(new Set(duplicateMappedFields)).join(", ")}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                      <div>
-                        <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>Ánh xạ cột chi tiết</h4>
-                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Hệ thống đã phân tích sheet `{importAnalysis.sheetName}` với {importAnalysis.totalRows} dòng vật lý.</p>
-                      </div>
-                      <span className="tag-pill" style={{ fontSize: 11 }}>{mappedFields.length}/{importAnalysis.columns.length} cột đã ánh xạ</span>
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {importAnalysis.columns.map((column) => (
-                        <div key={column.key} style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1.2fr) minmax(220px, 0.9fr) minmax(280px, 1.1fr)", gap: 16, padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.5)" }}>
-                          <div>
-                            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
-                              <span style={{ padding: "3px 8px", borderRadius: 999, background: "rgba(37, 99, 235, 0.08)", color: "var(--accent-blue)", fontSize: 11, fontWeight: 800 }}>{column.letter}</span>
-                              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{column.header}</span>
-                              <span style={{ padding: "3px 8px", borderRadius: 999, background: "rgba(15, 23, 42, 0.05)", color: "var(--text-muted)", fontSize: 11, fontWeight: 700 }}>{column.inferredType}</span>
-                            </div>
-                            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                              {column.sampleValues.length > 0 ? column.sampleValues.join(" • ") : "Không có mẫu dữ liệu"}
-                            </div>
-                          </div>
-
-                          <div>
-                            <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Gợi ý tốt nhất</div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                              {column.suggestions.slice(0, 3).map((suggestion) => (
-                                <div key={`${column.key}-${suggestion.field}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12 }}>
-                                  <span style={{ color: suggestion.field === column.suggestedField ? "var(--accent-blue)" : "var(--text-main)", fontWeight: suggestion.field === column.suggestedField ? 700 : 500 }}>
-                                    {IMPORT_FIELD_OPTIONS.find((option) => option.value === suggestion.field)?.label || suggestion.field}
-                                  </span>
-                                  <span style={{ color: "var(--text-muted)", fontWeight: 700 }}>score {suggestion.score}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Map vào trường hệ thống</div>
-                            <CustomSelect
-                              value={importMapping[column.key] || ""}
-                              onChange={(value) => updateImportMapping(column.key, value)}
-                              options={IMPORT_FIELD_OPTIONS}
-                              placeholder="Chọn trường..."
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
-                      <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 16, verticalAlign: "middle", marginRight: 6 }}>rule</span>
-                        Preview dữ liệu chuẩn hóa trước khi nhập
-                      </h4>
-                      <button
-                        className="btn-ios-pill btn-ios-secondary"
-                        style={{ padding: "8px 14px" }}
-                        onClick={runImportDryRun}
-                        disabled={importDryRunLoading || importing || missingRequiredImportFields.length > 0 || duplicateMappedFields.length > 0}
-                      >
-                        {importDryRunLoading ? (
-                          <><span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>sync</span> Đang tạo preview...</>
-                        ) : (
-                          <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>preview</span> Phân tích preview nhập</>
-                        )}
-                      </button>
-                    </div>
-
-                    {!importDryRun ? (
-                      <div style={{ padding: 16, borderRadius: 14, border: "1px dashed var(--glass-border)", color: "var(--text-muted)", fontSize: 13 }}>
-                        Bấm <strong>`Phân tích preview nhập`</strong> để xem chính xác dòng nào được nhập, dòng nào bị trùng/bị bỏ qua và giá trị chuẩn hóa của `ID`, `Trạng thái`, `Link`.
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
-                          <div style={{ padding: 10, borderRadius: 12, background: "rgba(15, 23, 42, 0.04)", border: "1px solid var(--glass-border)" }}>
-                            <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>Tổng dòng</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-main)" }}>{importDryRun.total}</div>
-                          </div>
-                          <div style={{ padding: 10, borderRadius: 12, background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.16)" }}>
-                            <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>Có thể nhập</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: "#10b981" }}>{importDryRun.importable}</div>
-                          </div>
-                          <div style={{ padding: 10, borderRadius: 12, background: "rgba(249, 115, 22, 0.08)", border: "1px solid rgba(249, 115, 22, 0.16)" }}>
-                            <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>Trùng lặp</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-orange)" }}>{importDryRun.duplicates}</div>
-                          </div>
-                          <div style={{ padding: 10, borderRadius: 12, background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
-                            <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>Bị bỏ qua</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)" }}>{importDryRun.skipped}</div>
-                          </div>
-                        </div>
-
-                        <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid var(--glass-border)" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                            <thead>
-                              <tr style={{ background: "rgba(0,0,0,0.02)" }}>
-                                <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>Dòng</th>
-                                <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>ID bài</th>
-                                <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>Ngày</th>
-                                <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>Tiêu đề</th>
-                                <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>Bút danh</th>
-                                <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>Trạng thái</th>
-                                <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>Kết quả</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {importDryRun.previewRows.map((row) => (
-                                <tr key={`dryrun-${row.rowNumber}`} style={{ borderTop: "1px solid var(--glass-border)" }}>
-                                  <td style={{ padding: "10px 12px", color: "var(--text-muted)", fontWeight: 700 }}>#{row.rowNumber}</td>
-                                  <td style={{ padding: "10px 12px", color: "var(--text-main)" }}>{row.normalized.articleId || "—"}</td>
-                                  <td style={{ padding: "10px 12px", color: "var(--text-main)" }}>{row.normalized.date || "—"}</td>
-                                  <td style={{ padding: "10px 12px", color: "var(--text-main)", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.normalized.title || "—"}</td>
-                                  <td style={{ padding: "10px 12px", color: "var(--text-main)" }}>{row.normalized.penName || "—"}</td>
-                                  <td style={{ padding: "10px 12px", color: "var(--text-main)" }}>{row.normalized.status || "—"}</td>
-                                  <td style={{ padding: "10px 12px", color: row.canImport ? "#10b981" : row.duplicate ? "var(--accent-orange)" : "var(--danger)", fontWeight: 700 }}>
-                                    {row.canImport ? "Sẽ nhập" : row.duplicate ? "Trùng lặp" : "Bỏ qua"}
-                                    {row.issues.length > 0 && (
-                                      <div style={{ marginTop: 4, color: "var(--text-muted)", fontWeight: 500, maxWidth: 320 }}>
-                                        {row.issues.join("; ")}
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div style={{ marginTop: 24 }}>
-                    <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", marginBottom: 12 }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 16, verticalAlign: "middle", marginRight: 6 }}>preview</span>
-                      Preview sau khi mapping
-                    </h4>
-                    {mappedPreviewFields.length === 0 ? (
-                      <div style={{ padding: 20, borderRadius: 14, border: "1px dashed var(--glass-border)", color: "var(--text-muted)" }}>
-                        Chọn ít nhất một cột để xem preview.
-                      </div>
-                    ) : (
-                      <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid var(--glass-border)" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                          <thead>
-                            <tr style={{ background: "rgba(0,0,0,0.02)" }}>
-                              <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>Dòng</th>
-                              {mappedPreviewFields.map((field) => (
-                                <th key={field.value} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                                  {field.label}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {importAnalysis.sampleRows.map((row) => (
-                              <tr key={row.rowNumber} style={{ borderTop: "1px solid var(--glass-border)" }}>
-                                <td style={{ padding: "10px 12px", color: "var(--text-muted)", fontWeight: 700 }}>#{row.rowNumber}</td>
-                                {mappedPreviewFields.map((field) => (
-                                  <td key={`${row.rowNumber}-${field.value}`} style={{ padding: "10px 12px", color: "var(--text-main)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {resolveImportPreviewValue(row, field.value)}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ marginTop: 24 }}>
-                    <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", marginBottom: 12 }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 16, verticalAlign: "middle", marginRight: 6 }}>table_chart</span>
-                      Mẫu dữ liệu gốc theo cột đã phân tích
-                    </h4>
-                    <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid var(--glass-border)" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                        <thead>
-                          <tr style={{ background: "rgba(0,0,0,0.02)" }}>
-                            <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>Dòng</th>
-                            {importAnalysis.columns.map((column) => (
-                              <th key={column.key} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "var(--text-muted)", fontSize: 10, textTransform: "uppercase", minWidth: 150 }}>
-                                {column.letter} • {column.header}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {importAnalysis.sampleRows.map((row) => (
-                            <tr key={`raw-${row.rowNumber}`} style={{ borderTop: "1px solid var(--glass-border)" }}>
-                              <td style={{ padding: "10px 12px", color: "var(--text-muted)", fontWeight: 700 }}>#{row.rowNumber}</td>
-                              {importAnalysis.columns.map((column) => (
-                                <td key={`${row.rowNumber}-${column.key}`} style={{ padding: "10px 12px", color: "var(--text-main)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {row.values[column.key] || "—"}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {importStep === 3 && importResult && (
-                <div style={{ textAlign: "center", padding: 32 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 56, color: "var(--accent-teal)" }}>task_alt</span>
-                  <h3 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-main)", marginTop: 16 }}>Import hoàn tất!</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 24 }}>
-                    {[
-                      { label: "Tổng dòng", value: importResult.total, color: "var(--text-main)", icon: "description" },
-                      { label: "Đã nhập", value: importResult.imported, color: "var(--accent-teal)", icon: "check_circle" },
-                      { label: "Trùng lặp", value: importResult.duplicates || 0, color: "var(--accent-orange)", icon: "content_copy" },
-                      { label: "Bỏ qua", value: importResult.skipped, color: "var(--text-muted)", icon: "skip_next" },
-                    ].map(s => (
-                      <div key={s.label} style={{ padding: 16, borderRadius: 16, background: "rgba(0,0,0,0.02)", border: "1px solid var(--glass-border)" }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 24, color: s.color }}>{s.icon}</span>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: s.color, marginTop: 4 }}>{s.value}</div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>{s.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, textAlign: "left" }}>
-                    <div style={{ padding: 14, borderRadius: 14, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.5)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Sheet</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{importResult.sheetName || importSheetName}</div>
-                    </div>
-                    <div style={{ padding: 14, borderRadius: 14, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.5)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Header</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>Dòng {importResult.headerRowNumber || importHeaderRowNumber}</div>
-                    </div>
-                    <div style={{ padding: 14, borderRadius: 14, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.5)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Chế độ</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{importResult.clearedExisting ? "Đã thay thế dữ liệu cũ" : "Chỉ thêm dữ liệu mới"}</div>
-                    </div>
-                  </div>
-                  {importResult.warnings?.length ? (
-                    <div style={{ marginTop: 24, textAlign: "left", padding: 16, borderRadius: 14, background: "rgba(249, 115, 22, 0.05)", border: "1px solid rgba(249, 115, 22, 0.15)" }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--accent-orange)", marginBottom: 8 }}>Cảnh báo còn lại</div>
-                      {importResult.warnings.map((warning, index) => (
-                        <div key={index} style={{ fontSize: 12, color: "var(--text-main)", marginBottom: index === importResult.warnings!.length - 1 ? 0 : 4 }}>• {warning}</div>
-                      ))}
-                    </div>
-                  ) : null}
-                  {importResult.errors?.length > 0 && (
-                    <div style={{ marginTop: 24, textAlign: "left", padding: 16, borderRadius: 14, background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.15)" }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "#ef4444", marginBottom: 8 }}>⚠️ Lỗi chi tiết:</div>
-                      {importResult.errors.map((err: string, i: number) => (
-                        <div key={i} style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>• {err}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer">
-              {importStep === 1 && !importFile && (
-                <>
-                  <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowImportWizard(false)}>Đóng</button>
-                  <button className="btn-ios-pill btn-ios-primary" onClick={triggerImportPicker}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>folder_open</span> Chọn file
-                  </button>
-                </>
-              )}
-              {importStep === 2 && (
-                <>
-                  <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowImportWizard(false)}>Hủy bỏ</button>
-                  <button className="btn-ios-pill btn-ios-primary" onClick={executeImport} disabled={importing || missingRequiredImportFields.length > 0 || duplicateMappedFields.length > 0}>
-                    {importing ? (
-                      <><span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>sync</span> Đang nhập...</>
-                    ) : (
-                      <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>file_download</span> Xác nhận nhập {importAnalysis?.dataRowCount} dòng</>
-                    )}
-                  </button>
-                </>
-              )}
-              {importStep === 3 && (
-                <button className="btn-ios-pill btn-ios-primary" onClick={() => setShowImportWizard(false)}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>done</span> Hoàn tất
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <ArticleImportWizard
+          importing={importing}
+          importStep={importStep}
+          importFile={importFile}
+          importAnalysis={importAnalysis}
+          importMapping={importMapping}
+          importSheetName={importSheetName}
+          importHeaderRowNumber={importHeaderRowNumber}
+          replaceExistingImport={replaceExistingImport}
+          importError={importError}
+          importDryRun={importDryRun}
+          importDryRunLoading={importDryRunLoading}
+          importResult={importResult}
+          missingRequiredImportFields={missingRequiredImportFields}
+          duplicateMappedFields={duplicateMappedFields}
+          mappedFields={mappedFields}
+          importantFieldInsights={importantFieldInsights}
+          mappedPreviewFields={mappedPreviewFields}
+          importFieldOptions={IMPORT_FIELD_OPTIONS}
+          onClose={() => setShowImportWizard(false)}
+          onTriggerImportPicker={triggerImportPicker}
+          onSheetChange={async (value) => {
+            if (!importFile) return;
+            setImportSheetName(value);
+            await analyzeImportFile(importFile, value, undefined);
+          }}
+          onHeaderRowChange={async (value) => {
+            if (!importFile) return;
+            const nextRow = Number(value);
+            setImportHeaderRowNumber(nextRow);
+            await analyzeImportFile(importFile, importSheetName, nextRow);
+          }}
+          onReplaceExistingChange={(checked) => {
+            setReplaceExistingImport(checked);
+            setImportDryRun(null);
+          }}
+          onUpdateImportMapping={updateImportMapping}
+          onRunImportDryRun={runImportDryRun}
+          onExecuteImport={executeImport}
+          resolveImportPreviewValue={resolveImportPreviewValue}
+        />
       )}
       </div>
 
