@@ -49,7 +49,21 @@ export async function GET(request: NextRequest) {
     }
 
     const rows = await db
-      .select()
+      .select({
+        id: feedbackEntries.id,
+        userId: feedbackEntries.userId,
+        teamId: feedbackEntries.teamId,
+        submitterName: feedbackEntries.submitterName,
+        category: feedbackEntries.category,
+        title: feedbackEntries.title,
+        message: feedbackEntries.message,
+        pageContext: feedbackEntries.pageContext,
+        rating: feedbackEntries.rating,
+        status: feedbackEntries.status,
+        adminNotes: feedbackEntries.adminNotes,
+        createdAt: feedbackEntries.createdAt,
+        updatedAt: feedbackEntries.updatedAt,
+      })
       .from(feedbackEntries)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(feedbackEntries.id))

@@ -396,7 +396,14 @@ export async function GET() {
             }
         }
 
-        const allArticles = await loadStatisticsArticles();
+        const candidateWhere = identityCandidates.length === 1
+            ? eq(articles.penName, identityCandidates[0])
+            : identityCandidates.length > 1
+                ? inArray(articles.penName, identityCandidates)
+                : undefined;
+        const allArticles = candidateWhere
+            ? await loadStatisticsArticles(candidateWhere)
+            : [];
         const scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
         const totalArticles = scopedArticles.length;
 

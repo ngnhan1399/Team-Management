@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url);
-        const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 500);
+        const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 500);
         const action = searchParams.get("action") || "";
         const entity = searchParams.get("entity") || "";
 
@@ -27,7 +27,15 @@ export async function GET(request: NextRequest) {
         if (entity) whereConditions.push(eq(auditLogs.entity, entity));
 
         const rows = await db
-            .select()
+            .select({
+                id: auditLogs.id,
+                userId: auditLogs.userId,
+                action: auditLogs.action,
+                entity: auditLogs.entity,
+                entityId: auditLogs.entityId,
+                payload: auditLogs.payload,
+                createdAt: auditLogs.createdAt,
+            })
             .from(auditLogs)
             .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
             .orderBy(desc(auditLogs.id))

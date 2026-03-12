@@ -28,7 +28,16 @@ export async function GET(request: NextRequest) {
 
         const [data, unreadCount] = await Promise.all([
             db
-                .select()
+                .select({
+                    id: notifications.id,
+                    toUserId: notifications.toUserId,
+                    type: notifications.type,
+                    title: notifications.title,
+                    message: notifications.message,
+                    relatedArticleId: notifications.relatedArticleId,
+                    isRead: notifications.isRead,
+                    createdAt: notifications.createdAt,
+                })
                 .from(notifications)
                 .where(and(...conditions))
                 .orderBy(desc(notifications.id))

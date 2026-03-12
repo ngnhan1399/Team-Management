@@ -25,6 +25,19 @@ const collaboratorDirectorySelect = {
     status: collaborators.status,
 };
 
+const collaboratorListSelect = {
+    ...collaboratorDirectorySelect,
+    phone: collaborators.phone,
+    dateOfBirth: collaborators.dateOfBirth,
+    cccd: collaborators.cccd,
+    cccdDate: collaborators.cccdDate,
+    taxId: collaborators.taxId,
+    bankAccount: collaborators.bankAccount,
+    bankName: collaborators.bankName,
+    deadline: collaborators.deadline,
+    createdAt: collaborators.createdAt,
+};
+
 type LinkedUserSummary = {
     id: number;
     email: string;
@@ -160,7 +173,7 @@ export async function GET(request: NextRequest) {
                     .where(scopedTeamId ? eq(collaborators.teamId, scopedTeamId) : undefined)
                     .all()
                 : await db
-                    .select()
+                    .select(collaboratorListSelect)
                     .from(collaborators)
                     .where(scopedTeamId ? eq(collaborators.teamId, scopedTeamId) : undefined)
                     .all();
@@ -181,7 +194,7 @@ export async function GET(request: NextRequest) {
 
         const own = useDirectoryView
             ? await db.select(collaboratorDirectorySelect).from(collaborators).where(eq(collaborators.id, collaboratorId)).all()
-            : await db.select().from(collaborators).where(eq(collaborators.id, collaboratorId)).all();
+            : await db.select(collaboratorListSelect).from(collaborators).where(eq(collaborators.id, collaboratorId)).all();
         return NextResponse.json({ success: true, data: own.map(mapCollaboratorForResponse) });
     } catch (error) {
         return handleServerError("collaborators.get", error);
@@ -527,7 +540,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Invalid collaborator ID" }, { status: 400 });
         }
 
-        const collaborator = await db.select().from(collaborators).where(eq(collaborators.id, collaboratorId)).get();
+        const collaborator = await db.select({ id: collaborators.id, teamId: collaborators.teamId, name: collaborators.name, penName: collaborators.penName }).from(collaborators).where(eq(collaborators.id, collaboratorId)).get();
         if (!collaborator) {
             return NextResponse.json({ success: false, error: "Không tìm thấy thành viên" }, { status: 404 });
         }

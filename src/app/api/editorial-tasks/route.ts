@@ -42,10 +42,24 @@ export async function GET(request: NextRequest) {
     }
 
     let data = await db
-      .select()
+      .select({
+        id: editorialTasks.id,
+        teamId: editorialTasks.teamId,
+        title: editorialTasks.title,
+        description: editorialTasks.description,
+        assigneePenName: editorialTasks.assigneePenName,
+        dueDate: editorialTasks.dueDate,
+        remindAt: editorialTasks.remindAt,
+        status: editorialTasks.status,
+        priority: editorialTasks.priority,
+        createdByUserId: editorialTasks.createdByUserId,
+        createdAt: editorialTasks.createdAt,
+        updatedAt: editorialTasks.updatedAt,
+      })
       .from(editorialTasks)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(editorialTasks.id))
+      .limit(100)
       .all();
 
     if (context.user.role !== "admin") {

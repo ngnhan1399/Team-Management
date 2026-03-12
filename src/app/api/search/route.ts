@@ -64,7 +64,17 @@ export async function GET(request: NextRequest) {
             : and(searchCondition, buildArticleOwnershipWhere(ownerCandidates));
 
         const results = await db
-            .select()
+            .select({
+                id: articles.id,
+                articleId: articles.articleId,
+                teamId: articles.teamId,
+                title: articles.title,
+                penName: articles.penName,
+                date: articles.date,
+                status: articles.status,
+                category: articles.category,
+                articleType: articles.articleType,
+            })
             .from(articles)
             .where(scopedWhere)
             .orderBy(desc(articles.id))

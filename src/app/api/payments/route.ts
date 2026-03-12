@@ -200,10 +200,26 @@ export async function GET(request: NextRequest) {
 
     const [rawPayments, contributorProfiles] = await Promise.all([
       db
-        .select()
+        .select({
+          id: payments.id,
+          teamId: payments.teamId,
+          month: payments.month,
+          year: payments.year,
+          penName: payments.penName,
+          totalArticles: payments.totalArticles,
+          totalAmount: payments.totalAmount,
+          details: payments.details,
+          status: payments.status,
+          approvedByUserId: payments.approvedByUserId,
+          approvedAt: payments.approvedAt,
+          paidAt: payments.paidAt,
+          createdAt: payments.createdAt,
+          updatedAt: payments.updatedAt,
+        })
         .from(payments)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(payments.id))
+        .limit(200)
         .all(),
       loadRoyaltyContributorProfiles(profileScopeTeamId),
     ]);
@@ -300,7 +316,7 @@ export async function POST(request: NextRequest) {
           row.teamId ? eq(payments.teamId, row.teamId) : adminTeamId ? eq(payments.teamId, adminTeamId) : undefined,
         ].filter((c): c is NonNullable<typeof c> => c != null);
         const existing = await db
-          .select()
+          .select({ id: payments.id, status: payments.status })
           .from(payments)
           .where(and(...existingPaymentConditions))
           .get();
@@ -353,7 +369,7 @@ export async function POST(request: NextRequest) {
       const stalePaymentWhere = and(...stalePaymentConditions);
 
       const stalePayments = await db
-        .select()
+        .select({ id: payments.id, penName: payments.penName, status: payments.status })
         .from(payments)
         .where(stalePaymentWhere)
         .all();
@@ -407,7 +423,7 @@ export async function PUT(request: NextRequest) {
     const action = enumValue(body.action, "action", ["approve", "mark-paid"] as const);
     const id = requiredInt(body.id, "id");
 
-    const payment = await db.select().from(payments).where(eq(payments.id, id)).get();
+    const payment = await db.select({ id: payments.id, teamId: payments.teamId, month: payments.month, year: payments.year, penName: payments.penName, status: payments.status }).from(payments).where(eq(payments.id, id)).get();
     if (!payment) {
       return NextResponse.json({ success: false, error: "Payment not found" }, { status: 404 });
     }

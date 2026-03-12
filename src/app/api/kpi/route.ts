@@ -26,7 +26,16 @@ export async function GET(request: NextRequest) {
         }
 
         let records = await db
-            .select()
+            .select({
+                id: kpiRecords.id,
+                teamId: kpiRecords.teamId,
+                month: kpiRecords.month,
+                year: kpiRecords.year,
+                penName: kpiRecords.penName,
+                kpiStandard: kpiRecords.kpiStandard,
+                kpiActual: kpiRecords.kpiActual,
+                evaluation: kpiRecords.evaluation,
+            })
             .from(kpiRecords)
             .where(and(...whereConditions))
             .all();
