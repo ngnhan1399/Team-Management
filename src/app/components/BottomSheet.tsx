@@ -19,23 +19,35 @@ export default function BottomSheet({
   footer,
 }: BottomSheetProps) {
   const isMobile = useIsMobile();
-  const [isRendered, setIsRendered] = useState(false);
+  const [isRendered, setIsRendered] = useState(isOpen);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
     if (isOpen) {
-      setIsRendered(true);
+      timer = setTimeout(() => {
+        setIsRendered(true);
+      }, 0);
       if (typeof document !== "undefined") {
         document.body.style.overflow = "hidden";
       }
     } else {
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         setIsRendered(false);
         if (typeof document !== "undefined") {
           document.body.style.overflow = "";
         }
       }, 300);
-      return () => clearTimeout(timer);
     }
+
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (!isOpen && typeof document !== "undefined") {
+        document.body.style.overflow = "";
+      }
+    };
   }, [isOpen]);
 
   if (!isRendered && !isOpen) return null;

@@ -7,6 +7,13 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
+function sanitizeSpreadsheetCell(value: unknown) {
+    const text = String(value ?? "");
+    if (!text) return text;
+
+    return /^[=+\-@]/.test(text) ? `'${text}` : text;
+}
+
 export async function GET() {
     try {
         const context = await getCurrentUserContext();
@@ -26,19 +33,19 @@ export async function GET() {
 
         const exportData = data.map((a) => ({
             STT: a.id,
-            "ID Bài viết": a.articleId,
-            "Ngày viết": a.date,
-            "Tên bài viết": a.title,
-            "Bút danh": a.penName,
-            "Danh mục": a.category,
-            "Loại bài": a.articleType,
-            "Viết mới/Viết lại": a.contentType,
-            "Số chữ": a.wordCountRange,
-            "Trạng thái": a.status,
-            Link: a.link,
-            "Link duyệt bài": normalizeArticleReviewLink(a.reviewLink) || null,
-            "Người duyệt": a.reviewerName,
-            "Ghi chú": a.notes,
+            "ID Bài viết": sanitizeSpreadsheetCell(a.articleId),
+            "Ngày viết": sanitizeSpreadsheetCell(a.date),
+            "Tên bài viết": sanitizeSpreadsheetCell(a.title),
+            "Bút danh": sanitizeSpreadsheetCell(a.penName),
+            "Danh mục": sanitizeSpreadsheetCell(a.category),
+            "Loại bài": sanitizeSpreadsheetCell(a.articleType),
+            "Viết mới/Viết lại": sanitizeSpreadsheetCell(a.contentType),
+            "Số chữ": sanitizeSpreadsheetCell(a.wordCountRange),
+            "Trạng thái": sanitizeSpreadsheetCell(a.status),
+            Link: sanitizeSpreadsheetCell(a.link),
+            "Link duyệt bài": sanitizeSpreadsheetCell(normalizeArticleReviewLink(a.reviewLink) || null),
+            "Người duyệt": sanitizeSpreadsheetCell(a.reviewerName),
+            "Ghi chú": sanitizeSpreadsheetCell(a.notes),
         }));
 
         const workbook = XLSX.utils.book_new();
@@ -78,4 +85,3 @@ export async function GET() {
         );
     }
 }
-

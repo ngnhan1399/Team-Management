@@ -1739,6 +1739,23 @@ export default function ArticlesPage() {
               {isMobile ? "Chọn tháng" : "Chọn tháng để đồng bộ"}
             </button>
           )}
+          {canManageArticles && (
+            <button
+              data-testid="articles-open-delete-tool"
+              className="btn-ios-pill"
+              onClick={openDeleteTool}
+              style={{
+                flex: isMobile ? 1 : "initial",
+                justifyContent: "center",
+                background: "rgba(239, 68, 68, 0.08)",
+                color: "var(--danger)",
+                border: "1px solid rgba(239, 68, 68, 0.16)",
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_sweep</span>
+              {isMobile ? "Xóa dữ liệu" : "Xóa dữ liệu"}
+            </button>
+          )}
           {canManageArticles && !isMobile && (
             <>
               <input

@@ -100,13 +100,6 @@ export default function MainApp() {
       : collaboratorRole === "reviewer"
         ? "CTV DUYỆT BÀI"
         : "CỘNG TÁC VIÊN";
-  const mobileRoleLabel = isLeader
-    ? "Leader hệ thống"
-    : isAdmin
-      ? "Admin team"
-      : collaboratorRole === "reviewer"
-        ? "CTV duyệt bài"
-        : "Cộng tác viên";
   const teamName = user?.team?.name?.trim() || "";
   const roleSubtitleWithTeam = teamName && isAdmin ? `${roleSubtitle} • ${teamName}` : roleSubtitle;
 
