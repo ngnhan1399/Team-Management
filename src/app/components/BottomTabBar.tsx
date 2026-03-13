@@ -7,13 +7,14 @@ interface BottomTabBarProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
   unreadCount?: number;
+  showTasksTab?: boolean;
 }
 
-export default function BottomTabBar({ currentPage, onNavigate, unreadCount = 0 }: BottomTabBarProps) {
+export default function BottomTabBar({ currentPage, onNavigate, unreadCount = 0, showTasksTab = true }: BottomTabBarProps) {
   const tabs = [
     { id: "dashboard", label: "Tổng quan", icon: "dashboard" },
     { id: "articles", label: "Bài viết", icon: "description" },
-    { id: "tasks", label: "Lịch việc", icon: "calendar_month" },
+    ...(showTasksTab ? [{ id: "tasks", label: "Lịch việc", icon: "calendar_month" }] : []),
     { id: "royalty", label: "Nhuận bút", icon: "payments" },
     { id: "notifications", label: "Thông báo", icon: "notifications", badge: unreadCount },
   ];

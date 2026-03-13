@@ -78,6 +78,7 @@ export default function MainApp() {
   const [page, setPage] = useState<Page>("dashboard");
   const [pendingPage, setPendingPage] = useState<Page | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasVisibleTasks, setHasVisibleTasks] = useState(false);
   const [pendingRegistrationReminder, setPendingRegistrationReminder] = useState<NotifItem | null>(null);
   const [markingRegistrationReminderRead, setMarkingRegistrationReminderRead] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -105,6 +106,29 @@ export default function MainApp() {
         : "CỘNG TÁC VIÊN";
   const teamName = user?.team?.name?.trim() || "";
   const roleSubtitleWithTeam = teamName && isAdmin ? `${roleSubtitle} • ${teamName}` : roleSubtitle;
+  const shouldShowTasksNav = isAdmin || hasVisibleTasks;
+
+  const refreshTaskVisibility = useCallback(() => {
+    if (!user?.id) {
+      setHasVisibleTasks(false);
+      return;
+    }
+
+    if (user.role === "admin") {
+      setHasVisibleTasks(true);
+      return;
+    }
+
+    fetch("/api/editorial-tasks", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        const nextTasks = Array.isArray(data?.data) ? data.data : [];
+        setHasVisibleTasks(nextTasks.length > 0);
+      })
+      .catch(() => {
+        setHasVisibleTasks(false);
+      });
+  }, [user?.id, user?.role]);
 
   const refreshUnreadCount = useCallback((announceNew = false) => {
     fetch("/api/notifications?unread=true", { cache: "no-store" })
@@ -154,6 +178,7 @@ export default function MainApp() {
 
   useEffect(() => {
     refreshUnreadCount(false);
+    refreshTaskVisibility();
 
     if (!user?.id) return;
 
@@ -198,9 +223,14 @@ export default function MainApp() {
               seenNotificationToastIdsRef.current = [...seenNotificationToastIdsRef.current.slice(-49), payloadId];
             }
             refreshUnreadCount(false);
+            refreshTaskVisibility();
+          }
+          if (Array.isArray(payload.channels) && payload.channels.includes("tasks")) {
+            refreshTaskVisibility();
           }
           if (Array.isArray(payload.channels) && payload.channels.includes("team")) {
             refreshUser().catch(() => { });
+            refreshTaskVisibility();
           }
         } catch {
           // Ignore malformed realtime packets.
@@ -211,6 +241,7 @@ export default function MainApp() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         refreshUnreadCount(false);
+        refreshTaskVisibility();
         openRealtimeSource();
         return;
       }
@@ -227,7 +258,7 @@ export default function MainApp() {
       window.removeEventListener("focus", handleVisibilityChange);
       closeRealtimeSource();
     };
-  }, [refreshUnreadCount, refreshUser, user?.id]);
+  }, [refreshTaskVisibility, refreshUnreadCount, refreshUser, user?.id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -241,9 +272,10 @@ export default function MainApp() {
       }
 
       refreshUnreadCount(true);
+      refreshTaskVisibility();
     }, 180000);
     return () => clearInterval(interval);
-  }, [refreshUnreadCount, user?.id]);
+  }, [refreshTaskVisibility, refreshUnreadCount, user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -251,6 +283,7 @@ export default function MainApp() {
       seenNotificationToastIdsRef.current = [];
       lastUnreadCountRef.current = 0;
       unreadBaselineReadyRef.current = false;
+      setHasVisibleTasks(false);
       setPendingRegistrationReminder(null);
       setMarkingRegistrationReminderRead(false);
     }
@@ -345,12 +378,18 @@ export default function MainApp() {
     navigateToPage(nextPage);
   }, [navigateToPage]);
 
+  useEffect(() => {
+    if (page === "tasks" && !shouldShowTasksNav) {
+      navigateToPage("dashboard");
+    }
+  }, [navigateToPage, page, shouldShowTasksNav]);
+
   const navItems = [
     { id: "dashboard", label: "Tổng quan", icon: "dashboard", section: "Tổng quan" },
     { id: "notifications", label: "Thông báo", icon: "notifications", section: "Tổng quan", count: unreadCount },
     { id: "feedback", label: "Feedback", icon: "feedback", section: "Tổng quan" },
     { id: "articles", label: "Bài viết", icon: "description", section: "Quản lý" },
-    { id: "tasks", label: "Lịch biên tập", icon: "calendar_month", section: "Quản lý" },
+    { id: "tasks", label: "Lịch biên tập", icon: "calendar_month", section: "Quản lý", hidden: !shouldShowTasksNav },
     { id: "team", label: "Đội ngũ", icon: "group", section: "Quản lý", adminOnly: true },
     { id: "royalty", label: "Nhuận bút", icon: "payments", section: "Quản lý" },
     { id: "audit", label: "Audit Logs", icon: "history", section: "Quản lý", adminOnly: true, leaderOnly: true },
@@ -375,6 +414,7 @@ export default function MainApp() {
           {["Tổng quan", "Quản lý"].map(section => {
             const items = navItems.filter((item) =>
               item.section === section
+              && !item.hidden
               && (!item.adminOnly || isAdmin)
               && (!item.leaderOnly || isLeader)
             );
@@ -468,7 +508,7 @@ export default function MainApp() {
           {page === "dashboard" && <DashboardPage onNavigate={navigateToPage} />}
           {page === "feedback" && <FeedbackPage />}
           {page === "articles" && <ArticlesPage />}
-          {page === "tasks" && <EditorialTasksPage />}
+          {page === "tasks" && shouldShowTasksNav && <EditorialTasksPage />}
           {page === "team" && isAdmin && <TeamPage />}
           {page === "royalty" && <RoyaltyPage />}
           {page === "audit" && isLeader && <AuditLogsPage />}
@@ -485,6 +525,7 @@ export default function MainApp() {
             setSidebarOpen(false);
           }} 
           unreadCount={unreadCount}
+          showTasksTab={shouldShowTasksNav}
         />
       )}
       {user?.role === "ctv" && pendingRegistrationReminder && (

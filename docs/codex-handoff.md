@@ -1,5 +1,30 @@
 # Codex Handoff
 
+## Update 2026-03-13 (ẩn tab Lịch biên tập của CTV khi chưa có task)
+
+- `MainApp.tsx` giờ không còn render tab `Lịch biên tập` cố định cho mọi `CTV`.
+- Logic mới:
+  - `admin` luôn thấy tab `Lịch biên tập`
+  - `CTV` chỉ thấy tab này khi `/api/editorial-tasks` trả về có task được giao cho đúng danh tính của họ
+  - nếu đang ở tab `tasks` mà hệ thống xác định không còn task hiển thị, app sẽ tự quay về `dashboard`
+- `BottomTabBar.tsx` cũng nhận `showTasksTab` để ẩn luôn tab mobile, tránh lệch giữa desktop và mobile
+- `MainApp.tsx` refresh lại visibility của tab này khi:
+  - vào app
+  - quay lại tab đang xem
+  - có realtime `tasks`, `notifications`, hoặc `team`
+  - fallback polling chạy
+
+### File đã động vào
+
+- `src/app/components/MainApp.tsx`
+- `src/app/components/BottomTabBar.tsx`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npx eslint src/app/components/MainApp.tsx src/app/components/BottomTabBar.tsx` ✅
+- `npm run typecheck` ✅
+
 ## Update 2026-03-13 (dashboard CTV self-scope + card auto layout)
 
 - `DashboardPage.tsx` giờ dùng cache theo `viewerCacheKey`, tránh lẫn cache giữa admin và CTV khi đổi tài khoản trong cùng phiên.
