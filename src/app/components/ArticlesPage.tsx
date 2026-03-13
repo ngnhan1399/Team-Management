@@ -242,16 +242,16 @@ export default function ArticlesPage() {
     });
   }, [deferredArticles]);
 
-  const checkVisibleLinks = useCallback(async () => {
+  const checkVisibleLinks = useCallback(async (force = false) => {
     const published = deferredArticles.filter((article) => (
       isApprovedArticleStatus(article.status) && article.link && article.link.startsWith("http")
     ));
     const urls = Array.from(new Set(published.map((article) => article.link).filter(Boolean)));
     const now = Date.now();
     const pendingUrls = urls.filter((url) => {
+      if (force) return true;
       const existingEntry = linkHealthRef.current[url];
       if (!existingEntry) return true;
-      if (existingEntry.status === "ok") return false;
       return now - existingEntry.checkedAt >= LINK_RECHECK_INTERVAL_MS;
     }).slice(0, 10);
 
@@ -265,6 +265,7 @@ export default function ArticlesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls: pendingUrls }),
+        cache: "no-store",
       });
       const data = await response.json();
       if (data.success && data.results) {
@@ -1498,7 +1499,7 @@ export default function ArticlesPage() {
               Xóa lọc
             </button>
           )}
-          <button className="btn-ios-pill btn-ios-secondary" onClick={() => { void checkVisibleLinks(); }} disabled={linkCheckLoading} style={{ height: 44 }}>
+          <button className="btn-ios-pill btn-ios-secondary" onClick={() => { void checkVisibleLinks(true); }} disabled={linkCheckLoading} style={{ height: 44 }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link_scan</span>
             {linkCheckLoading ? "Đang kiểm tra link..." : "Kiểm tra link"}
           </button>
