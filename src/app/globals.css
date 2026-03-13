@@ -25,10 +25,10 @@
   --gradient-1: var(--gradient-metallic);
 
   /* Liquid Glass System (Light Optimized) */
-  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-bg: rgba(255, 255, 255, 0.98);
   --glass-bg-accent: rgba(37, 99, 235, 0.08);
   --glass-border: rgba(0, 0, 0, 0.12);
-  --glass-blur: 24px;
+  --glass-blur: 16px;
   --glass-reflection: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, transparent 50%);
 
   /* Light Elevation Shadows */
@@ -1274,6 +1274,8 @@ input[type=number] {
 @media (max-width: 1023px) {
   .sidebar {
     transform: translateX(-100%);
+    background: #ffffff; /* Override glass on mobile for solid readability */
+    box-shadow: 2px 0 20px rgba(0,0,0,0.1);
   }
 
   .sidebar.open {

@@ -32,7 +32,7 @@ export default function BottomTabBar({ currentPage, onNavigate, unreadCount = 0 
               }`}
             >
               <div className="relative">
-                <span className={`material-symbols-outlined text-[24px] ${isActive ? "filled" : ""}`} style={{ fontVariationSettings: isActive ? "'FILL' 1" : "" }}>
+                <span className={`material-symbols-outlined text-[22px] ${isActive ? "filled" : ""}`} style={{ fontVariationSettings: isActive ? "'FILL' 1" : "" }}>
                   {tab.icon}
                 </span>
                 {tab.badge !== undefined && tab.badge > 0 && (
