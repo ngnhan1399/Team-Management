@@ -44,6 +44,7 @@ export const WORD_COUNT_RANGE_OPTIONS = [
 export const DEFAULT_ARTICLE_STATUS = "Submitted";
 export const LINK_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
 export const ARTICLE_PAGE_SIZE = 30;
+export const SPLIT_ARTICLE_PERIOD_FETCH_LIMIT = 2000;
 export const ARTICLE_STATUS_OPTIONS = [
   { value: "", label: "Tất cả" },
   { value: "Draft", label: "📋 Nháp" },

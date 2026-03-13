@@ -858,7 +858,7 @@ export async function GET(request: NextRequest) {
     }
 
     const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
-    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 200);
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 2000);
     const ownerCandidates = getContextArticleOwnerCandidates(context);
     const reviewerLabels = getContextIdentityLabels(context);
 

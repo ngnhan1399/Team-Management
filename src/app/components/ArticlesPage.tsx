@@ -23,6 +23,7 @@ import {
   MANAGER_DEFAULT_PEN_NAME,
   MONTH_OPTIONS,
   REQUIRED_IMPORT_FIELDS,
+  SPLIT_ARTICLE_PERIOD_FETCH_LIMIT,
   WORD_COUNT_RANGE_OPTIONS,
   YEAR_OPTIONS,
   buildApiErrorMessage,
@@ -236,8 +237,11 @@ export default function ArticlesPage() {
   ) => {
     const nextFilters = { ...f };
     const background = options?.background === true;
+    const shouldLoadFullSplitPeriod = shouldShowSplitArticleSections && Boolean(nextFilters.month && nextFilters.year);
+    const requestPage = shouldLoadFullSplitPeriod ? 1 : p;
+    const requestLimit = shouldLoadFullSplitPeriod ? SPLIT_ARTICLE_PERIOD_FETCH_LIMIT : ARTICLE_PAGE_SIZE;
     articleListQueryRef.current = {
-      page: p,
+      page: requestPage,
       search: s,
       filters: nextFilters,
     };
@@ -247,8 +251,8 @@ export default function ArticlesPage() {
     if (!background) {
       setLoading(true);
     }
-    setPagination((prev) => (prev.page === p ? prev : { ...prev, page: p }));
-    const params = new URLSearchParams({ page: String(p), limit: String(ARTICLE_PAGE_SIZE) });
+    setPagination((prev) => (prev.page === requestPage ? prev : { ...prev, page: requestPage }));
+    const params = new URLSearchParams({ page: String(requestPage), limit: String(requestLimit) });
     if (s) params.set("search", s);
     if (isWriter && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
     else if (nextFilters.penName) params.set("penName", nextFilters.penName);
@@ -278,7 +282,7 @@ export default function ArticlesPage() {
           }
         }
       });
-  }, [isWriter, user]);
+  }, [isWriter, shouldShowSplitArticleSections, user]);
 
   useEffect(() => {
     if (hasFetchedInitialArticlesRef.current) {
