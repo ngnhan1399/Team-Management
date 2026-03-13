@@ -83,6 +83,7 @@ export default function MainApp() {
   const lastUnreadCountRef = useRef(0);
   const unreadBaselineReadyRef = useRef(false);
   const navigationRequestIdRef = useRef(0);
+  const realtimeSourceRef = useRef<EventSource | null>(null);
   const displayName = (typeof user?.collaborator?.name === "string" && user.collaborator.name.trim())
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
@@ -149,43 +150,93 @@ export default function MainApp() {
 
     if (!user?.id) return;
 
-    const eventSource = new EventSource("/api/realtime");
-    eventSource.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        const payloadId = Number(payload?.id || 0);
-        if (payloadId > 0) {
-          if (seenRealtimeIdsRef.current.includes(payloadId)) {
-            return;
-          }
-          seenRealtimeIdsRef.current = [...seenRealtimeIdsRef.current.slice(-99), payloadId];
-        }
-        emitRealtimePayload(payload);
-        if (Array.isArray(payload.channels) && payload.channels.includes("notifications")) {
-          if (payloadId > 0 && payload.toastTitle) {
-            seenNotificationToastIdsRef.current = [...seenNotificationToastIdsRef.current.slice(-49), payloadId];
-          }
-          refreshUnreadCount(false);
-        }
-        if (Array.isArray(payload.channels) && payload.channels.includes("team")) {
-          refreshUser().catch(() => { });
-        }
-      } catch {
-        // Ignore malformed realtime packets.
-      }
+    if (typeof window === "undefined") return;
+
+    const closeRealtimeSource = () => {
+      realtimeSourceRef.current?.close();
+      realtimeSourceRef.current = null;
     };
 
+    const openRealtimeSource = () => {
+      if (document.visibilityState !== "visible" || realtimeSourceRef.current) {
+        return;
+      }
+
+      const eventSource = new EventSource("/api/realtime");
+      realtimeSourceRef.current = eventSource;
+
+      eventSource.onopen = () => {
+        refreshUnreadCount(false);
+      };
+
+      eventSource.onerror = () => {
+        if (realtimeSourceRef.current === eventSource && eventSource.readyState === EventSource.CLOSED) {
+          realtimeSourceRef.current = null;
+        }
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          const payloadId = Number(payload?.id || 0);
+          if (payloadId > 0) {
+            if (seenRealtimeIdsRef.current.includes(payloadId)) {
+              return;
+            }
+            seenRealtimeIdsRef.current = [...seenRealtimeIdsRef.current.slice(-99), payloadId];
+          }
+          emitRealtimePayload(payload);
+          if (Array.isArray(payload.channels) && payload.channels.includes("notifications")) {
+            if (payloadId > 0 && payload.toastTitle) {
+              seenNotificationToastIdsRef.current = [...seenNotificationToastIdsRef.current.slice(-49), payloadId];
+            }
+            refreshUnreadCount(false);
+          }
+          if (Array.isArray(payload.channels) && payload.channels.includes("team")) {
+            refreshUser().catch(() => { });
+          }
+        } catch {
+          // Ignore malformed realtime packets.
+        }
+      };
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshUnreadCount(false);
+        openRealtimeSource();
+        return;
+      }
+
+      closeRealtimeSource();
+    };
+
+    handleVisibilityChange();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
     return () => {
-      eventSource.close();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+      closeRealtimeSource();
     };
   }, [refreshUnreadCount, refreshUser, user?.id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
+      if (!user?.id || typeof document === "undefined" || document.visibilityState !== "visible") {
+        return;
+      }
+
+      const realtimeReadyState = realtimeSourceRef.current?.readyState;
+      if (realtimeReadyState === EventSource.OPEN || realtimeReadyState === EventSource.CONNECTING) {
+        return;
+      }
+
       refreshUnreadCount(true);
-    }, 30000);
+    }, 180000);
     return () => clearInterval(interval);
-  }, [refreshUnreadCount]);
+  }, [refreshUnreadCount, user?.id]);
 
   useEffect(() => {
     if (!user?.id) {

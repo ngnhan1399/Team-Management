@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 const encoder = new TextEncoder();
 const REALTIME_KEEP_ALIVE_INTERVAL_MS = 25000;
-const REALTIME_BACKFILL_POLL_INTERVAL_MS = 5000;
+// Keep DB backfill polling conservative so idle SSE connections do not burn serverless CPU.
+const REALTIME_BACKFILL_POLL_INTERVAL_MS = 15000;
 
 export async function GET(request: Request) {
   const context = await getCurrentUserContext();
