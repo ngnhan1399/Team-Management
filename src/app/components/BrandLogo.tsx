@@ -122,10 +122,11 @@ export default function BrandLogo({
         justifyContent: isCentered ? "center" : "flex-start",
         gap,
         textAlign: isCentered ? "center" : "left",
+        overflow: "hidden",
       }}
     >
       <BrandMark size={markSize} />
-      <div>
+      <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <div
           style={{
             fontSize: titleSize,
@@ -134,6 +135,8 @@ export default function BrandLogo({
             letterSpacing: "-0.05em",
             lineHeight: 1.1,
             whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           Workdocker
@@ -149,6 +152,8 @@ export default function BrandLogo({
               lineHeight: 1.1,
               whiteSpace: "nowrap",
               marginTop: 3,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
             {subtitle}
