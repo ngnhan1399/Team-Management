@@ -1,5 +1,32 @@
 # Codex Handoff
 
+## Update 2026-03-13 (postmortem lỗi lọc bài viết + guardrail publish)
+
+- Đã ghi lại postmortem đầy đủ ở `docs/article-filter-regression-2026-03-13.md`.
+- Kết luận quan trọng:
+  - không có chuyện admin thật sự mất quyền trong DB
+  - regression đến từ 2 lớp:
+    - alias/role inference làm bài admin bị gắn nhãn `CTV`
+    - split view `CTV` / `Biên tập/Admin` tính từ page hiện tại thay vì toàn tập lọc của tháng
+- Đã thêm guardrail vào `AGENTS.md` để các thread sau:
+  - đọc postmortem này khi chạm `Bài viết`
+  - không suy ra editorial bucket từ collaborator role một mình
+  - bắt buộc test case `Tháng 1 / 2026 / Tất cả bút danh`
+- Đã thêm script `scripts/publish-safe.ps1` để tránh lỗi vận hành:
+  - `OPS-CODEX-GIT-RACE-001`
+  - nghĩa là `git commit` và `git push` bị chạy song song nên push hụt commit mới
+
+### File đã động vào
+
+- `docs/article-filter-regression-2026-03-13.md`
+- `AGENTS.md`
+- `scripts/publish-safe.ps1`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npm run verify:safe` ✅
+
 ## Update 2026-03-13 (fix lệch SEO 1K5 + nhuận bút)
 
 - Đã sửa lệch nghiệp vụ `SEO ICT/Gia dụng 1K5`:
