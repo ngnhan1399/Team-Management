@@ -9,6 +9,7 @@ import {
   type GoogleSheetSyncLinkSnapshot,
 } from "@/lib/google-sheet-mutation";
 import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
+import { extractArticleIdFromLink } from "@/lib/article-link-id";
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
@@ -942,6 +943,8 @@ export async function POST(request: NextRequest) {
     const finalPenName = canManageArticles ? normalizeString(body.penName) : ownPenName || "";
     const title = normalizeString(body.title);
     const date = normalizeString(body.date);
+    const normalizedLink = normalizeString(body.link);
+    const derivedArticleId = extractArticleIdFromLink(normalizedLink);
     const normalizedArticleFields = resolveAppArticleFields({
       category: normalizeString(body.category),
       articleType: normalizeString(body.articleType) || "Bài SEO ICT",
@@ -968,6 +971,18 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (!canManageArticles && !normalizedLink) {
+      return NextResponse.json(
+        { success: false, error: "CTV phải dán link bài viết trước khi lưu bài mới" },
+        { status: 400 }
+      );
+    }
+    if ((!canManageArticles || normalizedLink) && !derivedArticleId && !normalizeString(body.articleId)) {
+      return NextResponse.json(
+        { success: false, error: "Link bài viết phải có đủ 6 chữ số ID ở cuối đường dẫn" },
+        { status: 400 }
+      );
+    }
     if (!articleTeamId) {
       return NextResponse.json(
         { success: false, error: "Không xác định được team cho bài viết này" },
@@ -985,7 +1000,7 @@ export async function POST(request: NextRequest) {
       .insert(articles)
       .values({
         teamId: articleTeamId,
-        articleId: normalizeString(body.articleId) || undefined,
+        articleId: derivedArticleId || normalizeString(body.articleId) || undefined,
         date,
         title,
         penName: finalPenName,
@@ -995,7 +1010,7 @@ export async function POST(request: NextRequest) {
         contentType: normalizedArticleFields.contentType as never,
         wordCountRange: (normalizedArticleFields.wordCountRange || undefined) as never,
         status: (normalizeString(body.status) || "Submitted") as never,
-        link: normalizeString(body.link) || undefined,
+        link: normalizedLink || undefined,
         reviewLink: normalizeArticleReviewLink(normalizeString(body.reviewLink)) || undefined,
         reviewerName: normalizeString(body.reviewerName) || undefined,
         notes: normalizeString(body.notes) || undefined,
@@ -1238,8 +1253,19 @@ export async function PUT(request: NextRequest) {
     }
 
     if (typeof updateData.title === "string") updateData.title = updateData.title.trim();
-    if (typeof updateData.articleId === "string") updateData.articleId = updateData.articleId.trim() || undefined;
     if (typeof updateData.link === "string") updateData.link = updateData.link.trim() || undefined;
+    const providedUpdateLink = typeof body.link === "string"
+      ? normalizeString(body.link) || undefined
+      : undefined;
+    const derivedUpdateArticleId = extractArticleIdFromLink(providedUpdateLink);
+    if (providedUpdateLink && !derivedUpdateArticleId && !normalizeString(updateData.articleId)) {
+      return NextResponse.json({ success: false, error: "Link bài viết phải có đủ 6 chữ số ID ở cuối đường dẫn" }, { status: 400 });
+    }
+    if (derivedUpdateArticleId) {
+      updateData.articleId = derivedUpdateArticleId;
+    } else if (typeof updateData.articleId === "string") {
+      updateData.articleId = updateData.articleId.trim() || undefined;
+    }
     if (typeof updateData.reviewLink === "string") updateData.reviewLink = normalizeArticleReviewLink(updateData.reviewLink) || undefined;
     if (typeof updateData.notes === "string") updateData.notes = updateData.notes.trim() || undefined;
     if (typeof updateData.reviewerName === "string") updateData.reviewerName = updateData.reviewerName.trim() || undefined;

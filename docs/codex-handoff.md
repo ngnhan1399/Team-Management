@@ -1,5 +1,32 @@
 # Codex Handoff
 
+## Update 2026-03-13 (auto-fill article ID from link + chặn lưu thiếu link)
+
+- Thêm helper dùng chung `src/lib/article-link-id.ts` để trích `6` chữ số ID ở cuối URL bài viết.
+- `ArticlesPage.tsx` giờ:
+  - tự điền `Mã ID hệ thống` khi dán link bài viết
+  - làm mờ ô ID và không cho CTV nhập tay
+  - hiển thị note `Mã ID tự tạo khi có link bài viết`
+  - chặn CTV lưu bài mới nếu chưa có link hoặc link không có đủ `6` chữ số ID cuối URL
+- `POST/PUT /api/articles` cũng dùng cùng helper để:
+  - tự đồng bộ `articleId` từ `link`
+  - chặn lưu bài mới của CTV nếu thiếu link hợp lệ
+  - từ chối link mới không có `6` chữ số ID ở cuối đường dẫn
+
+### File đã động vào
+
+- `src/lib/article-link-id.ts`
+- `src/app/components/ArticlesPage.tsx`
+- `src/app/api/articles/route.ts`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npx eslint src/app/components/ArticlesPage.tsx src/app/api/articles/route.ts src/lib/article-link-id.ts` ✅
+- `npm run typecheck` ✅
+- `npm run verify:safe` ✅
+- `npx tsx -e "...extractArticleIdFromLink(...)"` ✅
+
 ## Update 2026-03-13 (postmortem lỗi lọc bài viết + guardrail publish)
 
 - Đã ghi lại postmortem đầy đủ ở `docs/article-filter-regression-2026-03-13.md`.
