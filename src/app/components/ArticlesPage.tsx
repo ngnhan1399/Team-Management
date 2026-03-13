@@ -165,19 +165,15 @@ export default function ArticlesPage() {
       })),
   ];
   const resolveAuthorBucket = useCallback((article: Article): "ctv" | "editorial" => {
-    if (article.authorUserRole === "admin") {
-      return "editorial";
-    }
-
     if (article.authorRole === "writer" || article.authorRole === "reviewer") {
       return "ctv";
     }
 
-    if (article.authorBucket === "editorial" || normalizeIdentityValue(article.penName) === normalizeIdentityValue(MANAGER_DEFAULT_PEN_NAME)) {
+    if (normalizeIdentityValue(article.penName) === normalizeIdentityValue(MANAGER_DEFAULT_PEN_NAME)) {
       return "editorial";
     }
 
-    return "ctv";
+    return article.authorBucket === "editorial" ? "editorial" : "ctv";
   }, []);
 
   const visibleArticleIds = articles

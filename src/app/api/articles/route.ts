@@ -95,6 +95,13 @@ type NonBlockingStepOptions<T> = {
 
 import { foldSearchText, matchesLooseSearch, normalizeString } from "@/lib/normalize";
 
+const EDITORIAL_PEN_NAMES = new Set(["nhan btv", "nhân btv"]);
+
+function isEditorialPenName(value: string | null | undefined) {
+  const normalized = normalizeString(value).toLowerCase();
+  return EDITORIAL_PEN_NAMES.has(normalized);
+}
+
 async function runNonBlockingStep<T>(task: () => Promise<T>, options: NonBlockingStepOptions<T>): Promise<T> {
   try {
     return await task();
@@ -280,13 +287,14 @@ async function attachArticleResponseMetadata<
       );
 
       if (collaboratorProfile) {
-        const authorBucket = collaboratorProfile.linkedUserRole === "admin"
+        const hasContributorRole = collaboratorProfile.role === "writer" || collaboratorProfile.role === "reviewer";
+        const authorBucket = collaboratorProfile.linkedUserRole === "admin" && !hasContributorRole
           ? "editorial"
           : "ctv";
         return {
           authorBucket,
           authorBucketLabel: authorBucket === "editorial" ? "Biên tập/Admin" : "CTV",
-          authorRole: collaboratorProfile.role === "writer" || collaboratorProfile.role === "reviewer"
+          authorRole: hasContributorRole
             ? collaboratorProfile.role
             : null,
           authorUserRole: collaboratorProfile.linkedUserRole === "admin" || collaboratorProfile.linkedUserRole === "ctv"
@@ -296,7 +304,7 @@ async function attachArticleResponseMetadata<
       }
 
       const creatorRole = creatorRoleById.get(Number(row.createdByUserId || 0)) || null;
-      const authorBucket = creatorRole === "admin" ? "editorial" : "ctv";
+      const authorBucket = creatorRole === "admin" && isEditorialPenName(row.penName) ? "editorial" : "ctv";
       return {
         authorBucket,
         authorBucketLabel: authorBucket === "editorial" ? "Biên tập/Admin" : "CTV",
