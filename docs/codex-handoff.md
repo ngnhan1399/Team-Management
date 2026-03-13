@@ -559,3 +559,21 @@ npm run build
 ## Rủi ro / ghi chú
 - ...
 ```
+
+## Trạng thái
+- Đã xong: siết bố cục bảng `Bài viết` để cụm `Link / Thao tác` không bị trôi ra ngoài ở desktop.
+- Chưa làm: chưa đụng vào scope dashboard cho CTV; giữ nguyên nguyên tắc chỉ hiện dữ liệu đúng danh tính đang đăng nhập.
+
+## File đã động vào
+- `src/app/components/ArticlesPage.tsx`
+
+## Việc tiếp theo
+- Nếu vẫn còn một viewport hẹp nào phải kéo ngang, giảm tiếp `articleTableMinWidth` hoặc cố định thêm chiều rộng `Loại bài / Trạng thái`.
+- Khi quay lại dashboard, chỉ chỉnh layout card co giãn, không mở rộng dữ liệu CTV sang tên người khác.
+
+## Kiểm tra đã chạy
+- `npx eslint src/app/components/ArticlesPage.tsx`
+- `npm run typecheck`
+
+## Rủi ro / ghi chú
+- Bản vá hiện dùng `tableLayout: fixed` và thu cột `Ngày`, `Người duyệt`, `Link`; nếu sau này badge hoặc text trong các cột này bị nới lại, cụm thao tác có thể lại trôi ra mép phải.

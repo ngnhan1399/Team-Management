@@ -1532,7 +1532,7 @@ export default function ArticlesPage() {
   const showSplitArticleSections = shouldShowSplitArticleSections;
   const ctvArticles = articles.filter((article) => resolveAuthorBucket(article) !== "editorial");
   const editorialArticles = articles.filter((article) => resolveAuthorBucket(article) === "editorial");
-  const articleTableMinWidth = showSplitArticleSections ? 1240 : 1300;
+  const articleTableMinWidth = showSplitArticleSections ? 1020 : 1080;
   const articleSections = [
     {
       key: "ctv",
@@ -1562,18 +1562,18 @@ export default function ArticlesPage() {
 
     return (
     <div style={{ overflowX: "auto", position: "relative", zIndex: 0 }}>
-      <table style={{ width: "100%", minWidth: articleTableMinWidth, borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
+      <table style={{ width: "100%", minWidth: articleTableMinWidth, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
         <colgroup>
-          {allowBulkAssign && selectionMode && <col style={{ width: "4%" }} />}
-          <col style={{ width: "6%" }} />
-          <col style={{ width: "10%" }} />
-          <col style={{ width: "34%" }} />
-          <col style={{ width: "13%" }} />
-          <col style={{ width: "7%" }} />
-          <col style={{ width: "11%" }} />
-          <col style={{ width: "10%" }} />
-          <col style={{ width: "4%" }} />
-          <col style={{ width: "10%" }} />
+          {allowBulkAssign && selectionMode && <col style={{ width: 44 }} />}
+          <col style={{ width: 72 }} />
+          <col style={{ width: 92 }} />
+          <col />
+          <col style={{ width: 132 }} />
+          <col style={{ width: 92 }} />
+          <col style={{ width: 118 }} />
+          <col style={{ width: 132 }} />
+          <col style={{ width: 58 }} />
+          <col style={{ width: 142 }} />
         </colgroup>
         <thead style={{ pointerEvents: "none" }}>
           <tr style={{ background: "rgba(248, 250, 252, 0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)" }}>
@@ -1621,8 +1621,8 @@ export default function ArticlesPage() {
                     />
                   </td>
                 )}
-                <td style={{ padding: "12px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
-                <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
+                <td style={{ padding: "12px 12px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
+                <td style={{ padding: "12px 10px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{a.date}</td>
                 <td style={{ padding: "12px 14px" }}>
                   {getPreferredArticleNavigationLink(a) ? (
                     <button
@@ -1639,6 +1639,7 @@ export default function ArticlesPage() {
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
                         overflow: "hidden",
+                        width: "100%",
                         padding: 0,
                         cursor: "pointer",
                         textAlign: "left",
@@ -1660,6 +1661,7 @@ export default function ArticlesPage() {
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
                         overflow: "hidden",
+                        width: "100%",
                       }}
                     >
                       {a.title}
@@ -1668,22 +1670,46 @@ export default function ArticlesPage() {
                 </td>
                 <td style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
-                    <span style={{ fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap", fontWeight: 600 }}>{getDisplayedPenName(a.penName)}</span>
+                    <span
+                      title={getDisplayedPenName(a.penName)}
+                      style={{
+                        display: "block",
+                        maxWidth: "100%",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        fontSize: 13,
+                        color: "var(--text-main)",
+                        whiteSpace: "nowrap",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {getDisplayedPenName(a.penName)}
+                    </span>
                     {authorBucketBadge(a)}
                   </div>
                 </td>
-                <td style={{ padding: "12px 10px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>
-                  {a.reviewerName ? getDisplayedPenName(a.reviewerName) : "—"}
+                <td style={{ padding: "12px 8px", fontSize: 13, color: "var(--text-main)" }}>
+                  <span
+                    title={a.reviewerName ? getDisplayedPenName(a.reviewerName) : "Chưa phân công"}
+                    style={{
+                      display: "block",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {a.reviewerName ? getDisplayedPenName(a.reviewerName) : "—"}
+                  </span>
                 </td>
                 <td style={{ padding: "12px 14px", textAlign: "center" }}>
                   {articleTypeBadge(a.articleType)}
                 </td>
                 <td style={{ padding: "12px 14px", textAlign: "center" }}>{statusBadge(a.status)}</td>
-                <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                <td style={{ padding: "12px 8px", textAlign: "center" }}>
                   {linkBadge(a)}
                 </td>
-                <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                  <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
+                <td style={{ padding: "12px 10px", textAlign: "center" }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "center", alignItems: "center", flexWrap: "nowrap", whiteSpace: "nowrap", width: "100%" }}>
                     <div style={{ position: "relative", display: "inline-flex" }}>
                       <button
                         data-testid={`article-comment-${a.id}`}
