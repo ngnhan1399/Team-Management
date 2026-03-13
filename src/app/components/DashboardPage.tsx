@@ -189,7 +189,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
       <div style={{ 
         display: "grid", 
         gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(240px, 1fr))", 
-        alignItems: "start",
+        alignItems: "stretch",
         gap: isMobile ? 12 : 24, 
         marginBottom: 32 
       }}>
@@ -202,7 +202,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
             display: "flex", 
             flexDirection: "column", 
             gap: isMobile ? 12 : 20,
-            height: "auto",
+            height: "100%",
             minHeight: 0
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -220,14 +220,14 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
       </div>
 
       {/* Tier 2: Distribution & Insights */}
-      <div className="dashboard-insight-grid" style={{ gap: isMobile ? 16 : 32, alignItems: "start" }}>
+      <div className="dashboard-insight-grid" style={{ gap: isMobile ? 16 : 32, alignItems: "stretch" }}>
         <div style={{ 
           background: "white", 
           borderRadius: isMobile ? 24 : 32, 
           padding: isMobile ? 20 : 32, 
           boxShadow: "var(--shadow-premium)", 
           border: "1px solid var(--border-muted)",
-          height: "auto",
+          height: "100%",
           minHeight: 0
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 24 : 32 }}>
@@ -273,7 +273,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
           padding: isMobile ? 20 : 32, 
           boxShadow: "var(--shadow-premium)", 
           border: "1px solid var(--border-muted)",
-          height: "auto",
+          height: "100%",
           minHeight: 0
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 24 : 32 }}>
