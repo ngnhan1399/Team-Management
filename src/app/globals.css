@@ -1818,7 +1818,7 @@ input[type=number] {
   }
 
   .page-shell-actions>* {
-    flex: 1 1 200px;
+    flex: 1 1 auto;
   }
 
   .modal {

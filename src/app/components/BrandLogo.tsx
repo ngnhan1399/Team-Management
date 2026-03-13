@@ -123,10 +123,12 @@ export default function BrandLogo({
         gap,
         textAlign: isCentered ? "center" : "left",
         overflow: "hidden",
+        minWidth: 0,
+        width: "100%",
       }}
     >
       <BrandMark size={markSize} />
-      <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, flex: 1 }}>
         <div
           style={{
             fontSize: titleSize,
@@ -149,11 +151,13 @@ export default function BrandLogo({
               color: "var(--text-muted)",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
-              lineHeight: 1.1,
-              whiteSpace: "nowrap",
+              lineHeight: 1.25,
               marginTop: 3,
               overflow: "hidden",
-              textOverflow: "ellipsis",
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: 2,
+              overflowWrap: "anywhere",
             }}
           >
             {subtitle}

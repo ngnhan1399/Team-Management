@@ -324,7 +324,7 @@ export default function MainApp() {
       <RealtimeToastLayer />
       {sidebarOpen && <button className="sidebar-backdrop lg:hidden" aria-label="Đóng menu điều hướng" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div style={{ padding: "20px 24px", display: "flex", alignItems: "flex-start", width: "100%" }}>
+        <div style={{ padding: "20px 24px", display: "flex", alignItems: "flex-start", width: "100%", minWidth: 0, overflow: "hidden" }}>
           <BrandLogo
             markSize={38}
             titleSize={18}
