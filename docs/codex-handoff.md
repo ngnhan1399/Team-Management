@@ -1,5 +1,24 @@
 # Codex Handoff
 
+## Update 2026-03-13 (CTV mở tab Bài viết lần đầu bị trống)
+
+- Đã sửa `ArticlesPage.tsx` để lần mở đầu của `CTV` không còn mặc định áp bộ lọc `tháng/năm hiện tại`.
+- Logic mới:
+  - `admin` vẫn dùng default filter theo tháng hiện tại
+  - `CTV` mặc định dùng filter rỗng để thấy bài mới nhất ngay khi mở tab
+  - initial fetch chờ `authLoading` hoàn tất rồi mới chạy, tránh dựng request đầu tiên bằng state chưa ổn định
+  - `clearFilters()` cũng quay về default theo vai trò thay vì luôn ép `tháng hiện tại`
+
+### File đã động vào
+
+- `src/app/components/ArticlesPage.tsx`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npx eslint src/app/components/ArticlesPage.tsx` ✅
+- `npm run typecheck` ✅
+
 ## Update 2026-03-13 (auto-fill article ID from link + chặn lưu thiếu link)
 
 - Thêm helper dùng chung `src/lib/article-link-id.ts` để trích `6` chữ số ID ở cuối URL bài viết.

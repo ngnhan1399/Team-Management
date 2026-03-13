@@ -56,11 +56,21 @@ import type {
   ImportDryRunResult,
 } from "./types";
 
+const EMPTY_ARTICLE_FILTERS: ArticleFilters = {
+  penName: "",
+  status: "",
+  category: "",
+  articleType: "",
+  contentType: "",
+  month: "",
+  year: "",
+};
+
 export default function ArticlesPage() {
   type LinkHealthStatus = "ok" | "broken" | "unknown";
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
   type ArticleListQuery = { page: number; search: string; filters: ArticleFilters };
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const isMobile = useIsMobile();
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const articlesRequestAbortRef = React.useRef<AbortController | null>(null);
@@ -71,7 +81,7 @@ export default function ArticlesPage() {
   const articleListQueryRef = React.useRef<ArticleListQuery>({
     page: 1,
     search: "",
-    filters: createCurrentMonthFilters(),
+    filters: { ...EMPTY_ARTICLE_FILTERS },
   });
   const importInputId = React.useId();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -115,7 +125,7 @@ export default function ArticlesPage() {
   const [previewArticle, setPreviewArticle] = useState<Article | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<ArticleFilters>(createCurrentMonthFilters);
+  const [filters, setFilters] = useState<ArticleFilters>({ ...EMPTY_ARTICLE_FILTERS });
   const [linkHealth, setLinkHealth] = useState<Record<string, LinkHealthEntry>>({});
   const [linkCheckLoading, setLinkCheckLoading] = useState(false);
   const [showCommentsModal, setShowCommentsModal] = useState(false);
@@ -168,6 +178,10 @@ export default function ArticlesPage() {
       })),
   ];
   const normalizedFilterPenName = resolvePreferredCollaboratorPenName([filters.penName], filters.penName || "") || "";
+  const createDefaultFilters = useCallback(
+    (): ArticleFilters => (canManageArticles ? createCurrentMonthFilters() : { ...EMPTY_ARTICLE_FILTERS }),
+    [canManageArticles]
+  );
   const resolveAuthorBucket = useCallback((article: Article): "ctv" | "editorial" => {
     if (article.authorUserRole === "admin") {
       return "editorial";
@@ -286,13 +300,20 @@ export default function ArticlesPage() {
   }, [isWriter, shouldShowSplitArticleSections, user]);
 
   useEffect(() => {
-    if (hasFetchedInitialArticlesRef.current) {
+    if (authLoading || hasFetchedInitialArticlesRef.current) {
       return;
     }
 
+    const defaultFilters = createDefaultFilters();
+    articleListQueryRef.current = {
+      page: 1,
+      search: "",
+      filters: defaultFilters,
+    };
+    setFilters(defaultFilters);
     hasFetchedInitialArticlesRef.current = true;
-    fetchArticles(1, articleListQueryRef.current.search, articleListQueryRef.current.filters);
-  }, [fetchArticles]);
+    fetchArticles(1, "", defaultFilters);
+  }, [authLoading, createDefaultFilters, fetchArticles]);
 
   useEffect(() => () => {
     articlesRequestAbortRef.current?.abort();
@@ -467,7 +488,7 @@ export default function ArticlesPage() {
     fetchArticles(1, appliedSearch, f);
   };
   const clearFilters = () => {
-    const f = createCurrentMonthFilters();
+    const f = createDefaultFilters();
     setFilters(f);
     fetchArticles(1, appliedSearch, f);
   };
