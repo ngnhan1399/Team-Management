@@ -58,6 +58,8 @@ export default function ArticlesPage() {
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const articlesRequestAbortRef = React.useRef<AbortController | null>(null);
   const collaboratorsRequestRef = React.useRef<Promise<void> | null>(null);
+  const hasFetchedInitialArticlesRef = React.useRef(false);
+  const articlesRealtimeRefreshTimerRef = React.useRef<number | null>(null);
   const linkHealthRef = React.useRef<Record<string, LinkHealthEntry>>({});
   const articleListQueryRef = React.useRef<ArticleListQuery>({
     page: 1,
@@ -223,11 +225,19 @@ export default function ArticlesPage() {
   }, [isWriter, user]);
 
   useEffect(() => {
+    if (hasFetchedInitialArticlesRef.current) {
+      return;
+    }
+
+    hasFetchedInitialArticlesRef.current = true;
     fetchArticles(1, articleListQueryRef.current.search, articleListQueryRef.current.filters);
   }, [fetchArticles]);
 
   useEffect(() => () => {
     articlesRequestAbortRef.current?.abort();
+    if (articlesRealtimeRefreshTimerRef.current) {
+      window.clearTimeout(articlesRealtimeRefreshTimerRef.current);
+    }
   }, []);
 
   useEffect(() => {
@@ -712,11 +722,27 @@ export default function ArticlesPage() {
   }, []);
 
   const refreshArticlesView = useCallback(() => {
-    const currentQuery = articleListQueryRef.current;
-    fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
-    if (commentArticle) {
-      fetchComments(commentArticle.id);
+    if (typeof window === "undefined") {
+      const currentQuery = articleListQueryRef.current;
+      fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
+      if (commentArticle) {
+        fetchComments(commentArticle.id);
+      }
+      return;
     }
+
+    if (articlesRealtimeRefreshTimerRef.current) {
+      window.clearTimeout(articlesRealtimeRefreshTimerRef.current);
+    }
+
+    articlesRealtimeRefreshTimerRef.current = window.setTimeout(() => {
+      articlesRealtimeRefreshTimerRef.current = null;
+      const currentQuery = articleListQueryRef.current;
+      fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
+      if (commentArticle) {
+        fetchComments(commentArticle.id);
+      }
+    }, 600);
   }, [commentArticle, fetchArticles, fetchComments]);
 
   useRealtimeRefresh(["articles"], refreshArticlesView);
