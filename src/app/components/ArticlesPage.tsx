@@ -399,6 +399,10 @@ export default function ArticlesPage() {
     fetchArticles(1, appliedSearch, f);
   };
   const toggleSelectionMode = () => {
+    if (!selectionMode && canManageArticles) {
+      void ensureCollaboratorsLoaded();
+    }
+
     setSelectionMode((prev) => {
       const next = !prev;
       if (!next) {
