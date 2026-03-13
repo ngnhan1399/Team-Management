@@ -56,6 +56,9 @@ const STATUS_COLORS: Record<string, string> = {
 export default function FeedbackPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const contributorFeedbackLayoutStyle = !isAdmin
+    ? { width: "min(100%, 760px)", marginInline: "auto" as const }
+    : undefined;
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -206,14 +209,28 @@ export default function FeedbackPage() {
 
   return (
     <>
-      <header className="page-shell-header" style={{ marginBottom: 28 }}>
-        <div>
+      <header
+        className="page-shell-header"
+        style={{
+          marginBottom: 28,
+          ...(contributorFeedbackLayoutStyle || {}),
+        }}
+      >
+        <div style={{ width: "100%" }}>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Feedback</h2>
         </div>
       </header>
 
-      <div style={{ display: "grid", gap: 24, gridTemplateColumns: isAdmin ? "minmax(340px, 420px) minmax(0, 1fr)" : "minmax(0, 760px)" }}>
-        <div className="glass-card" style={{ padding: 24, alignSelf: "start" }}>
+      <div
+        style={{
+          display: "grid",
+          gap: 24,
+          gridTemplateColumns: isAdmin ? "minmax(340px, 420px) minmax(0, 1fr)" : "minmax(0, 760px)",
+          justifyContent: isAdmin ? "stretch" : "center",
+          ...(contributorFeedbackLayoutStyle || {}),
+        }}
+      >
+        <div className="glass-card" style={{ padding: 24, alignSelf: "start", width: "100%" }}>
           <div style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-main)", marginBottom: 6 }}>Gửi feedback mới</h3>
           </div>
@@ -260,7 +277,7 @@ export default function FeedbackPage() {
           </form>
         </div>
 
-        <div style={{ display: "grid", gap: 20 }}>
+        <div style={{ display: "grid", gap: 20, width: "100%" }}>
           {isAdmin && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 16 }}>
