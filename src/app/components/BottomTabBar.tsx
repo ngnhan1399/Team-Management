@@ -13,7 +13,7 @@ export default function BottomTabBar({ currentPage, onNavigate, unreadCount = 0 
   const tabs = [
     { id: "dashboard", label: "Tổng quan", icon: "dashboard" },
     { id: "articles", label: "Bài viết", icon: "description" },
-    { id: "tasks", label: "Lịch việc", icon: "task_alt" },
+    { id: "tasks", label: "Lịch việc", icon: "calendar_month" },
     { id: "royalty", label: "Nhuận bút", icon: "payments" },
     { id: "notifications", label: "Thông báo", icon: "notifications", badge: unreadCount },
   ];

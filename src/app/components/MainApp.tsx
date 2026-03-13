@@ -311,7 +311,7 @@ export default function MainApp() {
     { id: "notifications", label: "Thông báo", icon: "notifications", section: "Tổng quan", count: unreadCount },
     { id: "feedback", label: "Feedback", icon: "feedback", section: "Tổng quan" },
     { id: "articles", label: "Bài viết", icon: "description", section: "Quản lý" },
-    { id: "tasks", label: "Lịch biên tập", icon: "task_alt", section: "Quản lý" },
+    { id: "tasks", label: "Lịch biên tập", icon: "calendar_month", section: "Quản lý" },
     { id: "team", label: "Đội ngũ", icon: "group", section: "Quản lý", adminOnly: true },
     { id: "royalty", label: "Nhuận bút", icon: "payments", section: "Quản lý" },
     { id: "audit", label: "Audit Logs", icon: "history", section: "Quản lý", adminOnly: true, leaderOnly: true },
@@ -324,9 +324,9 @@ export default function MainApp() {
       <RealtimeToastLayer />
       {sidebarOpen && <button className="sidebar-backdrop lg:hidden" aria-label="Đóng menu điều hướng" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div style={{ padding: 24, display: "flex", alignItems: "flex-start", width: "100%" }}>
+        <div style={{ padding: "20px 24px", display: "flex", alignItems: "flex-start", width: "100%" }}>
           <BrandLogo
-            markSize={42}
+            markSize={38}
             titleSize={18}
             subtitle={roleSubtitleWithTeam}
           />

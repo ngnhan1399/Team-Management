@@ -392,7 +392,7 @@ export default function RoyaltyPage() {
               {hasBudget && budgetPct >= 80 && (
                 <div className="glass-card" style={{ padding: "24px 32px", marginBottom: 32, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap", borderLeft: `6px solid ${gaugeColor}`, background: `${gaugeColor}05` }}>
                   <div style={{ width: 56, height: 56, borderRadius: 16, background: `${gaugeColor}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 32, color: gaugeColor }}>{budgetPct >= 100 ? "priority_high" : "warning"}</span>
+                    <span className="material-symbols-outlined" style={{ fontSize: 22, color: gaugeColor }}>{budgetPct >= 100 ? "priority_high" : "warning"}</span>
                   </div>
                   <div style={{ flex: 1 }}>
                     <h4 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-main)" }}>{budgetPct >= 100 ? "Vượt ngân sách" : "Sắp đạt giới hạn"}</h4>

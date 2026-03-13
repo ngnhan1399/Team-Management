@@ -207,7 +207,7 @@ export default function EditorialTasksPage() {
                 {sendingReminders ? "Đang gửi..." : "Gửi nhắc việc"}
               </button>
               <button data-testid="tasks-create-button" className="btn-ios-pill btn-ios-primary" onClick={openCreateModal}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add_task</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>calendar_add_on</span>
                 Tạo task
               </button>
             </>
