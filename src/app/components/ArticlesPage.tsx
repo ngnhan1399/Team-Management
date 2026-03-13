@@ -1847,8 +1847,8 @@ export default function ArticlesPage() {
         </span>
       </div>
 
-      <div className="glass-card" style={{ padding: 20, marginBottom: 32 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      <div className="glass-card" style={{ padding: 20, marginBottom: 32, overflow: "hidden" }}>
+        <div style={{ display: "flex", gap: 12, rowGap: 10, alignItems: "center", flexWrap: "wrap", width: "100%", minWidth: 0 }}>
           <div style={{ flex: "1 1 420px", minWidth: 0, position: "relative" }}>
             <span className="material-symbols-outlined" style={{ position: "absolute", left: isMobile ? 12 : 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 18 }}>search</span>
             <input
@@ -1882,6 +1882,7 @@ export default function ArticlesPage() {
                 padding: "0 16px 0 12px",
                 gap: 10,
                 whiteSpace: "nowrap",
+                flexShrink: 0,
                 background: linkCheckLoading ? "rgba(14, 165, 233, 0.10)" : "rgba(37, 99, 235, 0.08)",
                 color: linkCheckLoading ? "#0369a1" : "var(--accent-blue)",
                 border: linkCheckLoading
@@ -1974,7 +1975,27 @@ export default function ArticlesPage() {
         )}
 
         {showFilters && !isMobile && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, borderTop: "1px solid var(--glass-border)", paddingTop: 24, animation: "modalFadeIn 0.2s ease" }}>
+          <div
+            style={{
+              marginTop: 18,
+              padding: 18,
+              borderRadius: 18,
+              border: "1px solid rgba(148, 163, 184, 0.16)",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(248,250,252,0.56) 100%)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55), 0 12px 30px rgba(15, 23, 42, 0.05)",
+              animation: "modalFadeIn 0.2s ease",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--accent-blue)" }}>tune</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-main)" }}>Bộ lọc bài viết</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
+                  Thu hẹp danh sách theo bút danh, trạng thái và loại bài
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
             {canManageArticles && (
               <div className="form-group">
                 <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Bút danh</label>
@@ -2047,6 +2068,7 @@ export default function ArticlesPage() {
                     placeholder="Năm"
                     menuMode="portal-bottom"
                   />
+                </div>
                 </div>
               </div>
             </div>

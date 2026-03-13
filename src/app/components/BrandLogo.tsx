@@ -13,7 +13,7 @@ type BrandLogoProps = {
 
 export function BrandMark({
   size = 48,
-  shadow = "0 20px 40px rgba(15, 23, 42, 0.18)",
+  shadow = "0 5px 12px rgba(15, 23, 42, 0.08)",
 }: BrandMarkProps) {
   const radius = Math.max(16, Math.round(size * 0.28));
   const innerRadius = Math.max(14, radius - 1);
@@ -74,7 +74,8 @@ export function BrandMark({
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth="10"
-          style={{ transform: "translateY(2px)", filter: "blur(2px)" }}
+          strokeOpacity="0.52"
+          style={{ transform: "translateY(1px)", filter: "blur(1px)" }}
         />
         
         {/* Main 'W' shape */}
@@ -96,7 +97,7 @@ export function BrandMark({
           height: dotSize,
           borderRadius: 999,
           background: "#fb923c",
-          boxShadow: "0 0 0 6px rgba(251,146,60,0.16)",
+          boxShadow: "0 0 0 2px rgba(251,146,60,0.08)",
         }}
       />
     </div>
