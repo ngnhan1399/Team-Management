@@ -1,10 +1,15 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus } from "@/lib/article-status";
 import type { DashboardStats, Page } from "./types";
+
+const DASHBOARD_STATS_CACHE_TTL_MS = 30_000;
+
+let dashboardStatsCache: DashboardStats | null = null;
+let dashboardStatsCacheAt = 0;
 
 function formatActivityTime(value: string) {
   const parsed = new Date(value);
@@ -39,25 +44,65 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const refreshTimeoutRef = useRef<number | null>(null);
 
   const refreshStats = useCallback((showLoading = false) => {
     if (showLoading) {
       setLoading(true);
     }
-    fetch("/api/statistics", { cache: "no-store" }).then(r => r.json()).then(d => { setStats(d.data); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
     fetch("/api/statistics", { cache: "no-store" })
-      .then(r => r.json())
-      .then(d => {
-        setStats(d.data);
+      .then((r) => r.json())
+      .then((d) => {
+        const nextStats = d.data || null;
+        dashboardStatsCache = nextStats;
+        dashboardStatsCacheAt = Date.now();
+        setStats(nextStats);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
-  useRealtimeRefresh(["dashboard", "articles", "royalty", "team", "notifications"], () => refreshStats(false));
+  useEffect(() => {
+    const hasFreshCache = dashboardStatsCache && Date.now() - dashboardStatsCacheAt < DASHBOARD_STATS_CACHE_TTL_MS;
+    if (hasFreshCache) {
+      const handle = window.setTimeout(() => {
+        setStats(dashboardStatsCache);
+        setLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(handle);
+    }
+
+    const handle = window.setTimeout(() => {
+      refreshStats(true);
+    }, 0);
+
+    return () => window.clearTimeout(handle);
+  }, [refreshStats]);
+
+  const scheduleStatsRefresh = useCallback(() => {
+    if (typeof window === "undefined") {
+      refreshStats(false);
+      return;
+    }
+
+    if (refreshTimeoutRef.current) {
+      return;
+    }
+
+    refreshTimeoutRef.current = window.setTimeout(() => {
+      refreshTimeoutRef.current = null;
+      refreshStats(false);
+    }, 1500);
+  }, [refreshStats]);
+
+  useEffect(() => () => {
+    if (refreshTimeoutRef.current) {
+      window.clearTimeout(refreshTimeoutRef.current);
+    }
+  }, []);
+
+  useRealtimeRefresh(["dashboard", "articles", "team"], scheduleStatsRefresh);
 
   if (loading) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16 }}>

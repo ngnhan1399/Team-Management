@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import CustomSelect from "./CustomSelect";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
@@ -12,6 +12,16 @@ import type {
   RoyaltyDashboardData,
   RoyaltyRateItem,
 } from "./types";
+
+const ROYALTY_RATES_CACHE_TTL_MS = 10 * 60 * 1000;
+const ROYALTY_COLLABORATORS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+let royaltyRatesCache: RoyaltyRateItem[] | null = null;
+let royaltyRatesCacheAt = 0;
+let royaltyCollaboratorsCache: Collaborator[] | null = null;
+let royaltyCollaboratorsCacheAt = 0;
+let royaltyCollaboratorsCacheKey = "";
+
 export default function RoyaltyPage() {
   const { user } = useAuth();
   const [rates, setRates] = useState<RoyaltyRateItem[]>([]);
@@ -38,6 +48,7 @@ export default function RoyaltyPage() {
   const [paymentActionId, setPaymentActionId] = useState<number | null>(null);
   const [forceGenerate, setForceGenerate] = useState(false);
   const [expandedPaymentId, setExpandedPaymentId] = useState<number | null>(null);
+  const refreshTimeoutRef = useRef<number | null>(null);
   const isAdmin = user?.role === "admin";
   const isLeader = Boolean(isAdmin && user?.isLeader);
   const collaboratorLabel = user?.collaborator?.penName || user?.collaborator?.name || "tài khoản của bạn";
@@ -86,10 +97,20 @@ export default function RoyaltyPage() {
       .catch(() => setLoading(false));
   }, [overviewMonth, overviewYear]);
 
-  const fetchRates = useCallback(() => {
-    fetch("/api/royalty?action=rates", { cache: "no-store" })
-      .then(r => r.json())
-      .then(d => setRates(d.data || []))
+  const fetchRates = useCallback((preferCache = true) => {
+    if (preferCache && royaltyRatesCache && Date.now() - royaltyRatesCacheAt < ROYALTY_RATES_CACHE_TTL_MS) {
+      setRates(royaltyRatesCache);
+      return Promise.resolve();
+    }
+
+    return fetch("/api/royalty?action=rates", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const nextRates = d.data || [];
+        royaltyRatesCache = nextRates;
+        royaltyRatesCacheAt = Date.now();
+        setRates(nextRates);
+      })
       .catch(() => { });
   }, []);
 
@@ -119,13 +140,43 @@ export default function RoyaltyPage() {
       .catch(() => setPaymentsLoading(false));
   }, [isAdmin, paymentMonth, paymentPenName, paymentStatusFilter, paymentYear, user]);
 
+  const fetchCollaborators = useCallback((preferCache = true) => {
+    if (!isAdmin) {
+      setCollaborators([]);
+      return Promise.resolve();
+    }
+
+    const cacheKey = `${user?.id || 0}:${user?.teamId || 0}:${isLeader ? "leader" : "team"}`;
+    if (
+      preferCache
+      && royaltyCollaboratorsCache
+      && royaltyCollaboratorsCacheKey === cacheKey
+      && Date.now() - royaltyCollaboratorsCacheAt < ROYALTY_COLLABORATORS_CACHE_TTL_MS
+    ) {
+      setCollaborators(royaltyCollaboratorsCache);
+      return Promise.resolve();
+    }
+
+    return fetch("/api/collaborators?view=directory", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const nextCollaborators = d.data || [];
+        royaltyCollaboratorsCache = nextCollaborators;
+        royaltyCollaboratorsCacheAt = Date.now();
+        royaltyCollaboratorsCacheKey = cacheKey;
+        setCollaborators(nextCollaborators);
+      })
+      .catch(() => { });
+  }, [isAdmin, isLeader, user?.id, user?.teamId]);
+
   useEffect(() => {
     fetchDashboard();
-    fetchRates();
-    if (isAdmin) {
-      fetch("/api/collaborators?view=directory", { cache: "no-store" }).then(r => r.json()).then(d => setCollaborators(d.data || [])).catch(() => { });
-    }
-  }, [fetchDashboard, fetchRates, isAdmin]);
+  }, [fetchDashboard]);
+
+  useEffect(() => {
+    void fetchRates(true);
+    void fetchCollaborators(true);
+  }, [fetchCollaborators, fetchRates]);
 
   useEffect(() => {
     if (tab === "calculate") {
@@ -133,13 +184,42 @@ export default function RoyaltyPage() {
     }
   }, [fetchCalculation, tab]);
 
+  useEffect(() => {
+    if (tab === "workflow") {
+      fetchPayments();
+    }
+  }, [fetchPayments, tab]);
+
   const refreshRoyaltyView = useCallback(() => {
-    fetchDashboard();
+    if (tab === "overview") fetchDashboard();
+    if (tab === "rates") void fetchRates(false);
     if (tab === "calculate") fetchCalculation();
     if (tab === "workflow") fetchPayments();
-  }, [fetchCalculation, fetchDashboard, fetchPayments, tab]);
+  }, [fetchCalculation, fetchDashboard, fetchPayments, fetchRates, tab]);
 
-  useRealtimeRefresh(["royalty", "dashboard", "articles"], refreshRoyaltyView);
+  const scheduleRoyaltyRefresh = useCallback(() => {
+    if (typeof window === "undefined") {
+      refreshRoyaltyView();
+      return;
+    }
+
+    if (refreshTimeoutRef.current) {
+      return;
+    }
+
+    refreshTimeoutRef.current = window.setTimeout(() => {
+      refreshTimeoutRef.current = null;
+      refreshRoyaltyView();
+    }, 1500);
+  }, [refreshRoyaltyView]);
+
+  useEffect(() => () => {
+    if (refreshTimeoutRef.current) {
+      window.clearTimeout(refreshTimeoutRef.current);
+    }
+  }, []);
+
+  useRealtimeRefresh(["royalty", "articles"], scheduleRoyaltyRefresh);
 
   const handleSetBudget = async () => {
     const amount = parseInt(budgetInput);
@@ -249,10 +329,7 @@ export default function RoyaltyPage() {
           <button
             key={t.id}
             data-testid={`royalty-tab-${t.id}`}
-            onClick={() => {
-              if (t.id === "overview") fetchDashboard();
-              setTab(t.id);
-            }}
+            onClick={() => setTab(t.id)}
             style={{
               padding: "10px 20px",
               borderRadius: 12,
