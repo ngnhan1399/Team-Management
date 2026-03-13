@@ -143,6 +143,17 @@ export default function ArticlesPage() {
   const mappedFields = Object.values(importMapping).filter(Boolean);
   const duplicateMappedFields = mappedFields.filter((field, index) => mappedFields.indexOf(field) !== index);
   const missingRequiredImportFields = REQUIRED_IMPORT_FIELDS.filter((field) => !mappedFields.includes(field));
+  const reviewerSelectOptions = [
+    { value: "", label: collaboratorsLoading && collaborators.length === 0 ? "Đang tải reviewer..." : "Chưa phân công" },
+    ...collaborators
+      .filter((collaborator) => collaborator.role === "reviewer" || collaborator.linkedUserRole === "admin")
+      .map((collaborator) => ({
+        value: collaborator.penName,
+        label: collaborator.name && collaborator.name !== collaborator.penName
+          ? `${collaborator.penName} (${collaborator.name})`
+          : collaborator.penName,
+      })),
+  ];
 
   const ensureCollaboratorsLoaded = useCallback(async () => {
     if (!canManageArticles || collaboratorsLoaded) {
@@ -1284,7 +1295,7 @@ export default function ArticlesPage() {
   const showSplitArticleSections = shouldShowSplitArticleSections;
   const ctvArticles = articles.filter((article) => article.authorBucket !== "editorial");
   const editorialArticles = articles.filter((article) => article.authorBucket === "editorial");
-  const articleTableMinWidth = showSplitArticleSections ? 980 : 1040;
+  const articleTableMinWidth = showSplitArticleSections ? 1160 : 1220;
   const articleSections = [
     {
       key: "ctv",
@@ -1311,11 +1322,12 @@ export default function ArticlesPage() {
       <table style={{ width: "100%", minWidth: articleTableMinWidth, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
         <colgroup>
           <col style={{ width: "6%" }} />
+          <col style={{ width: "9%" }} />
+          <col style={{ width: "26%" }} />
+          <col style={{ width: "11%" }} />
+          <col style={{ width: "12%" }} />
           <col style={{ width: "10%" }} />
-          <col style={{ width: "30%" }} />
-          <col style={{ width: "12%" }} />
-          <col style={{ width: "13%" }} />
-          <col style={{ width: "12%" }} />
+          <col style={{ width: "9%" }} />
           <col style={{ width: "5%" }} />
           <col style={{ width: "12%" }} />
         </colgroup>
@@ -1325,6 +1337,7 @@ export default function ArticlesPage() {
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ngày</th>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Tiêu đề</th>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Bút danh</th>
+            <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Người duyệt</th>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Loại bài</th>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Trạng thái</th>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Link</th>
@@ -1334,7 +1347,7 @@ export default function ArticlesPage() {
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={8}>
+              <td colSpan={9}>
                 <div style={{ padding: showSplitArticleSections ? 44 : 72, textAlign: "center", color: "var(--text-muted)" }}>
                   <div style={{ fontSize: showSplitArticleSections ? 28 : 36, marginBottom: 12 }}>📄</div>
                   <div style={{ fontWeight: 700 }}>{emptyMessage}</div>
@@ -1394,6 +1407,9 @@ export default function ArticlesPage() {
                     <span style={{ fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap", fontWeight: 600 }}>{getDisplayedPenName(a.penName)}</span>
                     {authorBucketBadge(a)}
                   </div>
+                </td>
+                <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)" }}>
+                  {a.reviewerName ? getDisplayedPenName(a.reviewerName) : "—"}
                 </td>
                 <td style={{ padding: "12px 14px", textAlign: "center" }}>
                   {articleTypeBadge(a.articleType)}
@@ -1564,7 +1580,7 @@ export default function ArticlesPage() {
             </a>
           )}
           {canCreateArticles && (
-            <button className="btn-ios-pill btn-ios-primary" onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? MANAGER_DEFAULT_PEN_NAME : user?.collaborator?.penName, status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}>
+            <button className="btn-ios-pill btn-ios-primary" onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? MANAGER_DEFAULT_PEN_NAME : user?.collaborator?.penName, reviewerName: "", status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
               Thêm bài viết
             </button>
@@ -1843,6 +1859,18 @@ export default function ArticlesPage() {
                 <label className="form-label">Mã ID hệ thống</label>
                 <input className="form-input" value={formData.articleId || ""} onChange={e => setFormData({ ...formData, articleId: e.target.value })} placeholder="VD: post-123" />
               </div>
+              {canManageArticles && (
+                <div className="form-group">
+                  <label className="form-label">Người duyệt</label>
+                  <CustomSelect
+                    value={formData.reviewerName || ""}
+                    onChange={v => setFormData({ ...formData, reviewerName: v })}
+                    options={reviewerSelectOptions}
+                    placeholder={collaboratorsLoading && collaborators.length === 0 ? "Đang tải reviewer..." : "Chọn người duyệt"}
+                    menuMode="portal-bottom"
+                  />
+                </div>
+              )}
                       <div className="form-group">
                 <label className="form-label">Đường dẫn bài viết (URL)</label>
                 <input className="form-input" value={formData.link || ""} onChange={e => setFormData({ ...formData, link: e.target.value })} placeholder="https://domain.com/bai-viet" />

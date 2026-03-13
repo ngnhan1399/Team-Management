@@ -1,12 +1,15 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { royaltyRates, articles, monthlyBudgets, collaborators, users } from "@/db/schema";
-import { getContextArticleOwnerCandidates, getCurrentUserContext } from "@/lib/auth";
+import { getContextArticleOwnerCandidates, getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import {
     filterBudgetEligibleRoyaltyArticles,
+    isBudgetEligibleContributor,
     matchesRoyaltyMonthYear,
     parseRoyaltyDateParts,
+    resolveRoyaltyContributorPenName,
+    resolveRoyaltyContributorProfile,
     summarizeRoyaltyContentBalance,
     type RoyaltyContributorProfile,
 } from "@/lib/royalty";
@@ -22,6 +25,7 @@ type RoyaltyBreakdown = Record<string, { count: number; unitPrice: number; total
 type RoyaltySourceArticle = {
     teamId: number | null;
     penName: string;
+    reviewerName: string | null;
     category: string;
     articleType: string;
     contentType: string;
@@ -54,6 +58,7 @@ async function selectRoyaltyArticles(options?: { ownerCandidates?: string[]; exa
     return db.select({
         teamId: articles.teamId,
         penName: articles.penName,
+        reviewerName: articles.reviewerName,
         category: articles.category,
         articleType: articles.articleType,
         contentType: articles.contentType,
@@ -78,6 +83,64 @@ async function loadRoyaltyContributorProfiles(teamId?: number | null) {
         .leftJoin(users, eq(users.collaboratorId, collaborators.id))
         .where(teamId ? eq(collaborators.teamId, teamId) : undefined)
         .all() as Promise<RoyaltyContributorProfile[]>;
+}
+
+function appendRoyaltyContribution(
+    rowsByContributor: Record<string, {
+        penName: string;
+        totalArticles: number;
+        totalAmount: number;
+        writerArticles: number;
+        writerAmount: number;
+        reviewerArticles: number;
+        reviewerAmount: number;
+        breakdown: RoyaltyBreakdown;
+    }>,
+    options: {
+        contributorPenName: string;
+        role: "writer" | "reviewer";
+        articleType: string;
+        contentType: string;
+        price: number;
+    }
+) {
+    const contributorPenName = String(options.contributorPenName || "").trim();
+    if (!contributorPenName) {
+        return;
+    }
+
+    if (!rowsByContributor[contributorPenName]) {
+        rowsByContributor[contributorPenName] = {
+            penName: contributorPenName,
+            totalArticles: 0,
+            totalAmount: 0,
+            writerArticles: 0,
+            writerAmount: 0,
+            reviewerArticles: 0,
+            reviewerAmount: 0,
+            breakdown: {},
+        };
+    }
+
+    const row = rowsByContributor[contributorPenName];
+    row.totalArticles += 1;
+    row.totalAmount += options.price;
+
+    if (options.role === "writer") {
+        row.writerArticles += 1;
+        row.writerAmount += options.price;
+    } else {
+        row.reviewerArticles += 1;
+        row.reviewerAmount += options.price;
+    }
+
+    const detailPrefix = options.role === "writer" ? "Viết bài" : "Duyệt bài";
+    const breakdownKey = `${detailPrefix} • ${options.articleType} (${options.contentType})`;
+    if (!row.breakdown[breakdownKey]) {
+        row.breakdown[breakdownKey] = { count: 0, unitPrice: options.price, total: 0 };
+    }
+    row.breakdown[breakdownKey].count += 1;
+    row.breakdown[breakdownKey].total += options.price;
 }
 
 export async function GET(request: NextRequest) {
@@ -255,6 +318,8 @@ export async function GET(request: NextRequest) {
             const month = searchParams.get("month") ? requiredInt(searchParams.get("month"), "month") : 0;
             const year = searchParams.get("year") ? requiredInt(searchParams.get("year"), "year") : 0;
             const requestPenName = optionalString(searchParams.get("penName")) || "";
+            const identityCandidates = getContextIdentityCandidates(context);
+            const scopedTeamId = context.user.role === "admin" ? adminTeamId : getContextTeamId(context);
 
             const rates = await db.select().from(royaltyRates).where(eq(royaltyRates.isActive, true)).all();
             const rateMap = new Map<string, number>();
@@ -262,66 +327,77 @@ export async function GET(request: NextRequest) {
                 rateMap.set(`${rate.articleType}|${rate.contentType}`, rate.price);
             }
 
-            const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
             const profileScopeTeamId = context.user.role === "admin"
                 ? adminTeamId
                 : getContextTeamId(context);
             const [scopedArticles, contributorProfiles] = await Promise.all([
                 selectRoyaltyArticles({
-                    exactPenName: context.user.role === "admin" ? requestPenName || undefined : undefined,
-                    ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
-                    teamId: adminTeamId,
+                    ownerCandidates: scopedTeamId ? undefined : (context.user.role === "admin" ? undefined : identityCandidates),
+                    teamId: scopedTeamId,
                 }),
                 loadRoyaltyContributorProfiles(profileScopeTeamId),
             ]);
-            const budgetEligibleArticles = filterBudgetEligibleRoyaltyArticles(scopedArticles, contributorProfiles);
-
-            const filtered = budgetEligibleArticles.filter((article) => {
-                if (!month || !year) return true;
-                return matchesRoyaltyMonthYear(article.date, month, year);
-            });
 
             const paymentByWriter: Record<string, {
                 penName: string;
                 totalArticles: number;
                 totalAmount: number;
+                writerArticles: number;
+                writerAmount: number;
+                reviewerArticles: number;
+                reviewerAmount: number;
                 breakdown: RoyaltyBreakdown;
             }> = {};
 
-            for (const article of filtered) {
+            for (const article of scopedArticles) {
+                if ((month && year) && !matchesRoyaltyMonthYear(article.date, month, year)) {
+                    continue;
+                }
+
                 const normalizedArticleFields = resolveAppArticleFields({
                     category: article.category,
                     articleType: article.articleType,
                     contentType: article.contentType,
                     wordCountRange: article.wordCountRange,
                 });
-                if (!paymentByWriter[article.penName]) {
-                    paymentByWriter[article.penName] = {
-                        penName: article.penName,
-                        totalArticles: 0,
-                        totalAmount: 0,
-                        breakdown: {},
-                    };
-                }
-
-                const writer = paymentByWriter[article.penName];
                 const key = `${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`;
                 const price = rateMap.get(key) || 0;
 
-                writer.totalArticles += 1;
-                writer.totalAmount += price;
-
-                const breakdownKey = `${normalizedArticleFields.articleType} (${normalizedArticleFields.contentType})`;
-                if (!writer.breakdown[breakdownKey]) {
-                    writer.breakdown[breakdownKey] = { count: 0, unitPrice: price, total: 0 };
+                const writerProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
+                if (isBudgetEligibleContributor(writerProfile, ["writer"])) {
+                    appendRoyaltyContribution(paymentByWriter, {
+                        contributorPenName: resolveRoyaltyContributorPenName(article.penName, contributorProfiles) || article.penName,
+                        role: "writer",
+                        articleType: normalizedArticleFields.articleType,
+                        contentType: normalizedArticleFields.contentType,
+                        price,
+                    });
                 }
-                writer.breakdown[breakdownKey].count += 1;
-                writer.breakdown[breakdownKey].total += price;
+
+                const reviewerName = String(article.reviewerName || "").trim();
+                const reviewerProfile = resolveRoyaltyContributorProfile(reviewerName, contributorProfiles);
+                if (reviewerName && isBudgetEligibleContributor(reviewerProfile, ["reviewer"])) {
+                    appendRoyaltyContribution(paymentByWriter, {
+                        contributorPenName: resolveRoyaltyContributorPenName(reviewerName, contributorProfiles) || reviewerName,
+                        role: "reviewer",
+                        articleType: normalizedArticleFields.articleType,
+                        contentType: normalizedArticleFields.contentType,
+                        price,
+                    });
+                }
+            }
+
+            let result = Object.values(paymentByWriter);
+            if (context.user.role === "admin" && requestPenName) {
+                result = result.filter((row) => matchesIdentityCandidate([row.penName], requestPenName));
+            }
+            if (context.user.role !== "admin") {
+                result = result.filter((row) => matchesIdentityCandidate(identityCandidates, row.penName));
             }
 
             return NextResponse.json({
                 success: true,
-                data: Object.values(paymentByWriter),
+                data: result,
                 month,
                 year,
             });

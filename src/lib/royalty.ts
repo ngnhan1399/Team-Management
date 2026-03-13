@@ -11,9 +11,12 @@ export type RoyaltyContributorProfile = {
   linkedUserRole?: string | null;
 };
 
+export type RoyaltyContributorRole = "writer" | "reviewer";
+
 export type RoyaltyScopedArticle = {
   teamId?: number | null;
   penName: string;
+  reviewerName?: string | null;
   articleType: string;
   contentType: string;
   date: string;
@@ -96,9 +99,13 @@ export function matchesRoyaltyMonthYear(value: unknown, month: number, year: num
   return Boolean(parts && parts.year === year && parts.month === month);
 }
 
-export function isBudgetEligibleContributor(profile: RoyaltyContributorProfile | null | undefined) {
+export function isBudgetEligibleContributor(
+  profile: RoyaltyContributorProfile | null | undefined,
+  allowedRoles: RoyaltyContributorRole[] = ["writer"]
+) {
   if (!profile) return false;
-  return String(profile.role || "").trim() === "writer" && String(profile.linkedUserRole || "").trim() !== "admin";
+  const normalizedRole = String(profile.role || "").trim() as RoyaltyContributorRole;
+  return allowedRoles.includes(normalizedRole) && String(profile.linkedUserRole || "").trim() !== "admin";
 }
 
 export function resolveRoyaltyContributorProfile(

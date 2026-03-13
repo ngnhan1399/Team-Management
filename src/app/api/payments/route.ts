@@ -1,13 +1,12 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articles, payments, royaltyRates, users, collaborators } from "@/db/schema";
-import { getContextArticleOwnerCandidates, getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { writeAuditLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications";
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import {
-  filterBudgetEligibleRoyaltyArticles,
   isBudgetEligibleContributor,
   matchesRoyaltyMonthYear,
   resolveRoyaltyContributorPenName,
@@ -27,12 +26,17 @@ type CalcRow = {
   penName: string;
   totalArticles: number;
   totalAmount: number;
+  writerArticles: number;
+  writerAmount: number;
+  reviewerArticles: number;
+  reviewerAmount: number;
   details: PaymentDetails;
 };
 
 type PaymentSourceArticle = {
   teamId: number | null;
   penName: string;
+  reviewerName: string | null;
   category: string;
   articleType: string;
   contentType: string;
@@ -53,13 +57,6 @@ function expandPenNameCandidates(values: string[]) {
   );
 }
 
-function buildArticleOwnerWhere(ownerCandidates: string[]): SQL | undefined {
-  const normalizedCandidates = expandPenNameCandidates(ownerCandidates);
-  if (normalizedCandidates.length === 0) return undefined;
-  if (normalizedCandidates.length === 1) return eq(articles.penName, normalizedCandidates[0] as never);
-  return inArray(articles.penName, normalizedCandidates as never[]);
-}
-
 function buildPaymentPenNameWhere(penNames: string[]): SQL | undefined {
   const normalizedCandidates = expandPenNameCandidates(penNames);
   if (normalizedCandidates.length === 0) return undefined;
@@ -67,16 +64,8 @@ function buildPaymentPenNameWhere(penNames: string[]): SQL | undefined {
   return inArray(payments.penName, normalizedCandidates as never[]);
 }
 
-async function selectPaymentSourceArticles(options?: { exactPenName?: string; ownerCandidates?: string[]; teamId?: number | null }) {
+async function selectPaymentSourceArticles(options?: { teamId?: number | null }) {
   const conditions: SQL[] = [inArray(articles.status, [...ROYALTY_ELIGIBLE_STATUS_VALUES])];
-
-  if (options?.exactPenName) {
-    const exactPenNameWhere = buildArticleOwnerWhere([options.exactPenName]);
-    if (exactPenNameWhere) conditions.push(exactPenNameWhere);
-  } else if (options?.ownerCandidates?.length) {
-    const ownerWhere = buildArticleOwnerWhere(options.ownerCandidates);
-    if (ownerWhere) conditions.push(ownerWhere);
-  }
   if (options?.teamId) {
     conditions.push(eq(articles.teamId, options.teamId));
   }
@@ -84,6 +73,7 @@ async function selectPaymentSourceArticles(options?: { exactPenName?: string; ow
   return db.select({
     teamId: articles.teamId,
     penName: articles.penName,
+    reviewerName: articles.reviewerName,
     category: articles.category,
     articleType: articles.articleType,
     contentType: articles.contentType,
@@ -120,7 +110,92 @@ function parsePaymentDetails(raw: string | null): PaymentDetails | null {
   }
 }
 
-async function buildCalculation(month: number, year: number, options?: { exactPenName?: string; ownerCandidates?: string[]; teamId?: number | null }): Promise<CalcRow[]> {
+function summarizePaymentDetails(details: PaymentDetails | null, totalArticles: number, totalAmount: number) {
+  if (!details) {
+    return {
+      writerArticles: totalArticles,
+      writerAmount: totalAmount,
+      reviewerArticles: 0,
+      reviewerAmount: 0,
+    };
+  }
+
+  let writerArticles = 0;
+  let writerAmount = 0;
+  let reviewerArticles = 0;
+  let reviewerAmount = 0;
+
+  for (const [detailKey, value] of Object.entries(details)) {
+    if (detailKey.startsWith("Duyệt bài • ")) {
+      reviewerArticles += Number(value.count || 0);
+      reviewerAmount += Number(value.total || 0);
+      continue;
+    }
+
+    writerArticles += Number(value.count || 0);
+    writerAmount += Number(value.total || 0);
+  }
+
+  return {
+    writerArticles,
+    writerAmount,
+    reviewerArticles,
+    reviewerAmount,
+  };
+}
+
+function appendContribution(
+  rowsByContributor: Record<string, CalcRow>,
+  options: {
+    contributorPenName: string;
+    contributorTeamId: number | null;
+    role: "writer" | "reviewer";
+    articleType: string;
+    contentType: string;
+    price: number;
+  }
+) {
+  const canonicalPenName = options.contributorPenName.trim();
+  if (!canonicalPenName) {
+    return;
+  }
+
+  if (!rowsByContributor[canonicalPenName]) {
+    rowsByContributor[canonicalPenName] = {
+      teamId: options.contributorTeamId,
+      penName: canonicalPenName,
+      totalArticles: 0,
+      totalAmount: 0,
+      writerArticles: 0,
+      writerAmount: 0,
+      reviewerArticles: 0,
+      reviewerAmount: 0,
+      details: {},
+    };
+  }
+
+  const row = rowsByContributor[canonicalPenName];
+  row.totalArticles += 1;
+  row.totalAmount += options.price;
+
+  if (options.role === "writer") {
+    row.writerArticles += 1;
+    row.writerAmount += options.price;
+  } else {
+    row.reviewerArticles += 1;
+    row.reviewerAmount += options.price;
+  }
+
+  const detailPrefix = options.role === "writer" ? "Viết bài" : "Duyệt bài";
+  const detailKey = `${detailPrefix} • ${options.articleType} (${options.contentType})`;
+  if (!row.details[detailKey]) {
+    row.details[detailKey] = { count: 0, unitPrice: options.price, total: 0 };
+  }
+  row.details[detailKey].count += 1;
+  row.details[detailKey].total += options.price;
+}
+
+async function buildCalculation(month: number, year: number, options?: { exactPenName?: string; identityCandidates?: string[]; teamId?: number | null }): Promise<CalcRow[]> {
   const rates = await db.select().from(royaltyRates).where(eq(royaltyRates.isActive, true)).all();
   const rateMap = new Map<string, number>();
   for (const rate of rates) {
@@ -131,47 +206,66 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
     selectPaymentSourceArticles(options),
     loadRoyaltyContributorProfiles(options?.teamId),
   ]);
-  const eligibleSourceArticles = filterBudgetEligibleRoyaltyArticles(sourceArticles, contributorProfiles)
-    .filter((article) => matchesRoyaltyMonthYear(article.date, month, year));
 
-  const byWriter: Record<string, CalcRow> = {};
+  const byContributor: Record<string, CalcRow> = {};
 
-  for (const article of eligibleSourceArticles) {
+  for (const article of sourceArticles) {
+    if (!matchesRoyaltyMonthYear(article.date, month, year)) {
+      continue;
+    }
+
     const normalizedArticleFields = resolveAppArticleFields({
       category: article.category,
       articleType: article.articleType,
       contentType: article.contentType,
       wordCountRange: article.wordCountRange,
     });
-    const contributorProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
-    const canonicalPenName = resolveRoyaltyContributorPenName(article.penName, contributorProfiles) || article.penName;
-
-    if (!byWriter[canonicalPenName]) {
-      byWriter[canonicalPenName] = {
-        teamId: contributorProfile?.teamId ?? article.teamId ?? options?.teamId ?? null,
-        penName: canonicalPenName,
-        totalArticles: 0,
-        totalAmount: 0,
-        details: {},
-      };
-    }
-
-    const row = byWriter[canonicalPenName];
     const key = `${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`;
     const price = rateMap.get(key) || 0;
 
-    row.totalArticles += 1;
-    row.totalAmount += price;
-
-    const detailKey = `${normalizedArticleFields.articleType} (${normalizedArticleFields.contentType})`;
-    if (!row.details[detailKey]) {
-      row.details[detailKey] = { count: 0, unitPrice: price, total: 0 };
+    const writerProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
+    if (isBudgetEligibleContributor(writerProfile, ["writer"])) {
+      appendContribution(byContributor, {
+        contributorPenName: resolveRoyaltyContributorPenName(article.penName, contributorProfiles) || article.penName,
+        contributorTeamId: writerProfile?.teamId ?? article.teamId ?? options?.teamId ?? null,
+        role: "writer",
+        articleType: normalizedArticleFields.articleType,
+        contentType: normalizedArticleFields.contentType,
+        price,
+      });
     }
-    row.details[detailKey].count += 1;
-    row.details[detailKey].total += price;
+
+    const reviewerName = String(article.reviewerName || "").trim();
+    if (!reviewerName) {
+      continue;
+    }
+
+    const reviewerProfile = resolveRoyaltyContributorProfile(reviewerName, contributorProfiles);
+    if (!isBudgetEligibleContributor(reviewerProfile, ["reviewer"])) {
+      continue;
+    }
+
+    appendContribution(byContributor, {
+      contributorPenName: resolveRoyaltyContributorPenName(reviewerName, contributorProfiles) || reviewerName,
+      contributorTeamId: reviewerProfile?.teamId ?? article.teamId ?? options?.teamId ?? null,
+      role: "reviewer",
+      articleType: normalizedArticleFields.articleType,
+      contentType: normalizedArticleFields.contentType,
+      price,
+    });
   }
 
-  return Object.values(byWriter);
+  let rows = Object.values(byContributor);
+
+  if (options?.exactPenName) {
+    rows = rows.filter((row) => matchesIdentityCandidate([row.penName], options.exactPenName || ""));
+  }
+
+  if (options?.identityCandidates?.length) {
+    rows = rows.filter((row) => matchesIdentityCandidate(options.identityCandidates || [], row.penName));
+  }
+
+  return rows;
 }
 
 async function notifyPaymentStatus(fromUserId: number, penName: string, title: string, message: string, teamId?: number | null) {
@@ -212,7 +306,6 @@ export async function GET(request: NextRequest) {
     const status = optionalString(searchParams.get("status"));
     const penNameFilter = optionalString(searchParams.get("penName"));
     const identityCandidates = getContextIdentityCandidates(context);
-    const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
     const adminTeamId = context.user.role === "admin" && !isLeader(context) ? getContextTeamId(context) : null;
     const profileScopeTeamId = context.user.role === "admin"
       ? adminTeamId
@@ -232,7 +325,7 @@ export async function GET(request: NextRequest) {
         const penNameWhere = buildPaymentPenNameWhere([penNameFilter]);
         if (penNameWhere) conditions.push(penNameWhere);
       }
-    } else if (identityCandidates.length === 0 && ownerCandidates.length === 0) {
+    } else if (identityCandidates.length === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
 
@@ -263,18 +356,21 @@ export async function GET(request: NextRequest) {
     ]);
 
     let data = rawPayments
-      .filter((payment) => isBudgetEligibleContributor(resolveRoyaltyContributorProfile(payment.penName, contributorProfiles)))
+      .filter((payment) => isBudgetEligibleContributor(resolveRoyaltyContributorProfile(payment.penName, contributorProfiles), ["writer", "reviewer"]))
       .map((payment) => {
         const contributorProfile = resolveRoyaltyContributorProfile(payment.penName, contributorProfiles);
         const canonicalPenName = resolvePreferredCollaboratorPenName(
           [contributorProfile?.penName, contributorProfile?.name, payment.penName],
           contributorProfile?.penName ?? payment.penName
         ) || payment.penName;
+        const details = parsePaymentDetails(payment.details);
+        const summary = summarizePaymentDetails(details, payment.totalArticles, payment.totalAmount);
 
         return {
           ...payment,
           penName: canonicalPenName,
-          details: parsePaymentDetails(payment.details),
+          details,
+          ...summary,
           isEstimated: false,
         };
       });
@@ -283,9 +379,10 @@ export async function GET(request: NextRequest) {
       data = data.filter((payment) => matchesIdentityCandidate(identityCandidates, payment.penName));
 
       if (data.length === 0 && month && year) {
-        const [estimated] = (await buildCalculation(month, year, { ownerCandidates })).filter((row) =>
-          matchesIdentityCandidate(identityCandidates, row.penName)
-        );
+        const [estimated] = await buildCalculation(month, year, {
+          identityCandidates,
+          teamId: getContextTeamId(context),
+        });
 
         if (estimated) {
           const now = new Date().toISOString();
@@ -297,6 +394,10 @@ export async function GET(request: NextRequest) {
             penName: estimated.penName,
             totalArticles: estimated.totalArticles,
             totalAmount: estimated.totalAmount,
+            writerArticles: estimated.writerArticles,
+            writerAmount: estimated.writerAmount,
+            reviewerArticles: estimated.reviewerArticles,
+            reviewerAmount: estimated.reviewerAmount,
             details: estimated.details,
             status: "pending",
             approvedByUserId: null,

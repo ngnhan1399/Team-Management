@@ -68,9 +68,9 @@ export default function RoyaltyPage() {
   const yearSelectOptions = yearOptions.map((year) => ({ value: String(year), label: String(year) }));
   const collaboratorSelectOptions = [
     { value: "", label: "Tất cả" },
-    ...collaborators.filter((c) => c.role === "writer").map((c) => ({
+    ...collaborators.map((c) => ({
       value: c.penName,
-      label: c.name && c.name !== c.penName ? `${c.penName} (${c.name})` : c.penName,
+      label: `${c.name && c.name !== c.penName ? `${c.penName} (${c.name})` : c.penName} • ${c.role === "reviewer" ? "Reviewer" : "Writer"}`,
     })),
   ];
   const paymentStatusOptions = [
@@ -574,6 +574,8 @@ export default function RoyaltyPage() {
         }
         const breakdownEntries = Object.entries(allBreakdowns).sort((a, b) => b[1].total - a[1].total);
         const totalCalcAmount = calculation.reduce((s: number, c) => s + c.totalAmount, 0);
+        const totalWriterAmount = calculation.reduce((s: number, c) => s + c.writerAmount, 0);
+        const totalReviewerAmount = calculation.reduce((s: number, c) => s + c.reviewerAmount, 0);
         const totalCalcArticles = calculation.reduce((s: number, c) => s + c.totalArticles, 0);
         const maxBreakdownTotal = breakdownEntries.length > 0 ? breakdownEntries[0][1].total : 1;
 
@@ -606,8 +608,9 @@ export default function RoyaltyPage() {
               <>
                 <div className="stats-grid mb-8">
                   <div className="stat-card blue"><div className="stat-label">Tổng chi trả</div><div className="stat-value">{fmt(totalCalcAmount)}</div><div className="stat-icon"><span className="material-symbols-outlined">account_balance</span></div></div>
-                  <div className="stat-card green"><div className="stat-label">Bài đã duyệt</div><div className="stat-value">{totalCalcArticles}</div><div className="stat-icon"><span className="material-symbols-outlined">library_books</span></div></div>
-                  <div className="stat-card orange"><div className="stat-label">CTV hoạt động</div><div className="stat-value">{calculation.length}</div><div className="stat-icon"><span className="material-symbols-outlined">badge</span></div></div>
+                  <div className="stat-card green"><div className="stat-label">Nhuận viết</div><div className="stat-value">{fmt(totalWriterAmount)}</div><div className="stat-icon"><span className="material-symbols-outlined">edit_note</span></div></div>
+                  <div className="stat-card orange"><div className="stat-label">Nhuận duyệt</div><div className="stat-value">{fmt(totalReviewerAmount)}</div><div className="stat-icon"><span className="material-symbols-outlined">fact_check</span></div></div>
+                  <div className="stat-card blue"><div className="stat-label">Lượt tính nhuận</div><div className="stat-value">{totalCalcArticles}</div><div className="stat-icon"><span className="material-symbols-outlined">badge</span></div></div>
                 </div>
 
                 <div className="card mb-8">
@@ -637,8 +640,11 @@ export default function RoyaltyPage() {
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
                         <tr>
-                          <th style={{ padding: "12px 24px", textAlign: "left", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>CTV</th>
-                          <th style={{ padding: "12px 24px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Số bài</th>
+                          <th style={{ padding: "12px 24px", textAlign: "left", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Cộng tác viên</th>
+                          <th style={{ padding: "12px 24px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài viết</th>
+                          <th style={{ padding: "12px 24px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài duyệt</th>
+                          <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận viết</th>
+                          <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận duyệt</th>
                           <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Tổng nhuận bút</th>
                           <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Chi tiết</th>
                         </tr>
@@ -648,7 +654,10 @@ export default function RoyaltyPage() {
                           <React.Fragment key={c.penName}>
                             <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
                               <td style={{ padding: "16px 24px", fontWeight: 700, color: "var(--text-main)" }}>{c.penName}</td>
-                              <td style={{ padding: "16px 24px", textAlign: "center", color: "var(--accent-teal)", fontWeight: 800 }}>{c.totalArticles}</td>
+                              <td style={{ padding: "16px 24px", textAlign: "center", color: "var(--accent-teal)", fontWeight: 800 }}>{c.writerArticles}</td>
+                              <td style={{ padding: "16px 24px", textAlign: "center", color: "var(--accent-purple)", fontWeight: 800 }}>{c.reviewerArticles}</td>
+                              <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-teal)", fontWeight: 800 }}>{fmt(c.writerAmount)}</td>
+                              <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-purple)", fontWeight: 800 }}>{fmt(c.reviewerAmount)}</td>
                               <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-blue)", fontWeight: 800 }}>{fmt(c.totalAmount)}</td>
                               <td style={{ padding: "16px 24px", textAlign: "right" }}>
                                 <button
@@ -662,7 +671,7 @@ export default function RoyaltyPage() {
                             </tr>
                             {expandedWriter === c.penName && (
                               <tr>
-                                <td colSpan={4} style={{ padding: "16px 24px", background: "rgba(255,255,255,0.01)" }}>
+                                <td colSpan={7} style={{ padding: "16px 24px", background: "rgba(255,255,255,0.01)" }}>
                                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
                                     {Object.entries(c.breakdown || {}).map(([k, v]: [string, RoyaltyBreakdownItem]) => (
                                       <div key={k} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid var(--glass-border)" }}>
@@ -752,9 +761,12 @@ export default function RoyaltyPage() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid var(--glass-border)" }}>
                   <tr>
-                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>CTV</th>
+                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Cộng tác viên</th>
                     <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Kỳ</th>
-                    <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Số bài</th>
+                    <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài viết</th>
+                    <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài duyệt</th>
+                    <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận viết</th>
+                    <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận duyệt</th>
                     <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Tổng tiền</th>
                     <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Trạng thái</th>
                     <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Thao tác</th>
@@ -763,11 +775,11 @@ export default function RoyaltyPage() {
                 <tbody>
                   {paymentsLoading ? (
                     <tr>
-                      <td colSpan={6} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>⏳ Đang tải thanh toán...</td>
+                      <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>⏳ Đang tải thanh toán...</td>
                     </tr>
                   ) : payments.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+                      <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
                         Chưa có dữ liệu thanh toán.
                         {!isAdmin ? <div style={{ marginTop: 8, fontSize: 13 }}>Hệ thống chỉ hiển thị nhuận bút thuộc {collaboratorLabel}.</div> : null}
                       </td>
@@ -778,7 +790,10 @@ export default function RoyaltyPage() {
                         <tr data-testid={`payment-row-${p.id}`} style={{ borderBottom: "1px solid var(--glass-border)" }}>
                           <td style={{ padding: "14px 20px", fontSize: 13, color: "var(--text-main)", fontWeight: 700 }}>{p.penName}</td>
                           <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.month}/{p.year}</td>
-                          <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.totalArticles}</td>
+                          <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.writerArticles}</td>
+                          <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.reviewerArticles}</td>
+                          <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-teal)", fontWeight: 800 }}>{fmt(p.writerAmount)}</td>
+                          <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-purple)", fontWeight: 800 }}>{fmt(p.reviewerAmount)}</td>
                           <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-blue)", fontWeight: 800 }}>{fmt(p.totalAmount)}</td>
                           <td style={{ padding: "14px 20px", textAlign: "center" }}>
                             <span data-testid={`payment-status-badge-${p.id}`} style={{
@@ -818,7 +833,7 @@ export default function RoyaltyPage() {
                         </tr>
                         {expandedPaymentId === p.id && (
                           <tr>
-                            <td colSpan={6} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
+                            <td colSpan={9} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
                                 {Object.entries(p.details || {}).length === 0 ? (
                                   <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Không có breakdown chi tiết.</div>

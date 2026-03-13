@@ -119,6 +119,10 @@ export interface PaymentItem {
   penName: string;
   totalArticles: number;
   totalAmount: number;
+  writerArticles: number;
+  writerAmount: number;
+  reviewerArticles: number;
+  reviewerAmount: number;
   details: Record<string, { count: number; unitPrice: number; total: number }> | null;
   status: "pending" | "approved" | "paid";
   approvedByUserId: number | null;
@@ -346,6 +350,10 @@ export interface RoyaltyCalculationRow {
   penName: string;
   totalArticles: number;
   totalAmount: number;
+  writerArticles: number;
+  writerAmount: number;
+  reviewerArticles: number;
+  reviewerAmount: number;
   breakdown: Record<string, RoyaltyBreakdownItem>;
 }
 
