@@ -1189,6 +1189,7 @@ export default function ArticlesPage() {
   const executeGoogleSheetSync = async (options?: { month?: string; year?: string; closeModalOnSuccess?: boolean }) => {
     const selectedMonth = options?.month ?? googleSyncMonth;
     const selectedYear = options?.year ?? googleSyncYear;
+    const shouldShowToast = Boolean(options?.closeModalOnSuccess) || !showGoogleSyncModal;
 
     if ((selectedMonth && !selectedYear) || (!selectedMonth && selectedYear)) {
       setGoogleSyncError("Hãy chọn đủ cả tháng và năm, hoặc để trống để dùng tab mới nhất.");
@@ -1216,12 +1217,26 @@ export default function ArticlesPage() {
       setGoogleSyncMonth(String(syncResult.month));
       setGoogleSyncYear(String(syncResult.year));
       focusSyncedArticles(syncResult.month, syncResult.year);
+      if (shouldShowToast) {
+        showUiToast(
+          "Da dong bo Google Sheet",
+          `Đã đồng bộ dữ liệu tháng ${syncResult.month}/${syncResult.year}.`,
+          "success"
+        );
+      }
       if (options?.closeModalOnSuccess) {
         setShowGoogleSyncModal(false);
       }
     } catch (error) {
       setGoogleSyncError(String(error));
       setGoogleSyncResult(null);
+      if (shouldShowToast) {
+        showUiToast(
+          "Dong bo that bai",
+          error instanceof Error ? error.message : String(error),
+          "error"
+        );
+      }
     } finally {
       setGoogleSyncLoading(false);
     }
@@ -1710,6 +1725,18 @@ export default function ArticlesPage() {
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
               {isMobile ? "Đồng bộ" : "Đồng bộ ngay"}
+            </button>
+          )}
+          {canSyncArticles && (
+            <button
+              className="btn-ios-pill btn-ios-secondary"
+              onClick={openGoogleSyncModal}
+              disabled={googleSyncLoading}
+              title="Chọn tháng và năm để đồng bộ từ Google Sheet"
+              style={{ flex: isMobile ? 1 : "initial", justifyContent: "center" }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
+              {isMobile ? "Chọn tháng" : "Chọn tháng để đồng bộ"}
             </button>
           )}
           {canManageArticles && !isMobile && (
