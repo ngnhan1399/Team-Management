@@ -1468,6 +1468,12 @@ input[type=number] {
   gap: 16px;
 }
 
+.royalty-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
 .price-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1801,6 +1807,10 @@ input[type=number] {
     flex: 1 1 180px;
     justify-content: center;
   }
+
+  .royalty-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 767px) {
@@ -1821,6 +1831,11 @@ input[type=number] {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .royalty-overview-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   th,

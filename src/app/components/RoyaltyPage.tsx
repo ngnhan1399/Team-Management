@@ -401,7 +401,7 @@ export default function RoyaltyPage() {
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 24, marginBottom: 32 }}>
+              <div className="royalty-overview-grid" style={{ marginBottom: 32 }}>
                 {[
                   { label: "Tổng nhuận bút", value: fmt(dashboard.currentMonth?.totalAmount || 0), icon: "account_balance_wallet", color: "var(--accent-blue)" },
                   { label: "Nhuận viết", value: fmt(dashboard.currentMonth?.writerAmount || 0), icon: "edit_note", color: "var(--accent-teal)" },
