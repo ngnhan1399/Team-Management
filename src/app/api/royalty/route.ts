@@ -4,7 +4,6 @@ import { getContextArticleOwnerCandidates, getContextIdentityCandidates, getCurr
 import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import {
-    filterBudgetEligibleRoyaltyArticles,
     isBudgetEligibleContributor,
     matchesRoyaltyMonthYear,
     parseRoyaltyDateParts,
@@ -186,7 +185,16 @@ export async function GET(request: NextRequest) {
                     success: true,
                     data: {
                         monthlyData: [],
-                        currentMonth: { month: new Date().getMonth() + 1, year: new Date().getFullYear(), totalAmount: 0, totalArticles: 0 },
+                        currentMonth: {
+                            month: new Date().getMonth() + 1,
+                            year: new Date().getFullYear(),
+                            totalAmount: 0,
+                            totalArticles: 0,
+                            writerAmount: 0,
+                            reviewerAmount: 0,
+                            writerArticles: 0,
+                            reviewerArticles: 0,
+                        },
                         budget: { budgetAmount: 0, spent: 0, remaining: 0, percentage: 0, hasBudget: false },
                         topWriters: [],
                         contentBalance: summarizeRoyaltyContentBalance([]),
@@ -207,23 +215,107 @@ export async function GET(request: NextRequest) {
                 rateMap.set(`${rate.articleType}|${rate.contentType}`, rate.price);
             }
 
+            const identityCandidates = getContextIdentityCandidates(context);
             const ownerCandidates = context.user.role === "admin" ? [] : getContextArticleOwnerCandidates(context);
+            const scopedTeamId = context.user.role === "admin"
+                ? adminTeamId
+                : getContextTeamId(context);
             const profileScopeTeamId = context.user.role === "admin"
                 ? adminTeamId
                 : getContextTeamId(context);
             const [scopedArticles, contributorProfiles] = await Promise.all([
                 selectRoyaltyArticles({
-                    ownerCandidates: context.user.role === "admin" ? undefined : ownerCandidates,
-                    teamId: adminTeamId,
+                    ownerCandidates: scopedTeamId ? undefined : (context.user.role === "admin" ? undefined : ownerCandidates),
+                    teamId: scopedTeamId,
                 }),
                 loadRoyaltyContributorProfiles(profileScopeTeamId),
             ]);
-            const budgetEligibleArticles = filterBudgetEligibleRoyaltyArticles(scopedArticles, contributorProfiles);
+            const canSeeContributor = (penName: string) => context.user.role === "admin" || matchesIdentityCandidate(identityCandidates, penName);
+            const monthlyMap: Record<string, {
+                month: number;
+                year: number;
+                totalAmount: number;
+                totalArticles: number;
+                writerAmount: number;
+                reviewerAmount: number;
+                writerArticles: number;
+                reviewerArticles: number;
+            }> = {};
+            const contributorAmounts: Record<string, {
+                penName: string;
+                amount: number;
+                writerAmount: number;
+                reviewerAmount: number;
+                writerArticles: number;
+                reviewerArticles: number;
+            }> = {};
+            const visibleCurrentPeriodArticles = new Map<string, RoyaltySourceArticle>();
 
-            const monthlyMap: Record<string, { month: number; year: number; totalAmount: number; totalArticles: number }> = {};
-            const writerAmounts: Record<string, number> = {};
+            const appendVisibleContribution = (
+                contributorPenName: string,
+                role: "writer" | "reviewer",
+                amount: number,
+                articleYear: number,
+                articleMonth: number,
+                article: RoyaltySourceArticle
+            ) => {
+                if (!canSeeContributor(contributorPenName)) {
+                    return;
+                }
 
-            for (const article of budgetEligibleArticles) {
+                const key = `${articleYear}-${articleMonth}`;
+                if (!monthlyMap[key]) {
+                    monthlyMap[key] = {
+                        month: articleMonth,
+                        year: articleYear,
+                        totalAmount: 0,
+                        totalArticles: 0,
+                        writerAmount: 0,
+                        reviewerAmount: 0,
+                        writerArticles: 0,
+                        reviewerArticles: 0,
+                    };
+                }
+
+                monthlyMap[key].totalAmount += amount;
+                monthlyMap[key].totalArticles += 1;
+                if (role === "writer") {
+                    monthlyMap[key].writerAmount += amount;
+                    monthlyMap[key].writerArticles += 1;
+                } else {
+                    monthlyMap[key].reviewerAmount += amount;
+                    monthlyMap[key].reviewerArticles += 1;
+                }
+
+                if (!contributorAmounts[contributorPenName]) {
+                    contributorAmounts[contributorPenName] = {
+                        penName: contributorPenName,
+                        amount: 0,
+                        writerAmount: 0,
+                        reviewerAmount: 0,
+                        writerArticles: 0,
+                        reviewerArticles: 0,
+                    };
+                }
+
+                contributorAmounts[contributorPenName].amount += amount;
+                if (role === "writer") {
+                    contributorAmounts[contributorPenName].writerAmount += amount;
+                    contributorAmounts[contributorPenName].writerArticles += 1;
+                } else {
+                    contributorAmounts[contributorPenName].reviewerAmount += amount;
+                    contributorAmounts[contributorPenName].reviewerArticles += 1;
+                }
+
+                if (articleMonth === currentMonth && articleYear === currentYear) {
+                    visibleCurrentPeriodArticles.set(
+                        `${article.penName}::${article.reviewerName || ""}::${article.articleType}::${article.contentType}::${article.date}`,
+                        article
+                    );
+                }
+            };
+
+            for (const article of scopedArticles) {
                 const normalizedArticleFields = resolveAppArticleFields({
                     category: article.category,
                     articleType: article.articleType,
@@ -235,23 +327,33 @@ export async function GET(request: NextRequest) {
                 const articleYear = dateParts.year;
                 const articleMonth = dateParts.month;
 
-                const key = `${articleYear}-${articleMonth}`;
                 const writerPrice = rateMap.get(`${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`) || 0;
 
-                if (!monthlyMap[key]) {
-                    monthlyMap[key] = { month: articleMonth, year: articleYear, totalAmount: 0, totalArticles: 0 };
-                }
-                monthlyMap[key].totalAmount += writerPrice;
-                monthlyMap[key].totalArticles += 1;
-
-                if (articleMonth === currentMonth && articleYear === currentYear) {
-                    writerAmounts[article.penName] = (writerAmounts[article.penName] || 0) + writerPrice;
+                const writerProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
+                if (isBudgetEligibleContributor(writerProfile, ["writer"])) {
+                    const contributorPenName = resolveRoyaltyContributorPenName(article.penName, contributorProfiles) || article.penName;
+                    appendVisibleContribution(
+                        contributorPenName,
+                        "writer",
+                        resolveRoyaltyContributionPrice("writer", writerPrice),
+                        articleYear,
+                        articleMonth,
+                        article
+                    );
                 }
 
                 const reviewerName = String(article.reviewerName || "").trim();
                 const reviewerProfile = resolveRoyaltyContributorProfile(reviewerName, contributorProfiles);
                 if (reviewerName && isBudgetEligibleContributor(reviewerProfile, ["reviewer"])) {
-                    monthlyMap[key].totalAmount += resolveRoyaltyContributionPrice("reviewer", writerPrice);
+                    const contributorPenName = resolveRoyaltyContributorPenName(reviewerName, contributorProfiles) || reviewerName;
+                    appendVisibleContribution(
+                        contributorPenName,
+                        "reviewer",
+                        resolveRoyaltyContributionPrice("reviewer", writerPrice),
+                        articleYear,
+                        articleMonth,
+                        article
+                    );
                 }
             }
 
@@ -278,7 +380,7 @@ export async function GET(request: NextRequest) {
             const budgetAmount = budget?.budgetAmount || 0;
             const budgetPercentage = budgetAmount > 0 ? Math.round((currentSpent / budgetAmount) * 100) : 0;
             const remainingBudget = Math.max(budgetAmount - currentSpent, 0);
-            const currentPeriodArticles = budgetEligibleArticles.filter((article) =>
+            const currentPeriodArticles = Array.from(visibleCurrentPeriodArticles.values()).filter((article) =>
                 matchesRoyaltyMonthYear(article.date, currentMonth, currentYear)
             );
             const contentBalance = summarizeRoyaltyContentBalance(
@@ -290,8 +392,7 @@ export async function GET(request: NextRequest) {
                 }))
             );
 
-            const topWriters = Object.entries(writerAmounts)
-                .map(([penName, amount]) => ({ penName, amount }))
+            const topWriters = Object.values(contributorAmounts)
                 .sort((left, right) => right.amount - left.amount)
                 .slice(0, 10);
 
@@ -304,6 +405,10 @@ export async function GET(request: NextRequest) {
                         year: currentYear,
                         totalAmount: currentSpent,
                         totalArticles: currentArticles,
+                        writerAmount: monthlyMap[currentKey]?.writerAmount || 0,
+                        reviewerAmount: monthlyMap[currentKey]?.reviewerAmount || 0,
+                        writerArticles: monthlyMap[currentKey]?.writerArticles || 0,
+                        reviewerArticles: monthlyMap[currentKey]?.reviewerArticles || 0,
                     },
                     budget: {
                         budgetAmount,

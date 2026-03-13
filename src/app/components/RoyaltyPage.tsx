@@ -401,12 +401,14 @@ export default function RoyaltyPage() {
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 24, marginBottom: 32 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 24, marginBottom: 32 }}>
                 {[
-                  { label: "Nhuận bút phát sinh", value: fmt(dashboard.currentMonth?.totalAmount || 0), icon: "account_balance_wallet", color: "var(--accent-blue)" },
-                  { label: "Bài đã duyệt", value: dashboard.currentMonth?.totalArticles || 0, icon: "history_edu", color: "var(--accent-teal)" },
-                  { label: "Ngân sách tháng", value: hasBudget ? fmt(dashboard.budget.budgetAmount) : "CHƯA ĐẶT", icon: "track_changes", color: "var(--accent-purple)" },
-                  { label: "Còn lại", value: hasBudget ? fmt(dashboard.budget.remaining) : "—", icon: "troubleshoot", color: "var(--accent-orange)" }
+                  { label: "Tổng nhuận bút", value: fmt(dashboard.currentMonth?.totalAmount || 0), icon: "account_balance_wallet", color: "var(--accent-blue)" },
+                  { label: "Nhuận viết", value: fmt(dashboard.currentMonth?.writerAmount || 0), icon: "edit_note", color: "var(--accent-teal)" },
+                  { label: "Nhuận duyệt", value: fmt(dashboard.currentMonth?.reviewerAmount || 0), icon: "fact_check", color: "var(--accent-orange)" },
+                  { label: "Bài viết", value: dashboard.currentMonth?.writerArticles || 0, icon: "article", color: "var(--accent-blue)" },
+                  { label: "Bài duyệt", value: dashboard.currentMonth?.reviewerArticles || 0, icon: "task", color: "var(--accent-purple)" },
+                  { label: "Ngân sách còn lại", value: hasBudget ? fmt(dashboard.budget.remaining) : "—", icon: "troubleshoot", color: "var(--accent-orange)" }
                 ].map((s, i) => (
                   <div key={i} className="glass-card" style={{ display: "flex", alignItems: "center", gap: 20 }}>
                     <div style={{ width: 48, height: 48, borderRadius: 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -517,13 +519,29 @@ export default function RoyaltyPage() {
 
               {dashboard.topWriters?.length > 0 && (
                 <div className="card">
-                  <h3 className="text-xl font-bold mb-8">Bảng xếp hạng</h3>
+                  <h3 className="text-xl font-bold mb-8">Bảng xếp hạng cộng tác viên</h3>
                   {dashboard.topWriters.map((w, i: number) => {
                     const maxW = dashboard.topWriters[0]?.amount || 1;
                     return (
                       <div key={i} className="obsidian-glass" style={{ display: "flex", alignItems: "center", gap: 20, padding: "16px 24px", borderRadius: 16, marginBottom: 12, border: "1px solid rgba(255,255,255,0.02)" }}>
                         <div className="text-xl font-black text-gradient-metallic" style={{ width: 40 }}>0{i + 1}</div>
-                        <span style={{ flex: 1, fontWeight: 700 }}>{w.penName}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: "var(--text-main)" }}>{w.penName}</div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                            {w.writerArticles > 0 && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 999, background: "rgba(13, 148, 136, 0.12)", color: "var(--accent-teal)", fontSize: 11, fontWeight: 800 }}>
+                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>edit_note</span>
+                                Viết: {w.writerArticles} bài • {fmt(w.writerAmount)}
+                              </span>
+                            )}
+                            {w.reviewerArticles > 0 && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 999, background: "rgba(249, 115, 22, 0.12)", color: "var(--accent-orange)", fontSize: 11, fontWeight: 800 }}>
+                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fact_check</span>
+                                Duyệt: {w.reviewerArticles} bài • {fmt(w.reviewerAmount)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                         <div className="inline-progress" style={{ width: 120 }}>
                           <div className="inline-progress-fill" style={{ width: `${(w.amount / maxW) * 100}%`, background: "var(--neon-cyan)" }} />
                         </div>

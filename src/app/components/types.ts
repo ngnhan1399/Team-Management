@@ -367,6 +367,10 @@ export interface RoyaltyMonthlyDatum {
 export interface RoyaltyTopWriter {
   penName: string;
   amount: number;
+  writerAmount: number;
+  reviewerAmount: number;
+  writerArticles: number;
+  reviewerArticles: number;
 }
 
 export interface RoyaltyContentBalance {
@@ -384,7 +388,16 @@ export interface RoyaltyContentBalance {
 
 export interface RoyaltyDashboardData {
   monthlyData: RoyaltyMonthlyDatum[];
-  currentMonth: { month: number; year: number; totalAmount: number; totalArticles: number };
+  currentMonth: {
+    month: number;
+    year: number;
+    totalAmount: number;
+    totalArticles: number;
+    writerAmount: number;
+    reviewerAmount: number;
+    writerArticles: number;
+    reviewerArticles: number;
+  };
   budget: { budgetAmount: number; spent: number; remaining: number; percentage: number; hasBudget: boolean };
   topWriters: RoyaltyTopWriter[];
   contentBalance: RoyaltyContentBalance;
