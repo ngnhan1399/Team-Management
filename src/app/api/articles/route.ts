@@ -1074,7 +1074,14 @@ export async function PUT(request: NextRequest) {
       }
 
       const targets = await db
-        .select({ id: articles.id, teamId: articles.teamId, reviewerName: articles.reviewerName, status: articles.status })
+        .select({
+          id: articles.id,
+          teamId: articles.teamId,
+          penName: articles.penName,
+          createdByUserId: articles.createdByUserId,
+          reviewerName: articles.reviewerName,
+          status: articles.status,
+        })
         .from(articles)
         .where(inArray(articles.id, ids))
         .all();
@@ -1084,6 +1091,11 @@ export async function PUT(request: NextRequest) {
       }
       if (targets.some((article) => !canAccessTeam(context, article.teamId))) {
         return NextResponse.json({ success: false, error: "Có bài viết nằm ngoài phạm vi team của bạn" }, { status: 403 });
+      }
+
+      const targetsWithMetadata = await attachArticleResponseMetadata(targets, context.user.id, canManageArticles);
+      if (targetsWithMetadata.some((article) => article.authorBucket === "editorial")) {
+        return NextResponse.json({ success: false, error: "Không áp dụng phân công reviewer cho bài của Biên tập/Admin" }, { status: 400 });
       }
       if (canSelfAssignReviewer && targets.some((article) => article.status !== "Submitted" && !matchesIdentityCandidate(identityCandidates, article.reviewerName))) {
         return NextResponse.json({ success: false, error: "Reviewer chỉ có thể nhận bài chờ duyệt hoặc bài đã thuộc scope của mình" }, { status: 403 });

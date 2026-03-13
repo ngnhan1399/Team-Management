@@ -160,7 +160,9 @@ export default function ArticlesPage() {
           : collaborator.penName,
       })),
   ];
-  const visibleArticleIds = articles.map((article) => article.id);
+  const visibleArticleIds = articles
+    .filter((article) => article.authorBucket !== "editorial")
+    .map((article) => article.id);
   const selectedVisibleCount = visibleArticleIds.filter((id) => selectedArticleIds.includes(id)).length;
 
   const ensureCollaboratorsLoaded = useCallback(async () => {
@@ -201,8 +203,14 @@ export default function ArticlesPage() {
     return article.penName === user?.collaborator?.penName || article.createdByUserId === user?.id;
   }, [canManageArticles, isWriter, user]);
 
-  const fetchArticles = useCallback((p = 1, s = "", f: ArticleFilters = articleListQueryRef.current.filters) => {
+  const fetchArticles = useCallback((
+    p = 1,
+    s = "",
+    f: ArticleFilters = articleListQueryRef.current.filters,
+    options?: { background?: boolean }
+  ) => {
     const nextFilters = { ...f };
+    const background = options?.background === true;
     articleListQueryRef.current = {
       page: p,
       search: s,
@@ -211,7 +219,9 @@ export default function ArticlesPage() {
     articlesRequestAbortRef.current?.abort();
     const controller = new AbortController();
     articlesRequestAbortRef.current = controller;
-    setLoading(true);
+    if (!background) {
+      setLoading(true);
+    }
     setPagination((prev) => (prev.page === p ? prev : { ...prev, page: p }));
     const params = new URLSearchParams({ page: String(p), limit: String(ARTICLE_PAGE_SIZE) });
     if (s) params.set("search", s);
@@ -238,7 +248,9 @@ export default function ArticlesPage() {
       .finally(() => {
         if (articlesRequestAbortRef.current === controller) {
           articlesRequestAbortRef.current = null;
-          setLoading(false);
+          if (!background) {
+            setLoading(false);
+          }
         }
       });
   }, [isWriter, user]);
@@ -826,9 +838,13 @@ export default function ArticlesPage() {
   }, []);
 
   const refreshArticlesView = useCallback(() => {
+    if (loading) {
+      return;
+    }
+
     if (typeof window === "undefined") {
       const currentQuery = articleListQueryRef.current;
-      fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
+      fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters, { background: true });
       if (commentArticle) {
         fetchComments(commentArticle.id);
       }
@@ -842,12 +858,12 @@ export default function ArticlesPage() {
     articlesRealtimeRefreshTimerRef.current = window.setTimeout(() => {
       articlesRealtimeRefreshTimerRef.current = null;
       const currentQuery = articleListQueryRef.current;
-      fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
+      fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters, { background: true });
       if (commentArticle) {
         fetchComments(commentArticle.id);
       }
     }, 600);
-  }, [commentArticle, fetchArticles, fetchComments]);
+  }, [commentArticle, fetchArticles, fetchComments, loading]);
 
   useRealtimeRefresh(["articles"], refreshArticlesView);
 
@@ -1402,6 +1418,7 @@ export default function ArticlesPage() {
       background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.04))",
       rows: ctvArticles,
       emptyMessage: "Chưa có bài nào ở nhóm CTV.",
+      allowBulkAssign: canBulkAssignReviewer,
     },
     {
       key: "editorial",
@@ -1411,10 +1428,11 @@ export default function ArticlesPage() {
       background: "linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(234, 88, 12, 0.04))",
       rows: editorialArticles,
       emptyMessage: "Chưa có bài nào ở nhóm Biên tập/Admin.",
+      allowBulkAssign: false,
     },
   ] as const;
 
-  const renderArticleTable = (rows: Article[], emptyMessage: string) => {
+  const renderArticleTable = (rows: Article[], emptyMessage: string, allowBulkAssign = false) => {
     const rowIds = rows.map((article) => article.id);
     const areAllRowsSelected = rowIds.length > 0 && rowIds.every((id) => selectedArticleIds.includes(id));
 
@@ -1422,7 +1440,7 @@ export default function ArticlesPage() {
     <div style={{ overflowX: "auto", position: "relative", zIndex: 0 }}>
       <table style={{ width: "100%", minWidth: articleTableMinWidth, borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
         <colgroup>
-          {selectionMode && <col style={{ width: "4%" }} />}
+          {allowBulkAssign && selectionMode && <col style={{ width: "4%" }} />}
           <col style={{ width: "6%" }} />
           <col style={{ width: "10%" }} />
           <col style={{ width: "34%" }} />
@@ -1435,7 +1453,7 @@ export default function ArticlesPage() {
         </colgroup>
         <thead style={{ pointerEvents: "none" }}>
           <tr style={{ background: "rgba(248, 250, 252, 0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)" }}>
-            {selectionMode && (
+            {allowBulkAssign && selectionMode && (
               <th style={{ padding: "14px 10px", textAlign: "center", pointerEvents: "auto" }}>
                 <input
                   type="checkbox"
@@ -1459,7 +1477,7 @@ export default function ArticlesPage() {
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={selectionMode ? 10 : 9}>
+              <td colSpan={allowBulkAssign && selectionMode ? 10 : 9}>
                 <div style={{ padding: showSplitArticleSections ? 44 : 72, textAlign: "center", color: "var(--text-muted)" }}>
                   <div style={{ fontSize: showSplitArticleSections ? 28 : 36, marginBottom: 12 }}>📄</div>
                   <div style={{ fontWeight: 700 }}>{emptyMessage}</div>
@@ -1469,7 +1487,7 @@ export default function ArticlesPage() {
           ) : (
             rows.map((a) => (
               <tr key={a.id} data-testid={`article-row-${a.id}`} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.02)", transition: "background 0.2s" }} className="hover:bg-white/[0.02]">
-                {selectionMode && (
+                {allowBulkAssign && selectionMode && (
                   <td style={{ padding: "12px 10px", textAlign: "center" }}>
                     <input
                       type="checkbox"
@@ -1945,13 +1963,13 @@ export default function ArticlesPage() {
                   {section.rows.length}
                 </span>
               </div>
-              {renderArticleTable(section.rows, section.emptyMessage)}
+              {renderArticleTable(section.rows, section.emptyMessage, section.allowBulkAssign)}
             </section>
           ))}
         </div>
       ) : (
         <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
-          {renderArticleTable(articles, "Chưa có bài viết nào")}
+          {renderArticleTable(articles, "Chưa có bài viết nào", canBulkAssignReviewer)}
         </div>
       )}
       {pagination.totalPages > 1 && (
