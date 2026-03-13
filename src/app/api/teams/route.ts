@@ -76,7 +76,7 @@ export async function GET() {
         memberCount: teamMembers.length,
         writerCount: teamMembers.filter((member) => member.role === "writer").length,
         reviewerCount: teamMembers.filter((member) => member.role === "reviewer").length,
-        adminCount: teamMembers.filter((member) => member.linkedUserRole === "admin" && !member.linkedUserIsLeader).length,
+        adminCount: teamMembers.filter((member) => member.linkedUserRole === "admin").length,
       };
     }).sort((left, right) => left.name.localeCompare(right.name, "vi"));
 

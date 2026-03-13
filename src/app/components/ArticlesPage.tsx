@@ -38,6 +38,7 @@ const ArticleDeleteModal = dynamic(() => import("./ArticleDeleteModal"), { ssr: 
 const ArticleImportWizard = dynamic(() => import("./ArticleImportWizard"), { ssr: false });
 import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
+import { resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
 import { getPreferredArticleNavigationLink } from "@/lib/review-link";
 import type {
@@ -164,12 +165,20 @@ export default function ArticlesPage() {
           : collaborator.penName,
       })),
   ];
+  const normalizedFilterPenName = resolvePreferredCollaboratorPenName([filters.penName], filters.penName || "") || "";
   const resolveAuthorBucket = useCallback((article: Article): "ctv" | "editorial" => {
+    if (article.authorUserRole === "admin") {
+      return "editorial";
+    }
+    if (article.authorUserRole === "ctv") {
+      return "ctv";
+    }
     if (article.authorRole === "writer" || article.authorRole === "reviewer") {
       return "ctv";
     }
 
-    if (normalizeIdentityValue(article.penName) === normalizeIdentityValue(MANAGER_DEFAULT_PEN_NAME)) {
+    const preferredPenName = resolvePreferredCollaboratorPenName([article.penName], article.penName || "") || article.penName || "";
+    if (normalizeIdentityValue(preferredPenName) === normalizeIdentityValue(MANAGER_DEFAULT_PEN_NAME)) {
       return "editorial";
     }
 
@@ -2617,7 +2626,7 @@ export default function ArticlesPage() {
               <div className="form-group">
                 <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Bút danh</label>
                 <CustomSelect
-                  value={filters.penName || ""}
+                  value={normalizedFilterPenName}
                   onChange={(v) => applyFilter("penName", v)}
                   options={[{ value: "", label: "Tất cả bút danh" }, ...collaborators.map(c => ({ value: c.penName, label: getDisplayedPenName(c.penName) }))]}
                   placeholder="Tất cả bút danh"

@@ -6,6 +6,11 @@ type CollaboratorDisplayOverride = {
 
 const KNOWN_COLLABORATOR_DISPLAY_OVERRIDES: CollaboratorDisplayOverride[] = [
   {
+    preferredName: "Nguyễn Đình Nhân",
+    preferredPenName: "Nhân BTV",
+    aliases: ["Nguyễn Đình Nhân", "Đình Nhân", "Nhân BTV"],
+  },
+  {
     preferredName: "Đậu Thị Phương",
     preferredPenName: "Thị Phương",
     aliases: ["Đậu Thị Phương", "Đậu Phương", "Thị Phương"],
@@ -44,6 +49,15 @@ export function buildCollaboratorIdentityVariants(value: unknown): string[] {
   if (!base) return [];
 
   variants.add(base);
+
+  const override = DISPLAY_OVERRIDE_LOOKUP.get(base);
+  if (override) {
+    for (const aliasValue of [override.preferredName, override.preferredPenName, ...override.aliases]) {
+      const foldedAlias = foldCollaboratorIdentity(aliasValue);
+      if (!foldedAlias) continue;
+      variants.add(foldedAlias);
+    }
+  }
 
   if (raw.includes("@")) {
     const [localPart] = raw.split("@");

@@ -341,18 +341,19 @@ export default function TeamPage() {
     })
     .sort((left, right) => left.label.localeCompare(right.label, "vi"));
   const adminProfiles = userAccounts
-    .filter((user) => user.role === "admin" && !user.isLeader)
+    .filter((user) => user.role === "admin")
     .map((user) => {
       const linkedCollaborator = collaborators.find((collaborator) => collaborator.linkedUserId === user.id || collaborator.linkedUserRole === "admin" && collaborator.linkedUserEmail === user.email) || null;
       return {
         id: linkedCollaborator ? `collaborator-${linkedCollaborator.id}` : `user-${user.id}`,
         collaboratorId: linkedCollaborator?.id ?? null,
-        name: linkedCollaborator?.name || "Biên tập viên chính",
-        penName: linkedCollaborator?.penName || "Admin",
+        name: linkedCollaborator?.name || (user.isLeader ? "Leader hệ thống" : "Biên tập viên chính"),
+        penName: linkedCollaborator?.penName || (user.isLeader ? "Leader" : "Admin"),
         email: linkedCollaborator?.email || user.email,
         status: linkedCollaborator?.status || "active",
         kpiStandard: linkedCollaborator?.kpiStandard ?? null,
         isOwner: currentTeam?.ownerUserId === user.id,
+        isLeader: Boolean(user.isLeader),
       };
     });
   const writers = collaborators.filter(c => c.linkedUserRole !== "admin" && c.role === "writer");
@@ -725,6 +726,11 @@ export default function TeamPage() {
                     <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                         <span>{admin.name}</span>
+                        {admin.isLeader && (
+                          <span style={{ padding: "4px 8px", borderRadius: 999, background: "rgba(249, 115, 22, 0.12)", color: "var(--accent-orange)", fontSize: 11, fontWeight: 800 }}>
+                            LEADER
+                          </span>
+                        )}
                         {admin.isOwner && (
                           <span style={{ padding: "4px 8px", borderRadius: 999, background: "rgba(37, 99, 235, 0.1)", color: "var(--accent-blue)", fontSize: 11, fontWeight: 800 }}>
                             OWNER
@@ -767,6 +773,9 @@ export default function TeamPage() {
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)" }}>{admin.name}</span>
+                      {admin.isLeader && (
+                        <span style={{ padding: "2px 6px", borderRadius: 6, background: "rgba(249, 115, 22, 0.12)", color: "var(--accent-orange)", fontSize: 9, fontWeight: 800 }}>LEADER</span>
+                      )}
                       {admin.isOwner && (
                         <span style={{ padding: "2px 6px", borderRadius: 6, background: "rgba(37, 99, 235, 0.1)", color: "var(--accent-blue)", fontSize: 9, fontWeight: 800 }}>OWNER</span>
                       )}

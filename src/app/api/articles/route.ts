@@ -9,6 +9,7 @@ import {
   type GoogleSheetSyncLinkSnapshot,
 } from "@/lib/google-sheet-mutation";
 import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
+import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
@@ -217,6 +218,14 @@ async function attachArticleResponseMetadata<
   const penNames = Array.from(new Set(rows.map((row) => normalizeString(row.penName)).filter(Boolean)));
   const teamIds = Array.from(new Set(rows.map((row) => Number(row.teamId)).filter((teamId) => Number.isInteger(teamId) && teamId > 0)));
   const creatorIds = Array.from(new Set(rows.map((row) => Number(row.createdByUserId)).filter((userId) => Number.isInteger(userId) && userId > 0)));
+  const collaboratorLookupValues = Array.from(
+    new Set(
+      penNames
+        .flatMap((value) => expandCollaboratorIdentityValues([value]))
+        .map((value) => normalizeString(value))
+        .filter(Boolean)
+    )
+  );
 
   const [commentMeta, collaboratorProfiles, creatorProfiles] = await Promise.all([
     loadArticleCommentMetadata(articleIds, currentUserId),
@@ -233,11 +242,13 @@ async function attachArticleResponseMetadata<
           .leftJoin(users, eq(users.collaboratorId, collaborators.id))
           .where(
             teamIds.length > 0
-              ? and(
-                  inArray(collaborators.penName, penNames as never[]),
-                  inArray(collaborators.teamId, teamIds as never[]),
-                )
-              : inArray(collaborators.penName, penNames as never[])
+              ? inArray(collaborators.teamId, teamIds as never[])
+              : collaboratorLookupValues.length > 0
+                ? or(
+                    inArray(collaborators.penName, collaboratorLookupValues as never[]),
+                    inArray(collaborators.name, collaboratorLookupValues as never[]),
+                  )
+                : undefined
           )
           .all()
       : Promise.resolve([]),
@@ -288,13 +299,15 @@ async function attachArticleResponseMetadata<
 
       if (collaboratorProfile) {
         const hasContributorRole = collaboratorProfile.role === "writer" || collaboratorProfile.role === "reviewer";
-        const authorBucket = collaboratorProfile.linkedUserRole === "admin" && !hasContributorRole
+        const authorBucket = collaboratorProfile.linkedUserRole === "admin"
           ? "editorial"
           : "ctv";
         return {
           authorBucket,
           authorBucketLabel: authorBucket === "editorial" ? "Biên tập/Admin" : "CTV",
-          authorRole: hasContributorRole
+          authorRole: collaboratorProfile.linkedUserRole === "admin"
+            ? null
+            : hasContributorRole
             ? collaboratorProfile.role
             : null,
           authorUserRole: collaboratorProfile.linkedUserRole === "admin" || collaboratorProfile.linkedUserRole === "ctv"
@@ -304,7 +317,8 @@ async function attachArticleResponseMetadata<
       }
 
       const creatorRole = creatorRoleById.get(Number(row.createdByUserId || 0)) || null;
-      const authorBucket = creatorRole === "admin" && isEditorialPenName(row.penName) ? "editorial" : "ctv";
+      const preferredPenName = resolvePreferredCollaboratorPenName([row.penName], row.penName || "") || row.penName || "";
+      const authorBucket = creatorRole === "admin" && isEditorialPenName(preferredPenName) ? "editorial" : "ctv";
       return {
         authorBucket,
         authorBucketLabel: authorBucket === "editorial" ? "Biên tập/Admin" : "CTV",
@@ -529,7 +543,19 @@ function buildArticleWhere(criteria: ArticleCriteria, isAdmin: boolean, matchedS
   const conditions: SQL[] = [];
 
   if (isAdmin && criteria.penName) {
-    conditions.push(eq(articles.penName, criteria.penName));
+    const penNameCandidates = Array.from(
+      new Set(
+        expandCollaboratorIdentityValues([criteria.penName])
+          .map((value) => normalizeString(value))
+          .filter(Boolean)
+      )
+    );
+
+    if (penNameCandidates.length === 1) {
+      conditions.push(eq(articles.penName, penNameCandidates[0] as never));
+    } else if (penNameCandidates.length > 1) {
+      conditions.push(inArray(articles.penName, penNameCandidates as never[]));
+    }
   }
 
   if (criteria.search) {
@@ -580,7 +606,19 @@ function buildArticleWhere(criteria: ArticleCriteria, isAdmin: boolean, matchedS
     conditions.push(eq(articles.contentType, criteria.contentType as never));
   }
   if (criteria.reviewerName) {
-    conditions.push(eq(articles.reviewerName, criteria.reviewerName));
+    const reviewerCandidates = Array.from(
+      new Set(
+        expandCollaboratorIdentityValues([criteria.reviewerName])
+          .map((value) => normalizeString(value))
+          .filter(Boolean)
+      )
+    );
+
+    if (reviewerCandidates.length === 1) {
+      conditions.push(eq(articles.reviewerName, reviewerCandidates[0] as never));
+    } else if (reviewerCandidates.length > 1) {
+      conditions.push(inArray(articles.reviewerName, reviewerCandidates as never[]));
+    }
   }
 
   if (criteria.year && criteria.month) {
@@ -857,7 +895,7 @@ export async function GET(request: NextRequest) {
         .select(articleResponseSelection)
         .from(articles)
         .where(scopedWhereClause)
-        .orderBy(desc(articles.updatedAt), desc(articles.date), desc(articles.id))
+        .orderBy(desc(articles.date), desc(articles.updatedAt), desc(articles.id))
         .limit(limit)
         .offset((page - 1) * limit)
         .all(),
