@@ -1026,7 +1026,107 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
     }
 
-    const body = (await request.json()) as ArticleUpdateInput;
+    const rawBody = (await request.json()) as Record<string, unknown>;
+    const action = normalizeString(rawBody.action);
+    const canManageArticles = hasArticleManagerAccess(context);
+
+    if (action === "bulk-assign-reviewer") {
+      if (!canManageArticles) {
+        return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+      }
+
+      const ids = Array.from(new Set(
+        (Array.isArray(rawBody.ids) ? rawBody.ids : [])
+          .map((value) => Number(value))
+          .filter((value) => Number.isInteger(value) && value > 0)
+      ));
+      if (ids.length === 0) {
+        return NextResponse.json({ success: false, error: "Danh sách bài viết không hợp lệ" }, { status: 400 });
+      }
+
+      const reviewerName = normalizeString(rawBody.reviewerName) || null;
+      if (reviewerName) {
+        const reviewerProfile = await db
+          .select({ id: collaborators.id, teamId: collaborators.teamId, role: collaborators.role })
+          .from(collaborators)
+          .where(eq(collaborators.penName, reviewerName))
+          .get();
+
+        if (!reviewerProfile) {
+          return NextResponse.json({ success: false, error: "Người duyệt không tồn tại trong hệ thống" }, { status: 404 });
+        }
+        if (!canAccessTeam(context, reviewerProfile.teamId)) {
+          return NextResponse.json({ success: false, error: "Người duyệt không thuộc phạm vi team của bạn" }, { status: 403 });
+        }
+      }
+
+      const targets = await db
+        .select({ id: articles.id, teamId: articles.teamId })
+        .from(articles)
+        .where(inArray(articles.id, ids))
+        .all();
+
+      if (targets.length !== ids.length) {
+        return NextResponse.json({ success: false, error: "Một số bài viết không còn tồn tại" }, { status: 404 });
+      }
+      if (targets.some((article) => !canAccessTeam(context, article.teamId))) {
+        return NextResponse.json({ success: false, error: "Có bài viết nằm ngoài phạm vi team của bạn" }, { status: 403 });
+      }
+
+      const updatedAt = new Date().toISOString();
+      await db.update(articles)
+        .set({
+          reviewerName,
+          updatedAt,
+        })
+        .where(inArray(articles.id, ids))
+        .run();
+
+      scheduleBackgroundWork(async () => {
+        await runNonBlockingStep(
+          () => writeAuditLog({
+            userId: context.user.id,
+            action: "articles_bulk_assign_reviewer",
+            entity: "article",
+            payload: { ids, reviewerName, updatedCount: ids.length },
+          }),
+          { scope: "articles.put.bulkReviewer.audit", fallback: undefined }
+        );
+
+        for (const articleId of ids) {
+          const sheetSyncResult = await runNonBlockingStep(
+            () => mirrorArticleUpdateToGoogleSheet({
+              articleId,
+              actorUserId: context.user.id,
+              actorDisplayName: getContextDisplayName(context),
+              reason: "articles_bulk_assign_reviewer",
+            }),
+            {
+              scope: `articles.put.bulkReviewer.sheetSync.${articleId}`,
+              fallback: {
+                attempted: true,
+                success: false,
+                skipped: false,
+                message: "Không thể kết nối tới Google Sheet lúc này. Bài viết vẫn đã được cập nhật trong hệ thống.",
+              },
+            }
+          );
+
+          if (sheetSyncResult && (sheetSyncResult.skipped || !sheetSyncResult.success)) {
+            await notifyGoogleSheetSyncIssue(context.user.id, sheetSyncResult.message);
+          }
+        }
+
+        await runNonBlockingStep(
+          () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
+          { scope: "articles.put.bulkReviewer.realtime", fallback: null }
+        );
+      });
+
+      return NextResponse.json({ success: true, updatedCount: ids.length, reviewerName });
+    }
+
+    const body = rawBody as ArticleUpdateInput;
     const id = Number(body.id);
 
     if (!Number.isInteger(id)) {
@@ -1044,7 +1144,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
     }
 
-    const canManageArticles = hasArticleManagerAccess(context);
     if (!canManageArticles) {
       const identityCandidates = getContextIdentityCandidates(context);
       if (!matchesIdentityCandidate(identityCandidates, existing.penName)) {

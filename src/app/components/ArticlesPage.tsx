@@ -118,6 +118,10 @@ export default function ArticlesPage() {
   const [commentContent, setCommentContent] = useState("");
   const [commentAttachment, setCommentAttachment] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedArticleIds, setSelectedArticleIds] = useState<number[]>([]);
+  const [bulkReviewerName, setBulkReviewerName] = useState("");
+  const [bulkAssigningReviewer, setBulkAssigningReviewer] = useState(false);
   const isAdmin = user?.role === "admin";
   const collaboratorRole = typeof user?.collaborator?.role === "string" ? user.collaborator.role : "";
   const isReviewer = user?.role === "ctv" && collaboratorRole === "reviewer";
@@ -154,6 +158,8 @@ export default function ArticlesPage() {
           : collaborator.penName,
       })),
   ];
+  const visibleArticleIds = articles.map((article) => article.id);
+  const selectedVisibleCount = visibleArticleIds.filter((id) => selectedArticleIds.includes(id)).length;
 
   const ensureCollaboratorsLoaded = useCallback(async () => {
     if (!canManageArticles || collaboratorsLoaded) {
@@ -254,6 +260,10 @@ export default function ArticlesPage() {
   useEffect(() => {
     linkHealthRef.current = linkHealth;
   }, [linkHealth]);
+
+  useEffect(() => {
+    setSelectedArticleIds((prev) => prev.filter((id) => articles.some((article) => article.id === id)));
+  }, [articles]);
 
   useEffect(() => {
     const published = deferredArticles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
@@ -373,6 +383,82 @@ export default function ArticlesPage() {
     const f = createCurrentMonthFilters();
     setFilters(f);
     fetchArticles(1, appliedSearch, f);
+  };
+  const toggleSelectionMode = () => {
+    setSelectionMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSelectedArticleIds([]);
+        setBulkReviewerName("");
+      }
+      return next;
+    });
+  };
+  const toggleArticleSelection = (articleId: number) => {
+    setSelectedArticleIds((prev) => (
+      prev.includes(articleId)
+        ? prev.filter((id) => id !== articleId)
+        : [...prev, articleId]
+    ));
+  };
+  const toggleArticleSelectionGroup = (articleIds: number[]) => {
+    if (articleIds.length === 0) {
+      return;
+    }
+
+    const allSelected = articleIds.every((id) => selectedArticleIds.includes(id));
+    if (allSelected) {
+      setSelectedArticleIds((prev) => prev.filter((id) => !articleIds.includes(id)));
+      return;
+    }
+
+    setSelectedArticleIds((prev) => Array.from(new Set([...prev, ...articleIds])));
+  };
+  const toggleSelectVisibleArticles = () => {
+    if (selectedVisibleCount === visibleArticleIds.length && visibleArticleIds.length > 0) {
+      setSelectedArticleIds((prev) => prev.filter((id) => !visibleArticleIds.includes(id)));
+      return;
+    }
+
+    setSelectedArticleIds((prev) => Array.from(new Set([...prev, ...visibleArticleIds])));
+  };
+  const assignReviewerToSelection = async () => {
+    if (!canManageArticles || selectedArticleIds.length === 0 || bulkAssigningReviewer) {
+      return;
+    }
+
+    setBulkAssigningReviewer(true);
+    try {
+      const res = await fetch("/api/articles", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "bulk-assign-reviewer",
+          ids: selectedArticleIds,
+          reviewerName: bulkReviewerName || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Không thể phân công người duyệt hàng loạt");
+      }
+
+      showUiToast(
+        "Da cap nhat nguoi duyet",
+        bulkReviewerName
+          ? `Đã gán ${getDisplayedPenName(bulkReviewerName)} cho ${data.updatedCount || selectedArticleIds.length} bài.`
+          : `Đã bỏ phân công reviewer cho ${data.updatedCount || selectedArticleIds.length} bài.`,
+        "success"
+      );
+      setSelectedArticleIds([]);
+      setBulkReviewerName("");
+      const currentQuery = articleListQueryRef.current;
+      fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
+    } catch (error) {
+      showUiToast("Cap nhat reviewer that bai", error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setBulkAssigningReviewer(false);
+    }
   };
   const activeFilterCount = Object.entries(filters).filter(([k, v]) => v !== "" && k !== "month" && k !== "year").length;
   const currentFilterDeleteCriteria: ArticleDeleteCriteria = {
@@ -1321,10 +1407,15 @@ export default function ArticlesPage() {
     },
   ] as const;
 
-  const renderArticleTable = (rows: Article[], emptyMessage: string) => (
+  const renderArticleTable = (rows: Article[], emptyMessage: string) => {
+    const rowIds = rows.map((article) => article.id);
+    const areAllRowsSelected = rowIds.length > 0 && rowIds.every((id) => selectedArticleIds.includes(id));
+
+    return (
     <div style={{ overflowX: "auto", position: "relative", zIndex: 0 }}>
       <table style={{ width: "100%", minWidth: articleTableMinWidth, borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
         <colgroup>
+          {selectionMode && <col style={{ width: "4%" }} />}
           <col style={{ width: "6%" }} />
           <col style={{ width: "10%" }} />
           <col style={{ width: "34%" }} />
@@ -1337,6 +1428,16 @@ export default function ArticlesPage() {
         </colgroup>
         <thead style={{ pointerEvents: "none" }}>
           <tr style={{ background: "rgba(248, 250, 252, 0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)" }}>
+            {selectionMode && (
+              <th style={{ padding: "14px 10px", textAlign: "center", pointerEvents: "auto" }}>
+                <input
+                  type="checkbox"
+                  checked={areAllRowsSelected}
+                  onChange={() => toggleArticleSelectionGroup(rowIds)}
+                  aria-label="Chọn tất cả bài đang hiển thị"
+                />
+              </th>
+            )}
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ID</th>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ngày</th>
             <th style={{ padding: "14px 14px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Tiêu đề</th>
@@ -1351,7 +1452,7 @@ export default function ArticlesPage() {
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={9}>
+              <td colSpan={selectionMode ? 10 : 9}>
                 <div style={{ padding: showSplitArticleSections ? 44 : 72, textAlign: "center", color: "var(--text-muted)" }}>
                   <div style={{ fontSize: showSplitArticleSections ? 28 : 36, marginBottom: 12 }}>📄</div>
                   <div style={{ fontWeight: 700 }}>{emptyMessage}</div>
@@ -1361,6 +1462,16 @@ export default function ArticlesPage() {
           ) : (
             rows.map((a) => (
               <tr key={a.id} data-testid={`article-row-${a.id}`} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.02)", transition: "background 0.2s" }} className="hover:bg-white/[0.02]">
+                {selectionMode && (
+                  <td style={{ padding: "12px 10px", textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedArticleIds.includes(a.id)}
+                      onChange={() => toggleArticleSelection(a.id)}
+                      aria-label={`Chọn bài ${a.title}`}
+                    />
+                  </td>
+                )}
                 <td style={{ padding: "12px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
                 <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>{a.date}</td>
                 <td style={{ padding: "12px 14px" }}>
@@ -1501,7 +1612,8 @@ export default function ArticlesPage() {
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   return (
     <>
@@ -1572,6 +1684,20 @@ export default function ArticlesPage() {
             </>
           )}
           {canManageArticles && (
+            <button
+              className="btn-ios-pill btn-ios-secondary"
+              onClick={toggleSelectionMode}
+              style={{
+                borderColor: selectionMode ? "rgba(37, 99, 235, 0.28)" : undefined,
+                background: selectionMode ? "rgba(37, 99, 235, 0.1)" : undefined,
+                color: selectionMode ? "var(--accent-blue)" : undefined,
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{selectionMode ? "close" : "checklist"}</span>
+              {selectionMode ? "Thoát chọn" : "Chọn hàng loạt"}
+            </button>
+          )}
+          {canManageArticles && (
             <button data-testid="articles-open-delete-tool" className="btn-ios-pill" onClick={openDeleteTool} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_sweep</span>
               Xóa dữ liệu
@@ -1627,6 +1753,43 @@ export default function ArticlesPage() {
             {linkCheckLoading ? "Đang kiểm tra link..." : "Kiểm tra link"}
           </button>
         </div>
+
+        {canManageArticles && selectionMode && (
+          <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--glass-border)", display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ minWidth: 180 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>
+                Đang chọn
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
+                {selectedArticleIds.length} bài
+              </div>
+            </div>
+            <div style={{ minWidth: 260, flex: "1 1 260px" }}>
+              <label className="form-label" style={{ marginBottom: 8, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Gán người duyệt</label>
+              <CustomSelect
+                value={bulkReviewerName}
+                onChange={setBulkReviewerName}
+                options={reviewerSelectOptions}
+                placeholder="Chọn người duyệt"
+                menuMode="portal-bottom"
+              />
+            </div>
+            <button className="btn-ios-pill btn-ios-secondary" onClick={toggleSelectVisibleArticles} style={{ height: 44 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                {selectedVisibleCount === visibleArticleIds.length && visibleArticleIds.length > 0 ? "deselect" : "select_all"}
+              </span>
+              {selectedVisibleCount === visibleArticleIds.length && visibleArticleIds.length > 0 ? "Bỏ chọn trang" : "Chọn trang"}
+            </button>
+            <button className="btn-ios-pill" onClick={() => setSelectedArticleIds([])} disabled={selectedArticleIds.length === 0} style={{ height: 44 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>clear_all</span>
+              Xóa chọn
+            </button>
+            <button className="btn-ios-pill btn-ios-primary" onClick={assignReviewerToSelection} disabled={selectedArticleIds.length === 0 || bulkAssigningReviewer} style={{ height: 44 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>assignment_ind</span>
+              {bulkAssigningReviewer ? "Đang cập nhật..." : "Phân công reviewer"}
+            </button>
+          </div>
+        )}
 
         {showFilters && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, borderTop: "1px solid var(--glass-border)", paddingTop: 24, animation: "modalFadeIn 0.2s ease" }}>
