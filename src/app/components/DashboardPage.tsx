@@ -11,6 +11,7 @@ const DASHBOARD_STATS_CACHE_TTL_MS = 30_000;
 
 let dashboardStatsCache: DashboardStats | null = null;
 let dashboardStatsCacheAt = 0;
+let dashboardStatsCacheKey = "";
 
 function formatActivityTime(value: string) {
   const parsed = new Date(value);
@@ -47,6 +48,8 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const refreshTimeoutRef = useRef<number | null>(null);
+  const viewerCacheKey = `${user?.id || 0}:${user?.role || "guest"}:${user?.collaborator?.id || 0}`;
+  const isSelfScopedDashboard = user?.role === "ctv";
 
   const refreshStats = useCallback((showLoading = false) => {
     if (showLoading) {
@@ -58,14 +61,17 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
         const nextStats = d.data || null;
         dashboardStatsCache = nextStats;
         dashboardStatsCacheAt = Date.now();
+        dashboardStatsCacheKey = viewerCacheKey;
         setStats(nextStats);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [viewerCacheKey]);
 
   useEffect(() => {
-    const hasFreshCache = dashboardStatsCache && Date.now() - dashboardStatsCacheAt < DASHBOARD_STATS_CACHE_TTL_MS;
+    const hasFreshCache = dashboardStatsCache
+      && dashboardStatsCacheKey === viewerCacheKey
+      && Date.now() - dashboardStatsCacheAt < DASHBOARD_STATS_CACHE_TTL_MS;
     if (hasFreshCache) {
       const handle = window.setTimeout(() => {
         setStats(dashboardStatsCache);
@@ -80,7 +86,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
     }, 0);
 
     return () => window.clearTimeout(handle);
-  }, [refreshStats]);
+  }, [refreshStats, viewerCacheKey]);
 
   const scheduleStatsRefresh = useCallback(() => {
     if (typeof window === "undefined") {
@@ -123,6 +129,23 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
     || "bạn";
+  const writerRows = isSelfScopedDashboard
+    ? (stats?.totalArticles ? [{
+        penName: user?.collaborator?.penName || displayName,
+        displayName,
+        count: stats.totalArticles,
+      }] : [])
+    : (stats?.articlesByWriter || []).slice(0, 5);
+  const categoryRows = isSelfScopedDashboard
+    ? (stats?.articlesByCategory || [])
+    : (stats?.articlesByCategory || []).slice(0, 4);
+  const latestArticles = stats?.latestArticles || [];
+  const dashboardKpis = [
+    { label: "Tổng bài viết", value: stats?.totalArticles || 0, sub: isSelfScopedDashboard ? "Cá nhân" : "+12.5%", icon: "article", color: "#2563eb", trend: "up" },
+    { label: "Bài đã duyệt", value: published, sub: "Đã xuất bản", icon: "payments", color: "#0d9488", trend: "neutral" },
+    { label: "Đang chờ", value: pending, sub: isSelfScopedDashboard ? "Cần xử lý" : "Ưu tiên", icon: "hourglass_empty", color: "#ea580c", trend: "warning" },
+    { label: isSelfScopedDashboard ? "Phạm vi" : "CTV", value: isSelfScopedDashboard ? "Cá nhân" : (stats?.totalCTVs || 0), sub: isSelfScopedDashboard ? displayName : "Quy mô", icon: "group", color: "#9333ea", trend: "up" }
+  ];
 
   return (
     <>
@@ -166,15 +189,11 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
       <div style={{ 
         display: "grid", 
         gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(240px, 1fr))", 
+        alignItems: "start",
         gap: isMobile ? 12 : 24, 
         marginBottom: 32 
       }}>
-        {[
-          { label: "Tổng bài viết", value: stats?.totalArticles || 0, sub: "+12.5%", icon: "article", color: "#2563eb", trend: "up" },
-          { label: "Bài đã duyệt", value: published, sub: "Đã xuất bản", icon: "payments", color: "#0d9488", trend: "neutral" },
-          { label: "Đang chờ", value: pending, sub: "Ưu tiên", icon: "hourglass_empty", color: "#ea580c", trend: "warning" },
-          { label: "CTV", value: stats?.totalCTVs || 0, sub: "Quy mô", icon: "group", color: "#9333ea", trend: "up" }
-        ].map((s, i) => (
+        {dashboardKpis.map((s, i) => (
           <div key={i} className="glass-card" style={{ 
             padding: isMobile ? 16 : 24, 
             borderRadius: isMobile ? 20 : 24, 
@@ -182,7 +201,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
             boxShadow: "var(--shadow-premium), var(--specular-top)", 
             display: "flex", 
             flexDirection: "column", 
-            gap: isMobile ? 12 : 20 
+            gap: isMobile ? 12 : 20,
+            height: "auto",
+            minHeight: 0
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, borderRadius: isMobile ? 10 : 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -199,28 +220,30 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
       </div>
 
       {/* Tier 2: Distribution & Insights */}
-      <div className="dashboard-insight-grid" style={{ gap: isMobile ? 16 : 32 }}>
+      <div className="dashboard-insight-grid" style={{ gap: isMobile ? 16 : 32, alignItems: "start" }}>
         <div style={{ 
           background: "white", 
           borderRadius: isMobile ? 24 : 32, 
           padding: isMobile ? 20 : 32, 
           boxShadow: "var(--shadow-premium)", 
-          border: "1px solid var(--border-muted)" 
+          border: "1px solid var(--border-muted)",
+          height: "auto",
+          minHeight: 0
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 24 : 32 }}>
             <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 8 }}>
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--accent-blue)" }}>analytics</span>
-              Cộng tác viên
+              {isSelfScopedDashboard ? "Bài viết của bạn" : "Cộng tác viên"}
             </h3>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent-blue)" }} />
-              <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>Tháng này</span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>{isSelfScopedDashboard ? "Phạm vi cá nhân" : "Tháng này"}</span>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {stats?.articlesByWriter?.slice(0, 5).map((w, i: number) => {
+            {writerRows.map((w, i: number) => {
               const colors = ["#2563eb", "#0d9488", "#9333ea", "#ea580c", "#64748b"];
-              const percentage = stats.totalArticles ? Math.min((w.count / stats.totalArticles) * 100 * 2.5, 100) : 0;
+              const percentage = stats?.totalArticles ? Math.min((w.count / stats.totalArticles) * 100 * 2.5, 100) : 0;
               return (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: isMobile ? 100 : 140, minWidth: 0 }}>
@@ -236,6 +259,11 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
                 </div>
               );
             })}
+            {writerRows.length === 0 && (
+              <div style={{ padding: "8px 0", fontSize: 13, color: "var(--text-muted)" }}>
+                {isSelfScopedDashboard ? "Chưa có bài viết nào trong phạm vi cá nhân." : "Chưa có dữ liệu cộng tác viên."}
+              </div>
+            )}
           </div>
         </div>
 
@@ -244,16 +272,18 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
           borderRadius: isMobile ? 24 : 32, 
           padding: isMobile ? 20 : 32, 
           boxShadow: "var(--shadow-premium)", 
-          border: "1px solid var(--border-muted)" 
+          border: "1px solid var(--border-muted)",
+          height: "auto",
+          minHeight: 0
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 24 : 32 }}>
-            <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: "var(--text-main)" }}>Danh mục</h3>
+            <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: "var(--text-main)" }}>{isSelfScopedDashboard ? "Danh mục của bạn" : "Danh mục"}</h3>
             {!isMobile && <span className="material-symbols-outlined" style={{ color: "var(--text-muted)", cursor: "pointer" }}>more_horiz</span>}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {stats?.articlesByCategory?.slice(0, 4).map((c, i: number) => {
+            {categoryRows.map((c, i: number) => {
               const colors = ["#2563eb", "#0d9488", "#9333ea", "#ea580c"];
-              const percentage = stats.totalArticles ? Math.round((c.count / stats.totalArticles) * 100) : 0;
+              const percentage = stats?.totalArticles ? Math.round((c.count / stats.totalArticles) * 100) : 0;
               return (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: isMobile ? "10px 14px" : "14px 18px", background: "#f8fafc", borderRadius: 16 }}>
                   <div style={{ width: 32, height: 32, borderRadius: 10, background: "white", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)" }}>
@@ -267,6 +297,11 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
                 </div>
               );
             })}
+            {categoryRows.length === 0 && (
+              <div style={{ padding: "8px 0", fontSize: 13, color: "var(--text-muted)" }}>
+                {isSelfScopedDashboard ? "Chưa có danh mục bài viết trong phạm vi cá nhân." : "Chưa có dữ liệu danh mục."}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -292,30 +327,32 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
                   <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Bài viết</th>
-                  <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Người viết</th>
+                  {!isSelfScopedDashboard && <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Người viết</th>}
                   <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>Loại bài</th>
                   <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>Trạng thái</th>
                   <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "right" }}>Ngày cập nhật</th>
                 </tr>
               </thead>
               <tbody>
-                {(stats?.latestArticles || []).map((a, i: number) => (
+                {latestArticles.map((a, i: number) => (
                   <tr key={a.id || i} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.2s" }} className="hover:bg-slate-50">
                     <td style={{ padding: "20px 32px", maxWidth: 350 }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.articleId || "No ID"}</div>
                     </td>
-                    <td style={{ padding: "20px 32px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent-blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{(a.writerDisplayName || a.penName || "?")[0]}</div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{a.writerDisplayName || a.penName}</div>
-                          {a.penName && a.writerDisplayName && a.penName !== a.writerDisplayName && (
-                            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.penName}</div>
-                          )}
+                    {!isSelfScopedDashboard && (
+                      <td style={{ padding: "20px 32px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent-blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{(a.writerDisplayName || a.penName || "?")[0]}</div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{a.writerDisplayName || a.penName}</div>
+                            {a.penName && a.writerDisplayName && a.penName !== a.writerDisplayName && (
+                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.penName}</div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
+                    )}
                     <td style={{ padding: "20px 32px", textAlign: "center" }}>
                       <span style={{ fontSize: 10, fontWeight: 800, color: "var(--accent-blue)", background: "rgba(59, 130, 246, 0.1)", padding: "4px 10px", borderRadius: 8, textTransform: "uppercase", whiteSpace: "nowrap" }}>{a.articleType || "SEO"}</span>
                     </td>
@@ -330,9 +367,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
                     </td>
                   </tr>
                 ))}
-                {(stats?.latestArticles || []).length === 0 && (
+                {latestArticles.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>
+                    <td colSpan={isSelfScopedDashboard ? 4 : 5} style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>
                       Chưa có dữ liệu hoạt động gần đây.
                     </td>
                   </tr>
@@ -342,8 +379,8 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
-            {(stats?.latestArticles || []).map((a, i) => (
-              <div key={a.id || i} style={{ padding: "16px 24px", borderBottom: i === (stats?.latestArticles || []).length - 1 ? "none" : "1px solid #f1f5f9" }}>
+            {latestArticles.map((a, i) => (
+              <div key={a.id || i} style={{ padding: "16px 24px", borderBottom: i === latestArticles.length - 1 ? "none" : "1px solid #f1f5f9" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", flex: 1, marginRight: 12 }}>{a.title}</div>
                   <div style={{ padding: "4px 8px", borderRadius: 8, background: getStatusPresentation(a.status).background, color: getStatusPresentation(a.status).color, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>
@@ -351,15 +388,19 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
                   </div>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#e2e8f0", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{(a.writerDisplayName || a.penName || "?")[0]}</div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>{a.writerDisplayName || a.penName}</span>
-                  </div>
+                  {!isSelfScopedDashboard ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#e2e8f0", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{(a.writerDisplayName || a.penName || "?")[0]}</div>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>{a.writerDisplayName || a.penName}</span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>{a.articleType || "Bài viết"}</span>
+                  )}
                   <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatActivityTime(a.updatedAt)}</span>
                 </div>
               </div>
             ))}
-            {(stats?.latestArticles || []).length === 0 && (
+            {latestArticles.length === 0 && (
               <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>Chưa có hoạt động gần đây.</div>
             )}
           </div>

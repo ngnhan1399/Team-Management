@@ -207,6 +207,7 @@ body {
   grid-template-columns: 1.6fr 1fr;
   gap: 32px;
   margin-bottom: 32px;
+  align-items: start;
 }
 
 .auth-shell {
@@ -516,6 +517,7 @@ select:focus {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 24px;
   margin-bottom: 32px;
+  align-items: start;
 }
 
 /* Royalty Price Cards */
@@ -524,6 +526,17 @@ select:focus {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
   margin-bottom: 32px;
+  align-items: start;
+}
+
+.card,
+.glass-card,
+.stat-card,
+.price-card,
+.breakdown-card,
+.summary-card {
+  height: auto;
+  min-height: 0;
 }
 
 .price-card {
@@ -1500,12 +1513,14 @@ input[type=number] {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
+  align-items: start;
 }
 
 .royalty-overview-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
+  align-items: start;
 }
 
 .price-card {

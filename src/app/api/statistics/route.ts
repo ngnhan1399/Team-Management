@@ -1,10 +1,11 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articles, collaborators } from "@/db/schema";
 import { resolveArticleCategory } from "@/lib/article-category";
-import { getContextIdentityCandidates, getContextIdentityLabels, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { getContextArticleOwnerCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import { expandCollaboratorIdentityValues } from "@/lib/collaborator-identity";
 import { handleServerError } from "@/lib/server-error";
 import { getContextTeamId, isLeader } from "@/lib/teams";
-import { desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 type CollaboratorDirectoryItem = {
@@ -81,13 +82,6 @@ function groupCount<T extends string>(values: T[]) {
   }, {})).map(([key, count]) => ({ key, count }));
 }
 
-function addScopeValue(target: Set<string>, value: string | null | undefined) {
-  const normalized = String(value || "").trim();
-  if (normalized) {
-    target.add(normalized);
-  }
-}
-
 function collectScopedCollaborators(
   allCollaborators: CollaboratorDirectoryItem[],
   identityCandidates: string[]
@@ -97,39 +91,6 @@ function collectScopedCollaborators(
     || matchesIdentityCandidate(identityCandidates, item.name)
     || matchesIdentityCandidate(identityCandidates, item.email || "")
   ));
-}
-
-function buildArticleScopeValues(
-  identityLabels: string[],
-  scopedCollaborators: CollaboratorDirectoryItem[]
-) {
-  const values = new Set<string>();
-  for (const label of identityLabels) {
-    addScopeValue(values, label);
-  }
-
-  for (const collaborator of scopedCollaborators) {
-    addScopeValue(values, collaborator.penName);
-    addScopeValue(values, collaborator.name);
-    addScopeValue(values, collaborator.email);
-    if (collaborator.email) {
-      addScopeValue(values, collaborator.email.split("@")[0]);
-    }
-  }
-
-  return Array.from(values);
-}
-
-function buildArticleScopeWhere(scopeValues: string[]): SQL | undefined {
-  if (scopeValues.length === 1) {
-    return eq(articles.penName, scopeValues[0]);
-  }
-
-  if (scopeValues.length > 1) {
-    return inArray(articles.penName, scopeValues);
-  }
-
-  return undefined;
 }
 
 async function loadStatisticsArticles(whereClause?: SQL) {
@@ -363,8 +324,7 @@ export async function GET() {
             return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
         }
 
-        const identityCandidates = getContextIdentityCandidates(context);
-        const identityLabels = getContextIdentityLabels(context);
+        const articleOwnerCandidates = getContextArticleOwnerCandidates(context);
         const adminTeamId = context.user.role === "admin" && !isLeader(context)
             ? getContextTeamId(context)
             : null;
@@ -406,7 +366,7 @@ export async function GET() {
             });
         }
 
-        if (identityCandidates.length === 0) {
+        if (articleOwnerCandidates.length === 0) {
             return NextResponse.json({
                 success: true,
                 data: {
@@ -422,11 +382,33 @@ export async function GET() {
             });
         }
 
-        const scopedCollaborators = collectScopedCollaborators(allCollaborators, identityCandidates);
-        const collaboratorDirectory = scopedCollaborators.length > 0 ? scopedCollaborators : allCollaborators;
-        const articleScopeValues = buildArticleScopeValues(identityLabels, scopedCollaborators);
-        const scopeWhere = buildArticleScopeWhere(articleScopeValues);
-        const totalCTVCount = identityCandidates.length > 0 ? 1 : 0;
+        const exactScopeValues = Array.from(new Set(
+            expandCollaboratorIdentityValues([
+                context.collaborator?.name,
+                context.collaborator?.penName,
+                context.collaborator?.email,
+                context.token.penName,
+                context.user.email.split("@")[0],
+            ])
+                .map((value) => String(value || "").trim())
+                .filter(Boolean)
+        ));
+        const collaboratorDirectory = context.collaborator
+            ? [{
+                id: context.collaborator.id,
+                teamId: context.collaborator.teamId,
+                name: context.collaborator.name,
+                penName: context.collaborator.penName,
+                email: context.collaborator.email,
+            }]
+            : collectScopedCollaborators(allCollaborators, articleOwnerCandidates);
+        const teamScope = context.user.teamId ?? context.collaborator?.teamId ?? null;
+        const scopeWhere = exactScopeValues.length === 1
+            ? (teamScope ? and(eq(articles.teamId, teamScope), eq(articles.penName, exactScopeValues[0])) : eq(articles.penName, exactScopeValues[0]))
+            : exactScopeValues.length > 1
+                ? (teamScope ? and(eq(articles.teamId, teamScope), inArray(articles.penName, exactScopeValues)) : inArray(articles.penName, exactScopeValues))
+                : undefined;
+        const totalCTVCount = 1;
 
         if (scopeWhere) {
             const scopedStatistics = await getScopedStatistics(scopeWhere, totalCTVCount, collaboratorDirectory);
@@ -438,15 +420,13 @@ export async function GET() {
             }
         }
 
-        const candidateWhere = identityCandidates.length === 1
-            ? eq(articles.penName, identityCandidates[0])
-            : identityCandidates.length > 1
-                ? inArray(articles.penName, identityCandidates)
-                : undefined;
+        const candidateWhere = teamScope
+            ? eq(articles.teamId, teamScope)
+            : undefined;
         const allArticles = candidateWhere
             ? await loadStatisticsArticles(candidateWhere)
-            : [];
-        const scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(identityCandidates, article.penName));
+            : await loadStatisticsArticles();
+        const scopedArticles = allArticles.filter((article) => matchesIdentityCandidate(articleOwnerCandidates, article.penName));
         const totalArticles = scopedArticles.length;
 
         const articlesByStatus = groupCount(scopedArticles.map((article) => article.status))

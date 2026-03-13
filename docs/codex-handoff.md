@@ -1,5 +1,32 @@
 # Codex Handoff
 
+## Update 2026-03-13 (dashboard CTV self-scope + card auto layout)
+
+- `DashboardPage.tsx` giờ dùng cache theo `viewerCacheKey`, tránh lẫn cache giữa admin và CTV khi đổi tài khoản trong cùng phiên.
+- Dashboard cho `CTV` đã được siết lại theo đúng danh tính hiện tại:
+  - block `Cộng tác viên` chỉ còn hiện dữ liệu của chính người đang đăng nhập
+  - block `Danh mục` chỉ thống kê bài viết trong phạm vi cá nhân
+  - `Hoạt động mới` không còn hiển thị cột tác giả dư thừa ở view cá nhân
+- `statistics/route.ts` không còn dùng scope rộng theo collaborator directory cho CTV:
+  - ưu tiên exact scope từ danh tính/alias của chính user
+  - nếu cần fallback thì chỉ quét trong team hiện tại rồi fuzzy-match lại với owner candidates của chính user
+- `globals.css` đã được chỉnh để grid card co giãn theo nội dung tốt hơn:
+  - `dashboard-insight-grid`, `stats-grid`, `price-grid`, `royalty-overview-grid` dùng `align-items: start`
+  - các lớp card chính (`card`, `glass-card`, `stat-card`, `price-card`, `breakdown-card`, `summary-card`) dùng `height: auto; min-height: 0`
+
+### File đã động vào
+
+- `src/app/components/DashboardPage.tsx`
+- `src/app/api/statistics/route.ts`
+- `src/app/globals.css`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npx eslint src/app/components/DashboardPage.tsx src/app/api/statistics/route.ts` ✅
+- `npm run typecheck` ✅
+- `npm run verify:safe` ✅
+
 ## Update 2026-03-13 (chuyển bài viết sang tháng sau + popup đăng ký lại)
 
 - Thêm action mới `move-to-next-month` trong `PUT /api/articles`.
