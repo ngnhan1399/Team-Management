@@ -283,6 +283,17 @@ export default function ArticlesPage() {
     setSelectedArticleIds((prev) => prev.filter((id) => articles.some((article) => article.id === id)));
   }, [articles]);
 
+  const showUiToast = useCallback((title: string, message: string, variant: "info" | "success" | "warning" | "error" = "info") => {
+    emitRealtimePayload({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      channels: ["ui-feedback"],
+      at: new Date().toISOString(),
+      toastTitle: title,
+      toastMessage: message,
+      toastVariant: variant,
+    });
+  }, []);
+
   useEffect(() => {
     const published = deferredArticles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
     if (published.length === 0) {
@@ -305,7 +316,7 @@ export default function ArticlesPage() {
     });
   }, [deferredArticles]);
 
-  const checkVisibleLinks = useCallback(async (force = false) => {
+  const checkVisibleLinks = useCallback(async (force = false, manual = false) => {
     const published = deferredArticles.filter((article) => (
       isApprovedArticleStatus(article.status) && article.link && article.link.startsWith("http")
     ));
@@ -319,6 +330,15 @@ export default function ArticlesPage() {
     }).slice(0, 10);
 
     if (pendingUrls.length === 0) {
+      if (manual) {
+        showUiToast(
+          "Khong co link can kiem tra",
+          urls.length === 0
+            ? "Không có bài đã duyệt nào có link hợp lệ để kiểm tra."
+            : "Các link đang hiển thị đều đã được kiểm tra gần đây.",
+          "info"
+        );
+      }
       return;
     }
 
@@ -331,22 +351,45 @@ export default function ArticlesPage() {
         cache: "no-store",
       });
       const data = await response.json();
-      if (data.success && data.results) {
-        const checkedAt = Date.now();
-        const nextEntries = Object.fromEntries(
-          Object.entries(data.results as Record<string, LinkHealthStatus>).map(([url, status]) => [
-            url,
-            { status, checkedAt },
-          ])
-        );
-        setLinkHealth((prev) => ({ ...prev, ...nextEntries }));
+      if (!response.ok || !data.success || !data.results) {
+        throw new Error(data.error || "Không thể kiểm tra trạng thái link.");
       }
-    } catch {
-      // Ignore transient link check failures and keep manual retry available.
+
+      const checkedAt = Date.now();
+      const nextEntries = Object.fromEntries(
+        Object.entries(data.results as Record<string, LinkHealthStatus>).map(([url, status]) => [
+          url,
+          { status, checkedAt },
+        ])
+      );
+      setLinkHealth((prev) => ({ ...prev, ...nextEntries }));
+
+      if (manual) {
+        const statuses = Object.values(data.results as Record<string, LinkHealthStatus>);
+        const brokenCount = statuses.filter((status) => status === "broken").length;
+        const unknownCount = statuses.filter((status) => status === "unknown").length;
+        const okCount = statuses.filter((status) => status === "ok").length;
+
+        showUiToast(
+          "Da kiem tra link",
+          brokenCount > 0
+            ? `Đã kiểm tra ${statuses.length} link: ${brokenCount} lỗi, ${okCount} hoạt động, ${unknownCount} chưa xác minh.`
+            : `Đã kiểm tra ${statuses.length} link. ${okCount} link hoạt động${unknownCount > 0 ? `, ${unknownCount} link chưa xác minh.` : "."}`,
+          brokenCount > 0 ? "warning" : "success"
+        );
+      }
+    } catch (error) {
+      if (manual) {
+        showUiToast(
+          "Kiem tra link that bai",
+          error instanceof Error ? error.message : "Không thể kiểm tra link lúc này.",
+          "error"
+        );
+      }
     } finally {
       setLinkCheckLoading(false);
     }
-  }, [deferredArticles]);
+  }, [deferredArticles, showUiToast]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -705,17 +748,6 @@ export default function ArticlesPage() {
       setDeleteLoading(false);
     }
   };
-
-  const showUiToast = useCallback((title: string, message: string, variant: "info" | "success" | "warning" | "error" = "info") => {
-    emitRealtimePayload({
-      id: Date.now() + Math.floor(Math.random() * 1000),
-      channels: ["ui-feedback"],
-      at: new Date().toISOString(),
-      toastTitle: title,
-      toastMessage: message,
-      toastVariant: variant,
-    });
-  }, []);
 
   const executeDelete = async () => {
     if (!deletePreview) {
@@ -1816,8 +1848,8 @@ export default function ArticlesPage() {
       </div>
 
       <div className="glass-card" style={{ padding: 20, marginBottom: 32 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div style={{ flex: 1, position: "relative" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 420px", minWidth: 0, position: "relative" }}>
             <span className="material-symbols-outlined" style={{ position: "absolute", left: isMobile ? 12 : 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 18 }}>search</span>
             <input
               data-testid="articles-search"
@@ -1839,9 +1871,56 @@ export default function ArticlesPage() {
             </button>
           )}
           {!isMobile && (
-            <button className="btn-ios-pill btn-ios-secondary" onClick={() => { void checkVisibleLinks(true); }} disabled={linkCheckLoading} style={{ height: 44 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link_scan</span>
-              {linkCheckLoading ? "Đang kiểm tra link..." : "Kiểm tra link"}
+            <button
+              className="btn-ios-pill"
+              data-testid="articles-check-links"
+              onClick={() => { void checkVisibleLinks(true, true); }}
+              disabled={linkCheckLoading}
+              title="Kiểm tra lại trạng thái các link bài viết đang hiển thị"
+              style={{
+                height: 44,
+                padding: "0 16px 0 12px",
+                gap: 10,
+                whiteSpace: "nowrap",
+                background: linkCheckLoading ? "rgba(14, 165, 233, 0.10)" : "rgba(37, 99, 235, 0.08)",
+                color: linkCheckLoading ? "#0369a1" : "var(--accent-blue)",
+                border: linkCheckLoading
+                  ? "1px solid rgba(14, 165, 233, 0.20)"
+                  : "1px solid rgba(37, 99, 235, 0.18)",
+                boxShadow: "0 10px 24px rgba(37, 99, 235, 0.08)",
+              }}
+            >
+              <span
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 999,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: linkCheckLoading ? "rgba(14, 165, 233, 0.16)" : "rgba(37, 99, 235, 0.14)",
+                  color: "inherit",
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{
+                    fontSize: 16,
+                    animation: linkCheckLoading ? "spin 1s linear infinite" : undefined,
+                  }}
+                >
+                  verified
+                </span>
+              </span>
+              <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.1 }}>
+                <span style={{ fontSize: 13, fontWeight: 800 }}>{linkCheckLoading ? "Đang kiểm tra..." : "Kiểm tra link"}</span>
+                {!linkCheckLoading && (
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
+                    Recheck các bài đang hiển thị
+                  </span>
+                )}
+              </span>
             </button>
           )}
         </div>
