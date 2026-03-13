@@ -164,8 +164,24 @@ export default function ArticlesPage() {
           : collaborator.penName,
       })),
   ];
+  const resolveAuthorBucket = useCallback((article: Article): "ctv" | "editorial" => {
+    if (article.authorUserRole === "admin") {
+      return "editorial";
+    }
+
+    if (article.authorRole === "writer" || article.authorRole === "reviewer") {
+      return "ctv";
+    }
+
+    if (article.authorBucket === "editorial" || normalizeIdentityValue(article.penName) === normalizeIdentityValue(MANAGER_DEFAULT_PEN_NAME)) {
+      return "editorial";
+    }
+
+    return "ctv";
+  }, []);
+
   const visibleArticleIds = articles
-    .filter((article) => article.authorBucket !== "editorial")
+    .filter((article) => resolveAuthorBucket(article) !== "editorial")
     .map((article) => article.id);
   const selectedVisibleCount = visibleArticleIds.filter((id) => selectedArticleIds.includes(id)).length;
 
@@ -1433,7 +1449,7 @@ export default function ArticlesPage() {
   };
 
   const authorBucketBadge = (article: Article) => {
-    const isEditorialArticle = article.authorBucket === "editorial";
+    const isEditorialArticle = resolveAuthorBucket(article) === "editorial";
     return (
       <span
         style={{
@@ -1455,14 +1471,14 @@ export default function ArticlesPage() {
         <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
           {isEditorialArticle ? "shield_person" : "groups"}
         </span>
-        {article.authorBucketLabel || (isEditorialArticle ? "Biên tập/Admin" : "CTV")}
+        {isEditorialArticle ? "Biên tập/Admin" : "CTV"}
       </span>
     );
   };
 
   const showSplitArticleSections = shouldShowSplitArticleSections;
-  const ctvArticles = articles.filter((article) => article.authorBucket !== "editorial");
-  const editorialArticles = articles.filter((article) => article.authorBucket === "editorial");
+  const ctvArticles = articles.filter((article) => resolveAuthorBucket(article) !== "editorial");
+  const editorialArticles = articles.filter((article) => resolveAuthorBucket(article) === "editorial");
   const articleTableMinWidth = showSplitArticleSections ? 1240 : 1300;
   const articleSections = [
     {

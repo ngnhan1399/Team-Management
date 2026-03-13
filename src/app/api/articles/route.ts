@@ -280,7 +280,7 @@ async function attachArticleResponseMetadata<
       );
 
       if (collaboratorProfile) {
-        const authorBucket = collaboratorProfile.role === "reviewer" || collaboratorProfile.linkedUserRole === "admin"
+        const authorBucket = collaboratorProfile.linkedUserRole === "admin"
           ? "editorial"
           : "ctv";
         return {
