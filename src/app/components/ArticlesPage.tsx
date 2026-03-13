@@ -285,6 +285,43 @@ export default function ArticlesPage() {
     }
   }, [deferredArticles]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void checkVisibleLinks();
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [checkVisibleLinks]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      void checkVisibleLinks();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [checkVisibleLinks]);
+
   const handleSearch = (e?: React.FormEvent) => { e?.preventDefault(); fetchArticles(1, search, filters); };
   const applyFilter = (key: string, val: string) => { const f = { ...filters, [key]: val }; setFilters(f); fetchArticles(1, search, f); };
   const clearFilters = () => { const f = createCurrentMonthFilters(); setFilters(f); fetchArticles(1, search, f); };
@@ -1143,8 +1180,16 @@ export default function ArticlesPage() {
       );
     }
 
+    if (isApprovedArticleStatus(article.status)) {
+      return (
+        <span title="Đang chờ kiểm tra trạng thái link" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-orange)" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>pending</span>
+        </span>
+      );
+    }
+
     return (
-      <span title={isApprovedArticleStatus(article.status) ? "Tự động kiểm tra link đang tắt để tiết kiệm usage" : "Có link"} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-blue)" }}>
+      <span title="Có link" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-blue)" }}>
         <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link</span>
       </span>
     );
