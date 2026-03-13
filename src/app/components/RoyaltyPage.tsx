@@ -14,6 +14,7 @@ import type {
 } from "./types";
 
 const ROYALTY_RATES_CACHE_TTL_MS = 10 * 60 * 1000;
+const REVIEWER_ROYALTY_PRICE = 15000;
 const ROYALTY_COLLABORATORS_CACHE_TTL_MS = 10 * 60 * 1000;
 
 let royaltyRatesCache: RoyaltyRateItem[] | null = null;
@@ -540,6 +541,18 @@ export default function RoyaltyPage() {
       {/* ═══ TAB: RATES ═══ */}
       {tab === "rates" && (
         <div className="price-grid">
+          <div className="price-card obsidian-glass" style={{ border: "1px solid rgba(249, 115, 22, 0.18)", background: "linear-gradient(135deg, rgba(249, 115, 22, 0.16), rgba(234, 88, 12, 0.06))" }}>
+            <div className="price-card-header">
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#f97316" }}>fact_check</span>
+              <span>Duyệt bài</span>
+            </div>
+            <div className="price-card-body">
+              <div className="price-card-col" style={{ width: "100%" }}>
+                <span className="price-card-type rewrite">MỨC CỐ ĐỊNH</span>
+                <span className="price-card-amount rewrite">{fmt(REVIEWER_ROYALTY_PRICE)}</span>
+              </div>
+            </div>
+          </div>
           {Object.entries(rateGroups).map(([articleType, prices]) => (
             <div key={articleType} className="price-card obsidian-glass">
               <div className="price-card-header">

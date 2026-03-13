@@ -12,6 +12,7 @@ export type RoyaltyContributorProfile = {
 };
 
 export type RoyaltyContributorRole = "writer" | "reviewer";
+export const REVIEWER_ROYALTY_PRICE = 15000;
 
 export type RoyaltyScopedArticle = {
   teamId?: number | null;
@@ -106,6 +107,10 @@ export function isBudgetEligibleContributor(
   if (!profile) return false;
   const normalizedRole = String(profile.role || "").trim() as RoyaltyContributorRole;
   return allowedRoles.includes(normalizedRole) && String(profile.linkedUserRole || "").trim() !== "admin";
+}
+
+export function resolveRoyaltyContributionPrice(role: RoyaltyContributorRole, writerPrice: number) {
+  return role === "reviewer" ? REVIEWER_ROYALTY_PRICE : writerPrice;
 }
 
 export function resolveRoyaltyContributorProfile(

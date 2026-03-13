@@ -9,6 +9,7 @@ import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import {
   isBudgetEligibleContributor,
   matchesRoyaltyMonthYear,
+  resolveRoyaltyContributionPrice,
   resolveRoyaltyContributorPenName,
   resolveRoyaltyContributorProfile,
   type RoyaltyContributorProfile,
@@ -221,7 +222,7 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
       wordCountRange: article.wordCountRange,
     });
     const key = `${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`;
-    const price = rateMap.get(key) || 0;
+    const writerPrice = rateMap.get(key) || 0;
 
     const writerProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
     if (isBudgetEligibleContributor(writerProfile, ["writer"])) {
@@ -231,7 +232,7 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
         role: "writer",
         articleType: normalizedArticleFields.articleType,
         contentType: normalizedArticleFields.contentType,
-        price,
+        price: resolveRoyaltyContributionPrice("writer", writerPrice),
       });
     }
 
@@ -251,7 +252,7 @@ async function buildCalculation(month: number, year: number, options?: { exactPe
       role: "reviewer",
       articleType: normalizedArticleFields.articleType,
       contentType: normalizedArticleFields.contentType,
-      price,
+      price: resolveRoyaltyContributionPrice("reviewer", writerPrice),
     });
   }
 

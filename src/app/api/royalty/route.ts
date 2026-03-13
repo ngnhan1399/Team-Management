@@ -8,6 +8,7 @@ import {
     isBudgetEligibleContributor,
     matchesRoyaltyMonthYear,
     parseRoyaltyDateParts,
+    resolveRoyaltyContributionPrice,
     resolveRoyaltyContributorPenName,
     resolveRoyaltyContributorProfile,
     summarizeRoyaltyContentBalance,
@@ -235,16 +236,22 @@ export async function GET(request: NextRequest) {
                 const articleMonth = dateParts.month;
 
                 const key = `${articleYear}-${articleMonth}`;
-                const price = rateMap.get(`${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`) || 0;
+                const writerPrice = rateMap.get(`${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`) || 0;
 
                 if (!monthlyMap[key]) {
                     monthlyMap[key] = { month: articleMonth, year: articleYear, totalAmount: 0, totalArticles: 0 };
                 }
-                monthlyMap[key].totalAmount += price;
+                monthlyMap[key].totalAmount += writerPrice;
                 monthlyMap[key].totalArticles += 1;
 
                 if (articleMonth === currentMonth && articleYear === currentYear) {
-                    writerAmounts[article.penName] = (writerAmounts[article.penName] || 0) + price;
+                    writerAmounts[article.penName] = (writerAmounts[article.penName] || 0) + writerPrice;
+                }
+
+                const reviewerName = String(article.reviewerName || "").trim();
+                const reviewerProfile = resolveRoyaltyContributorProfile(reviewerName, contributorProfiles);
+                if (reviewerName && isBudgetEligibleContributor(reviewerProfile, ["reviewer"])) {
+                    monthlyMap[key].totalAmount += resolveRoyaltyContributionPrice("reviewer", writerPrice);
                 }
             }
 
@@ -361,7 +368,7 @@ export async function GET(request: NextRequest) {
                     wordCountRange: article.wordCountRange,
                 });
                 const key = `${normalizedArticleFields.articleType}|${normalizedArticleFields.contentType}`;
-                const price = rateMap.get(key) || 0;
+                const writerPrice = rateMap.get(key) || 0;
 
                 const writerProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
                 if (isBudgetEligibleContributor(writerProfile, ["writer"])) {
@@ -370,7 +377,7 @@ export async function GET(request: NextRequest) {
                         role: "writer",
                         articleType: normalizedArticleFields.articleType,
                         contentType: normalizedArticleFields.contentType,
-                        price,
+                        price: resolveRoyaltyContributionPrice("writer", writerPrice),
                     });
                 }
 
@@ -382,7 +389,7 @@ export async function GET(request: NextRequest) {
                         role: "reviewer",
                         articleType: normalizedArticleFields.articleType,
                         contentType: normalizedArticleFields.contentType,
-                        price,
+                        price: resolveRoyaltyContributionPrice("reviewer", writerPrice),
                     });
                 }
             }
