@@ -1868,6 +1868,37 @@ input[type=number] {
     gap: 12px;
   }
 
+  .stat-card {
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    margin-bottom: 6px;
+    max-width: calc(100% - 30px); /* Leave room for icon */
+  }
+
+  .stat-value {
+    font-size: clamp(16px, 4.5vw, 20px);
+    line-height: 1.2;
+    word-break: break-word; /* Break extremely long numbers if necessary */
+    padding-right: 0;
+    margin-top: auto;
+  }
+
+  .stat-icon {
+    top: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .stat-icon span {
+    font-size: 16px;
+  }
+
   .royalty-overview-grid {
     grid-template-columns: 1fr;
     gap: 16px;
