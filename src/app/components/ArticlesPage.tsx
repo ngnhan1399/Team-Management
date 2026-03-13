@@ -1299,7 +1299,7 @@ export default function ArticlesPage() {
   const showSplitArticleSections = shouldShowSplitArticleSections;
   const ctvArticles = articles.filter((article) => article.authorBucket !== "editorial");
   const editorialArticles = articles.filter((article) => article.authorBucket === "editorial");
-  const articleTableMinWidth = showSplitArticleSections ? 1360 : 1420;
+  const articleTableMinWidth = showSplitArticleSections ? 1240 : 1300;
   const articleSections = [
     {
       key: "ctv",
@@ -1327,13 +1327,13 @@ export default function ArticlesPage() {
         <colgroup>
           <col style={{ width: "6%" }} />
           <col style={{ width: "10%" }} />
-          <col style={{ width: "32%" }} />
-          <col style={{ width: "12%" }} />
+          <col style={{ width: "34%" }} />
+          <col style={{ width: "13%" }} />
+          <col style={{ width: "7%" }} />
+          <col style={{ width: "11%" }} />
           <col style={{ width: "10%" }} />
-          <col style={{ width: "12%" }} />
+          <col style={{ width: "4%" }} />
           <col style={{ width: "10%" }} />
-          <col style={{ width: "5%" }} />
-          <col style={{ width: "12%" }} />
         </colgroup>
         <thead style={{ pointerEvents: "none" }}>
           <tr style={{ background: "rgba(248, 250, 252, 0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)" }}>
@@ -1412,7 +1412,7 @@ export default function ArticlesPage() {
                     {authorBucketBadge(a)}
                   </div>
                 </td>
-                <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--text-main)" }}>
+                <td style={{ padding: "12px 10px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap" }}>
                   {a.reviewerName ? getDisplayedPenName(a.reviewerName) : "—"}
                 </td>
                 <td style={{ padding: "12px 14px", textAlign: "center" }}>
