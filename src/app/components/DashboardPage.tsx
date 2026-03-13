@@ -5,6 +5,7 @@ import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus } from "@/lib/article-status";
 import type { DashboardStats, Page } from "./types";
+import { useIsMobile } from "./useMediaQuery";
 
 const DASHBOARD_STATS_CACHE_TTL_MS = 30_000;
 
@@ -42,6 +43,7 @@ function getStatusPresentation(status: string) {
 
 export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page) => void }) {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const refreshTimeoutRef = useRef<number | null>(null);
@@ -124,22 +126,36 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
 
   return (
     <>
-      <header className="page-shell-header" style={{ marginBottom: 40, alignItems: "flex-start" }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em", lineHeight: 1.1 }}>{`Chào ${greeting}, ${displayName}`}</h2>
+      <header className="page-shell-header" style={{ 
+        marginBottom: isMobile ? 32 : 40, 
+        paddingLeft: isMobile ? 4 : 0,
+        paddingRight: isMobile ? 4 : 0, 
+        alignItems: "flex-start",
+        flexDirection: isMobile ? "column" : "row"
+      }}>
+        <div style={{ minWidth: 0, width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+            <h2 style={{ 
+              fontSize: isMobile ? 26 : 32, 
+              fontWeight: 800, 
+              color: "var(--text-main)", 
+              letterSpacing: "-0.04em", 
+              lineHeight: 1.1 
+            }}>{`Chào ${greeting}, ${displayName}`}</h2>
             <div style={{ padding: "4px 10px", background: "rgba(16, 185, 129, 0.1)", borderRadius: 20, display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#059669", textTransform: "uppercase" }}>Hệ thống ổn định</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#059669", textTransform: "uppercase" }}>Ổn định</span>
             </div>
           </div>
         </div>
-        <div className="page-shell-actions">
-          <button className="btn-ios-pill btn-ios-secondary" style={{ background: "white", boxShadow: "var(--specular-top)" }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>file_download</span>
-            Báo cáo
-          </button>
-          <button className="btn-ios-pill btn-ios-primary" onClick={() => onNavigate("articles")}>
+        <div className="page-shell-actions" style={{ width: isMobile ? "100%" : "auto", display: "flex", gap: 10 }}>
+          {!isMobile && (
+            <button className="btn-ios-pill btn-ios-secondary" style={{ background: "white", boxShadow: "var(--specular-top)" }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>file_download</span>
+              Báo cáo
+            </button>
+          )}
+          <button className="btn-ios-pill btn-ios-primary" style={{ flex: isMobile ? 1 : "initial", justifyContent: "center" }} onClick={() => onNavigate("articles")}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>article</span>
             Quản lý bài viết
           </button>
@@ -147,80 +163,105 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
       </header>
 
       {/* Tier 1: Main KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 24, marginBottom: 32 }}>
+      <div style={{ 
+        display: "grid", 
+        gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(240px, 1fr))", 
+        gap: isMobile ? 12 : 24, 
+        marginBottom: 32 
+      }}>
         {[
           { label: "Tổng bài viết", value: stats?.totalArticles || 0, sub: "+12.5%", icon: "article", color: "#2563eb", trend: "up" },
           { label: "Bài đã duyệt", value: published, sub: "Đã xuất bản", icon: "payments", color: "#0d9488", trend: "neutral" },
-          { label: "Đang chờ duyệt", value: pending, sub: "Yêu cầu ưu tiên", icon: "hourglass_empty", color: "#ea580c", trend: "warning" },
-          { label: "Cộng tác viên", value: stats?.totalCTVs || 0, sub: "Quy mô hiện tại", icon: "group", color: "#9333ea", trend: "up" }
+          { label: "Đang chờ", value: pending, sub: "Ưu tiên", icon: "hourglass_empty", color: "#ea580c", trend: "warning" },
+          { label: "CTV", value: stats?.totalCTVs || 0, sub: "Quy mô", icon: "group", color: "#9333ea", trend: "up" }
         ].map((s, i) => (
-          <div key={i} className="glass-card" style={{ padding: 24, borderRadius: 24, background: "white", boxShadow: "var(--shadow-premium), var(--specular-top)", display: "flex", flexDirection: "column", gap: 20 }}>
+          <div key={i} className="glass-card" style={{ 
+            padding: isMobile ? 16 : 24, 
+            borderRadius: isMobile ? 20 : 24, 
+            background: "white", 
+            boxShadow: "var(--shadow-premium), var(--specular-top)", 
+            display: "flex", 
+            flexDirection: "column", 
+            gap: isMobile ? 12 : 20 
+          }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ width: 44, height: 44, borderRadius: 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 22, color: s.color, fontVariationSettings: "'FILL' 1" }}>{s.icon}</span>
+              <div style={{ width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, borderRadius: isMobile ? 10 : 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 18 : 22, color: s.color, fontVariationSettings: "'FILL' 1" }}>{s.icon}</span>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: s.trend === 'up' ? "#10b981" : s.trend === 'warning' ? "#f59e0b" : "var(--text-muted)", background: s.trend === 'up' ? "#10b98110" : s.trend === 'warning' ? "#f59e0b10" : "transparent", padding: "4px 8px", borderRadius: 8 }}>{s.sub}</span>
+              {!isMobile && <span style={{ fontSize: 11, fontWeight: 700, color: s.trend === 'up' ? "#10b981" : s.trend === 'warning' ? "#f59e0b" : "var(--text-muted)", background: s.trend === 'up' ? "#10b98110" : s.trend === 'warning' ? "#f59e0b10" : "transparent", padding: "4px 8px", borderRadius: 8 }}>{s.sub}</span>}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>{s.label}</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.02em" }}>{s.value}</div>
+              <div style={{ fontSize: isMobile ? 11 : 13, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.02em" }}>{s.value}</div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Tier 2: Distribution & Insights */}
-      <div className="dashboard-insight-grid">
-        <div style={{ background: "white", borderRadius: 32, padding: 32, boxShadow: "var(--shadow-premium)", border: "1px solid var(--border-muted)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 10 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 22, color: "var(--accent-blue)" }}>analytics</span>
-              Hiệu suất Cộng tác viên bài viết
+      <div className="dashboard-insight-grid" style={{ gap: isMobile ? 16 : 32 }}>
+        <div style={{ 
+          background: "white", 
+          borderRadius: isMobile ? 24 : 32, 
+          padding: isMobile ? 20 : 32, 
+          boxShadow: "var(--shadow-premium)", 
+          border: "1px solid var(--border-muted)" 
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 24 : 32 }}>
+            <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--accent-blue)" }}>analytics</span>
+              Cộng tác viên
             </h3>
-            <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-blue)" }} />
-              <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Tháng này</span>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent-blue)" }} />
+              <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>Tháng này</span>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {stats?.articlesByWriter?.slice(0, 5).map((w, i: number) => {
               const colors = ["#2563eb", "#0d9488", "#9333ea", "#ea580c", "#64748b"];
               const percentage = stats.totalArticles ? Math.min((w.count / stats.totalArticles) * 100 * 2.5, 100) : 0;
               return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ width: 140, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", lineHeight: 1.3 }}>{w.displayName}</div>
-                    {w.penName && w.penName !== w.displayName && (
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{w.penName}</div>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: isMobile ? 100 : 140, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.displayName}</div>
+                    {w.penName && w.penName !== w.displayName && !isMobile && (
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{w.penName}</div>
                     )}
                   </div>
-                  <div style={{ flex: 1, height: 10, background: "#f1f5f9", borderRadius: 5, overflow: "hidden", position: "relative" }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${percentage}%`, background: `linear-gradient(90deg, ${colors[i % colors.length]}, ${colors[i % colors.length]}dd)`, borderRadius: 5, transition: "width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)" }} />
+                  <div style={{ flex: 1, height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden", position: "relative" }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${percentage}%`, background: colors[i % colors.length], borderRadius: 4, transition: "width 1s ease-out" }} />
                   </div>
-                  <div style={{ width: 60, textAlign: "right", fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>{w.count} bài</div>
+                  <div style={{ width: 45, textAlign: "right", fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>{w.count}</div>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div style={{ background: "white", borderRadius: 32, padding: 32, boxShadow: "var(--shadow-premium)", border: "1px solid var(--border-muted)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)" }}>Danh mục</h3>
-            <span className="material-symbols-outlined" style={{ color: "var(--text-muted)", cursor: "pointer" }}>more_horiz</span>
+        <div style={{ 
+          background: "white", 
+          borderRadius: isMobile ? 24 : 32, 
+          padding: isMobile ? 20 : 32, 
+          boxShadow: "var(--shadow-premium)", 
+          border: "1px solid var(--border-muted)" 
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 24 : 32 }}>
+            <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: "var(--text-main)" }}>Danh mục</h3>
+            {!isMobile && <span className="material-symbols-outlined" style={{ color: "var(--text-muted)", cursor: "pointer" }}>more_horiz</span>}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {stats?.articlesByCategory?.slice(0, 4).map((c, i: number) => {
               const colors = ["#2563eb", "#0d9488", "#9333ea", "#ea580c"];
               const percentage = stats.totalArticles ? Math.round((c.count / stats.totalArticles) * 100) : 0;
               return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 18px", background: "#f8fafc", borderRadius: 20, transition: "transform 0.2s" }} className="hover:scale-[1.02]">
-                  <div style={{ width: 40, height: 40, borderRadius: 12, background: "white", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)" }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: colors[i % colors.length] }}>{percentage}%</span>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: isMobile ? "10px 14px" : "14px 18px", background: "#f8fafc", borderRadius: 16 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 10, background: "white", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: colors[i % colors.length] }}>{percentage}%</span>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{c.category}</p>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>{c.count} bài viết hiện có</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>{c.category}</p>
+                    {!isMobile && <p style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>{c.count} bài viết</p>}
                   </div>
                   <div style={{ width: 32, height: 4, background: colors[i % colors.length], borderRadius: 2 }} />
                 </div>
@@ -231,64 +272,98 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
       </div>
 
       {/* Tier 3: Recent Activity Table */}
-      <div style={{ background: "white", borderRadius: 32, padding: 0, overflow: "hidden", boxShadow: "var(--shadow-premium)", border: "1px solid var(--border-muted)" }}>
-        <div style={{ padding: "24px 32px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)" }}>Hoạt động mới nhất</h3>
-          <button onClick={() => onNavigate("articles")} style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-blue)", background: "transparent", border: "none", cursor: "pointer" }}>Xem tất cả</button>
+      <div style={{ 
+        background: "white", 
+        borderRadius: isMobile ? 24 : 32, 
+        padding: 0, 
+        overflow: "hidden", 
+        boxShadow: "var(--shadow-premium)", 
+        border: "1px solid var(--border-muted)",
+        marginBottom: isMobile ? 80 : 0
+      }}>
+        <div style={{ padding: isMobile ? "20px 24px" : "24px 32px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: "var(--text-main)" }}>Hoạt động mới</h3>
+          <button onClick={() => onNavigate("articles")} style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-blue)", background: "transparent", border: "none", cursor: "pointer" }}>{isMobile ? "Tất cả" : "Xem tất cả"}</button>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-            <thead>
-              <tr style={{ background: "#f8fafc" }}>
-                <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Bài viết</th>
-                <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Người viết</th>
-                <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>Loại bài</th>
-                <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>Trạng thái</th>
-                <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "right" }}>Ngày cập nhật</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(stats?.latestArticles || []).map((a, i: number) => (
-                <tr key={a.id || i} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.2s" }} className="hover:bg-slate-50">
-                  <td style={{ padding: "20px 32px", maxWidth: 350 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.articleId || "No ID"}</div>
-                  </td>
-                  <td style={{ padding: "20px 32px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent-blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{(a.writerDisplayName || a.penName || "?")[0]}</div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{a.writerDisplayName || a.penName}</div>
-                        {a.penName && a.writerDisplayName && a.penName !== a.writerDisplayName && (
-                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.penName}</div>
-                        )}
+        
+        {!isMobile ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Bài viết</th>
+                  <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Người viết</th>
+                  <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>Loại bài</th>
+                  <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>Trạng thái</th>
+                  <th style={{ padding: "16px 32px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "right" }}>Ngày cập nhật</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(stats?.latestArticles || []).map((a, i: number) => (
+                  <tr key={a.id || i} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.2s" }} className="hover:bg-slate-50">
+                    <td style={{ padding: "20px 32px", maxWidth: 350 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.articleId || "No ID"}</div>
+                    </td>
+                    <td style={{ padding: "20px 32px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent-blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{(a.writerDisplayName || a.penName || "?")[0]}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{a.writerDisplayName || a.penName}</div>
+                          {a.penName && a.writerDisplayName && a.penName !== a.writerDisplayName && (
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.penName}</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: "20px 32px", textAlign: "center" }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--accent-blue)", background: "rgba(59, 130, 246, 0.1)", padding: "4px 10px", borderRadius: 8, textTransform: "uppercase", whiteSpace: "nowrap" }}>{a.articleType || "SEO"}</span>
-                  </td>
-                  <td style={{ padding: "20px 32px", textAlign: "center" }}>
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 12, background: getStatusPresentation(a.status).background, color: getStatusPresentation(a.status).color, fontSize: 12, fontWeight: 700 }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
-                      {getStatusPresentation(a.status).label}
-                    </div>
-                  </td>
-                  <td style={{ padding: "20px 32px", textAlign: "right", fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
-                    {formatActivityTime(a.updatedAt)}
-                  </td>
-                </tr>
-              ))}
-              {(stats?.latestArticles || []).length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>
-                    Chưa có dữ liệu hoạt động gần đây.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </td>
+                    <td style={{ padding: "20px 32px", textAlign: "center" }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: "var(--accent-blue)", background: "rgba(59, 130, 246, 0.1)", padding: "4px 10px", borderRadius: 8, textTransform: "uppercase", whiteSpace: "nowrap" }}>{a.articleType || "SEO"}</span>
+                    </td>
+                    <td style={{ padding: "20px 32px", textAlign: "center" }}>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 12, background: getStatusPresentation(a.status).background, color: getStatusPresentation(a.status).color, fontSize: 12, fontWeight: 700 }}>
+                        <div style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
+                        {getStatusPresentation(a.status).label}
+                      </div>
+                    </td>
+                    <td style={{ padding: "20px 32px", textAlign: "right", fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
+                      {formatActivityTime(a.updatedAt)}
+                    </td>
+                  </tr>
+                ))}
+                {(stats?.latestArticles || []).length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>
+                      Chưa có dữ liệu hoạt động gần đây.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {(stats?.latestArticles || []).map((a, i) => (
+              <div key={a.id || i} style={{ padding: "16px 24px", borderBottom: i === (stats?.latestArticles || []).length - 1 ? "none" : "1px solid #f1f5f9" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", flex: 1, marginRight: 12 }}>{a.title}</div>
+                  <div style={{ padding: "4px 8px", borderRadius: 8, background: getStatusPresentation(a.status).background, color: getStatusPresentation(a.status).color, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>
+                    {getStatusPresentation(a.status).label}
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#e2e8f0", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{(a.writerDisplayName || a.penName || "?")[0]}</div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>{a.writerDisplayName || a.penName}</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatActivityTime(a.updatedAt)}</span>
+                </div>
+              </div>
+            ))}
+            {(stats?.latestArticles || []).length === 0 && (
+              <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>Chưa có hoạt động gần đây.</div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

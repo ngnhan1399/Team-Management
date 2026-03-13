@@ -1103,6 +1103,21 @@ input[type=number] {
   gap: 16px;
 }
 
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-ios-md);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+
+.table-compact th,
+.table-compact td {
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
 /* Flex */
 .flex {
   display: flex;
@@ -1256,7 +1271,7 @@ input[type=number] {
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
   .sidebar {
     transform: translateX(-100%);
   }
@@ -1266,8 +1281,8 @@ input[type=number] {
   }
 
   .main-content {
-    margin-left: 0;
-    padding: 16px;
+    margin-left: 0 !important;
+    padding: 20px 16px;
   }
 
   .stats-grid {
@@ -1278,6 +1293,23 @@ input[type=number] {
   .grid-3,
   .grid-4 {
     grid-template-columns: 1fr;
+  }
+  
+  .page-title {
+    font-size: 28px;
+  }
+  
+  .page-header {
+    margin-bottom: 28px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .page-header-actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
   }
 }
 
@@ -1815,7 +1847,7 @@ input[type=number] {
 
 @media (max-width: 767px) {
   .app-shell-inner {
-    padding: 16px 12px 28px;
+    padding: 16px 12px 100px; /* Space for bottom tab bar */
   }
 
   .auth-shell {
@@ -1830,7 +1862,8 @@ input[type=number] {
   }
 
   .stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 
   .royalty-overview-grid {
@@ -1840,26 +1873,54 @@ input[type=number] {
 
   th,
   td {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding: 12px 12px !important;
+    font-size: 13px;
+  }
+  
+  .page-title {
+    font-size: 22px;
+  }
+  
+  .page-header {
+    margin-bottom: 20px;
   }
 
   .btn,
   .btn-ios-pill {
     white-space: normal;
+    min-height: 44px;
+    padding: 8px 16px;
   }
 
   .page-shell-actions {
     flex-direction: column;
+    width: 100%;
   }
 
-  .page-shell-actions>* {
+  .page-shell-actions button,
+  .page-shell-actions .btn {
     width: 100%;
   }
 
   .tabs {
     overflow-x: auto;
     padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Compact form for mobile */
+  .form-group {
+    margin-bottom: 12px;
+  }
+  
+  .form-input, .form-select {
+    padding: 10px 14px;
+    border-radius: 12px;
   }
 }
 

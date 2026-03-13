@@ -5,8 +5,11 @@ import CustomSelect from "./CustomSelect";
 import { useRealtimeRefresh } from "./realtime";
 import { useAuth } from "./auth-context";
 import type { Collaborator, TeamSummary, UserAccount } from "./types";
+import { useIsMobile } from "./useMediaQuery";
+import BottomSheet from "./BottomSheet";
 export default function TeamPage() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const isLeader = Boolean(user?.role === "admin" && user?.isLeader);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
@@ -383,52 +386,64 @@ export default function TeamPage() {
 
   return (
     <>
-      <header className="page-shell-header">
+      <header className="page-shell-header" style={{ flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 12 : 16 }}>
         <div>
-          <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Đội ngũ</h2>
+          <h2 style={{ fontSize: isMobile ? 26 : 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Đội ngũ</h2>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <button className="btn-ios-pill btn-ios-primary" onClick={openCreateModal} disabled={isLeader && !currentTeam}>
+        <div style={{ display: "flex", gap: 10, width: isMobile ? "100%" : "auto" }}>
+          <button className="btn-ios-pill btn-ios-primary" style={{ flex: isMobile ? 1 : "initial", justifyContent: "center" }} onClick={openCreateModal} disabled={isLeader && !currentTeam}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_add</span>
-            Thêm thành viên
+            Thành viên
           </button>
-          <button className="btn-ios-pill" onClick={() => { setDeleteTarget(""); setShowDeleteModal(true); }} disabled={isLeader && !currentTeam} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
+          <button className="btn-ios-pill" onClick={() => { setDeleteTarget(""); setShowDeleteModal(true); }} disabled={isLeader && !currentTeam} style={{ 
+            flex: isMobile ? 1 : "initial",
+            justifyContent: "center",
+            background: "rgba(239, 68, 68, 0.08)", 
+            color: "var(--danger)", 
+            border: "1px solid rgba(239, 68, 68, 0.16)" 
+          }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
-            Xóa thành viên
+            Xóa
           </button>
         </div>
       </header>
 
-      <div className="glass-card" style={{ marginBottom: 32 }}>
+      <div className="glass-card" style={{ marginBottom: 32, padding: isMobile ? 16 : 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
           <div>
-            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-main)", marginBottom: 6 }}>
+            <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 800, color: "var(--text-main)", marginBottom: 4 }}>
               {isLeader ? "Điều phối team" : "Thông tin team"}
             </h3>
           </div>
           {isLeader && (
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowTeamModal(true)}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", width: isMobile ? "100%" : "auto" }}>
+              <button className="btn-ios-pill btn-ios-secondary" style={{ flex: isMobile ? 1 : "initial", justifyContent: "center" }} onClick={() => setShowTeamModal(true)}>
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>group_add</span>
                 Tạo team
               </button>
               <button
                 className="btn-ios-pill"
+                style={{ 
+                  flex: isMobile ? 1 : "initial",
+                  justifyContent: "center",
+                  background: "rgba(37, 99, 235, 0.08)", 
+                  color: "var(--accent-blue)", 
+                  border: "1px solid rgba(37, 99, 235, 0.16)" 
+                }}
                 onClick={() => {
                   setTransferTargetUserId(transferCandidateOptions[0]?.value || "");
                   setShowTransferModal(true);
                 }}
                 disabled={!currentTeam || transferCandidateOptions.length === 0}
-                style={{ background: "rgba(37, 99, 235, 0.08)", color: "var(--accent-blue)", border: "1px solid rgba(37, 99, 235, 0.16)" }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>swap_horiz</span>
-                Bàn giao owner
+                Bàn giao
               </button>
             </div>
           )}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
           <div style={{ padding: 18, borderRadius: 18, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.03)" }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 10 }}>
               {isLeader ? "Team đang xem" : "Team của bạn"}
@@ -497,20 +512,20 @@ export default function TeamPage() {
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 24, marginBottom: 40 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(200px, 1fr))", gap: isMobile ? 12 : 24, marginBottom: 40 }}>
         {[
-          { label: "Tổng thành viên", value: collaborators.length, icon: "groups", color: "var(--accent-blue)" },
-          { label: "Cộng tác viên", value: writers.length, icon: "edit_note", color: "var(--accent-teal)" },
-          { label: "Người duyệt", value: reviewers.length, icon: "verified", color: "var(--accent-purple)" },
-          { label: "Admin team", value: adminProfiles.length, icon: "shield_person", color: "var(--accent-orange)" }
+          { label: "Tổng", value: collaborators.length, icon: "groups", color: "var(--accent-blue)" },
+          { label: "Writer", value: writers.length, icon: "edit_note", color: "var(--accent-teal)" },
+          { label: "Reviewer", value: reviewers.length, icon: "verified", color: "var(--accent-purple)" },
+          { label: "Admin", value: adminProfiles.length, icon: "shield_person", color: "var(--accent-orange)" }
         ].map((s, i) => (
-          <div key={i} className="glass-card" style={{ display: "flex", alignItems: "center", gap: 20 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 24, color: s.color }}>{s.icon}</span>
+          <div key={i} className="glass-card" style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 20, padding: isMobile ? 16 : 24 }}>
+            <div style={{ width: isMobile ? 40 : 48, height: isMobile ? 40 : 48, borderRadius: isMobile ? 10 : 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 20 : 24, color: s.color }}>{s.icon}</span>
             </div>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{s.label}</p>
-              <p style={{ fontSize: 24, fontWeight: 800, color: "var(--text-main)" }}>{s.value}</p>
+              <p style={{ fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>{s.label}</p>
+              <p style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: "var(--text-main)" }}>{s.value}</p>
             </div>
           </div>
         ))}
@@ -520,462 +535,802 @@ export default function TeamPage() {
         <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>✍️ Cộng tác viên viết bài ({writers.length})</h3>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
-            <colgroup>
-              {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
-            </colgroup>
-            <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
-              <tr>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>STT</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Họ tên</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Bút danh</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Email</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>KPI</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Trạng thái</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {writers.map((c, i) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
-                  <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)" }}>{i + 1}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{c.name}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-blue)", fontWeight: 600 }}>{c.penName}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{c.email || "—"}</td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(59, 130, 246, 0.1)", color: "var(--accent-blue)", fontSize: 11, fontWeight: 800 }}>{c.kpiStandard}</span>
-                  </td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <span style={statusBadgeStyle(c.status)}>
-                      {c.status === "active" ? "Hoạt động" : "Tạm nghỉ"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                    </button>
-                  </td>
+        {!isMobile ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+              <colgroup>
+                {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
+              </colgroup>
+              <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
+                <tr>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>STT</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Họ tên</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Bút danh</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Email</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>KPI</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Trạng thái</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {writers.map((c, i) => (
+                  <tr key={c.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
+                    <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)" }}>{i + 1}</td>
+                    <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{c.name}</td>
+                    <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-blue)", fontWeight: 600 }}>{c.penName}</td>
+                    <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{c.email || "—"}</td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(59, 130, 246, 0.1)", color: "var(--accent-blue)", fontSize: 11, fontWeight: 800 }}>{c.kpiStandard}</span>
+                    </td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      <span style={statusBadgeStyle(c.status)}>
+                        {c.status === "active" ? "Hoạt động" : "Tạm nghỉ"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {writers.map((c) => (
+              <div key={c.id} style={{ padding: 16, borderBottom: "1px solid var(--glass-border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)" }}>{c.name}</div>
+                    <div style={{ fontSize: 13, color: "var(--accent-blue)", fontWeight: 600, marginTop: 2 }}>{c.penName}</div>
+                  </div>
+                  <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--text-muted)" }}>mail</span>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{c.email || "Chưa có email"}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "space-between", marginTop: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>KPI:</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--accent-blue)" }}>{c.kpiStandard}</span>
+                    </div>
+                    <span style={statusBadgeStyle(c.status)}>{c.status === "active" ? "Hoạt động" : "Tạm nghỉ"}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {writers.length === 0 && (
+              <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>Chưa có cộng tác viên viết bài</div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="glass-card" style={{ padding: 0, overflow: "hidden", marginBottom: 32 }}>
         <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>✅ Cộng tác viên duyệt ({reviewers.length})</h3>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
-            <colgroup>
-              {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
-            </colgroup>
-            <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
-              <tr>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>STT</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Họ tên</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Bút danh</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Email</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>KPI</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Trạng thái</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reviewers.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>Chưa có cộng tác viên duyệt</td></tr>
-              ) : reviewers.map((c, i) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
-                  <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)" }}>{i + 1}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{c.name}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-purple)", fontWeight: 600 }}>{c.penName}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{c.email || "—"}</td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(168, 85, 247, 0.1)", color: "var(--accent-purple)", fontSize: 11, fontWeight: 800 }}>{c.kpiStandard}</span>
-                  </td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <span style={statusBadgeStyle(c.status)}>
-                      {c.status === "active" ? "Hoạt động" : "Tạm nghỉ"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                    </button>
-                  </td>
+        {!isMobile ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+              <colgroup>
+                {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
+              </colgroup>
+              <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
+                <tr>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>STT</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Họ tên</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Bút danh</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Email</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>KPI</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Trạng thái</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {reviewers.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>Chưa có cộng tác viên duyệt</td></tr>
+                ) : reviewers.map((c, i) => (
+                  <tr key={c.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
+                    <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)" }}>{i + 1}</td>
+                    <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>{c.name}</td>
+                    <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-purple)", fontWeight: 600 }}>{c.penName}</td>
+                    <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{c.email || "—"}</td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(168, 85, 247, 0.1)", color: "var(--accent-purple)", fontSize: 11, fontWeight: 800 }}>{c.kpiStandard}</span>
+                    </td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      <span style={statusBadgeStyle(c.status)}>
+                        {c.status === "active" ? "Hoạt động" : "Tạm nghỉ"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {reviewers.map((c) => (
+              <div key={c.id} style={{ padding: 16, borderBottom: "1px solid var(--glass-border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)" }}>{c.name}</div>
+                    <div style={{ fontSize: 13, color: "var(--accent-purple)", fontWeight: 600, marginTop: 2 }}>{c.penName}</div>
+                  </div>
+                  <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEditModal(c)}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--text-muted)" }}>mail</span>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{c.email || "Chưa có email"}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "space-between", marginTop: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>KPI:</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--accent-purple)" }}>{c.kpiStandard}</span>
+                    </div>
+                    <span style={statusBadgeStyle(c.status)}>{c.status === "active" ? "Hoạt động" : "Tạm nghỉ"}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {reviewers.length === 0 && (
+              <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>Chưa có cộng tác viên duyệt bài</div>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="glass-card" style={{ padding: 0, overflow: "hidden", marginBottom: isMobile ? 80 : 0 }}>
         <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>📋 Admin team ({adminProfiles.length})</h3>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
-            <colgroup>
-              {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
-            </colgroup>
-            <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
-              <tr>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>STT</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Họ tên</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Bút danh</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Email</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>KPI</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Trạng thái</th>
-                <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {adminProfiles.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>Chưa có tài khoản admin team trong phạm vi hiện tại.</td></tr>
-              ) : adminProfiles.map((admin, i) => (
-                <tr key={admin.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
-                  <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)" }}>{i + 1}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span>{admin.name}</span>
+        {!isMobile ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+              <colgroup>
+                {tableColumnWidths.map((width, idx) => <col key={idx} style={{ width }} />)}
+              </colgroup>
+              <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
+                <tr>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>STT</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Họ tên</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Bút danh</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Email</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>KPI</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Trạng thái</th>
+                  <th style={{ padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "center" }}>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminProfiles.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>Chưa có tài khoản admin team trong phạm vi hiện tại.</td></tr>
+                ) : adminProfiles.map((admin, i) => (
+                  <tr key={admin.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
+                    <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)" }}>{i + 1}</td>
+                    <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span>{admin.name}</span>
+                        {admin.isOwner && (
+                          <span style={{ padding: "4px 8px", borderRadius: 999, background: "rgba(37, 99, 235, 0.1)", color: "var(--accent-blue)", fontSize: 11, fontWeight: 800 }}>
+                            OWNER
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-orange)", fontWeight: 600 }}>{admin.penName}</td>
+                    <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{admin.email || "—"}</td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(249, 115, 22, 0.1)", color: "var(--accent-orange)", fontSize: 11, fontWeight: 800 }}>{admin.kpiStandard ?? "ADMIN"}</span>
+                    </td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      <span style={statusBadgeStyle(admin.status)}>
+                        {admin.status === "active" ? "Hoạt động" : "Tạm nghỉ"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      {admin.collaboratorId ? (
+                        <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => {
+                          const collaborator = collaborators.find((item) => item.id === admin.collaboratorId);
+                          if (collaborator) openEditModal(collaborator);
+                        }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Quản trị hệ thống</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {adminProfiles.map((admin) => (
+              <div key={admin.id} style={{ padding: 16, borderBottom: "1px solid var(--glass-border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)" }}>{admin.name}</span>
                       {admin.isOwner && (
-                        <span style={{ padding: "4px 8px", borderRadius: 999, background: "rgba(37, 99, 235, 0.1)", color: "var(--accent-blue)", fontSize: 11, fontWeight: 800 }}>
-                          OWNER
-                        </span>
+                        <span style={{ padding: "2px 6px", borderRadius: 6, background: "rgba(37, 99, 235, 0.1)", color: "var(--accent-blue)", fontSize: 9, fontWeight: 800 }}>OWNER</span>
                       )}
                     </div>
-                  </td>
-                  <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-orange)", fontWeight: 600 }}>{admin.penName}</td>
-                  <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{admin.email || "—"}</td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(249, 115, 22, 0.1)", color: "var(--accent-orange)", fontSize: 11, fontWeight: 800 }}>{admin.kpiStandard ?? "ADMIN"}</span>
-                  </td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    <span style={statusBadgeStyle(admin.status)}>
-                      {admin.status === "active" ? "Hoạt động" : "Tạm nghỉ"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "16px 24px", textAlign: "center" }}>
-                    {admin.collaboratorId ? (
-                      <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => {
-                        const collaborator = collaborators.find((item) => item.id === admin.collaboratorId);
-                        if (collaborator) openEditModal(collaborator);
-                      }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Quản lý ở tài khoản hệ thống</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    <div style={{ fontSize: 13, color: "var(--accent-orange)", fontWeight: 600, marginTop: 2 }}>{admin.penName}</div>
+                  </div>
+                  {admin.collaboratorId ? (
+                    <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => {
+                      const collaborator = collaborators.find((item) => item.id === admin.collaboratorId);
+                      if (collaborator) openEditModal(collaborator);
+                    }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, padding: "4px 8px", background: "#f1f5f9", borderRadius: 8 }}>Hệ thống</span>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--text-muted)" }}>mail</span>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{admin.email || "—"}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "space-between", marginTop: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>KPI:</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--accent-orange)" }}>{admin.kpiStandard ?? "ADMIN"}</span>
+                    </div>
+                    <span style={statusBadgeStyle(admin.status)}>{admin.status === "active" ? "Hoạt động" : "Tạm nghỉ"}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {adminProfiles.length === 0 && (
+              <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>Chưa có tài khoản admin team</div>
+            )}
+          </div>
+        )}
       </div>
 
-      {showModal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">{formData.id ? "Thông tin thành viên" : "Thêm cộng tác viên"}</h3>
-              <button className="modal-close" onClick={closeModal}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
-            </div>
-            <div className="modal-body">
-              {formError && (
-                <div
-                  role="alert"
-                  style={{
-                    marginBottom: 20,
-                    padding: "12px 16px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(239, 68, 68, 0.18)",
-                    background: "var(--danger-light)",
-                    color: "var(--danger)",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {formError}
-                </div>
-              )}
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Họ và tên *</label>
-                  <input className="form-input" value={formData.name || ""} onChange={e => { setFormData({ ...formData, name: e.target.value }); if (formError) setFormError(""); }} placeholder="Nguyễn Văn A" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Bút danh *</label>
-                  <input className="form-input" value={formData.penName || ""} onChange={e => { setFormData({ ...formData, penName: e.target.value }); if (formError) setFormError(""); }} placeholder="Bút danh" />
-                </div>
+      {!isMobile ? (
+        showModal && (
+          <div className="modal-overlay" onClick={closeModal}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">{formData.id ? "Thông tin thành viên" : "Thêm cộng tác viên"}</h3>
+                <button className="modal-close" onClick={closeModal}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                </button>
               </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Email tài khoản</label>
-                  <input className="form-input" type="email" value={formData.email || ""} onChange={e => { setFormData({ ...formData, email: e.target.value }); if (formError) setFormError(""); }} placeholder="ctv@email.com" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Vai trò hệ thống</label>
-                  {currentLinkedUserIsAdmin ? (
-                    <>
-                      <input className="form-input" value={currentLinkedUser?.isLeader ? "Leader hệ thống" : "Admin team"} readOnly style={{ background: "rgba(255,255,255,0.01)", opacity: 0.75 }} />
-                      <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                        Quyền admin được quản lý ở bảng tài khoản đăng nhập, không chỉnh tại trường vai trò cộng tác viên.
-                      </div>
-                    </>
-                  ) : (
-                    <CustomSelect
-                      value={(formData.role || "writer") as Collaborator["role"]}
-                      onChange={(value) => setFormData({ ...formData, role: value as Collaborator["role"] })}
-                      options={roleOptions}
-                    />
-                  )}
-                </div>
-              </div>
-              {formData.id && (
-                <div style={{ marginBottom: 18, padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.03)" }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 10 }}>Liên kết tài khoản đăng nhập</div>
-                  <div style={{ fontSize: 13, color: "var(--text-main)", marginBottom: 12 }}>
-                    {formData.linkedUserEmail
-                      ? `Đang liên kết: ${formData.linkedUserEmail}${formData.linkedUserRole ? ` • ${formData.linkedUserRole.toUpperCase()}` : ""}`
-                      : "Chưa liên kết tài khoản nào."}
+              <div className="modal-body">
+                {formError && (
+                  <div
+                    role="alert"
+                    style={{
+                      marginBottom: 20,
+                      padding: "12px 16px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(239, 68, 68, 0.18)",
+                      background: "var(--danger-light)",
+                      color: "var(--danger)",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {formError}
                   </div>
-                  {currentLinkedUserIsAdmin ? (
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                      Tài khoản admin đang được giữ nguyên. Màn hình này chỉ cho phép gán lại các tài khoản CTV.
-                    </div>
-                  ) : (
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Gán tài khoản CTV</label>
+                )}
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Họ và tên *</label>
+                    <input className="form-input" value={formData.name || ""} onChange={e => { setFormData({ ...formData, name: e.target.value }); if (formError) setFormError(""); }} placeholder="Nguyễn Văn A" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Bút danh *</label>
+                    <input className="form-input" value={formData.penName || ""} onChange={e => { setFormData({ ...formData, penName: e.target.value }); if (formError) setFormError(""); }} placeholder="Bút danh" />
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Email tài khoản</label>
+                    <input className="form-input" type="email" value={formData.email || ""} onChange={e => { setFormData({ ...formData, email: e.target.value }); if (formError) setFormError(""); }} placeholder="ctv@email.com" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Vai trò hệ thống</label>
+                    {currentLinkedUserIsAdmin ? (
+                      <>
+                        <input className="form-input" value={currentLinkedUser?.isLeader ? "Leader hệ thống" : "Admin team"} readOnly style={{ background: "rgba(255,255,255,0.01)", opacity: 0.75 }} />
+                        <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                          Quyền admin được quản lý ở bảng tài khoản đăng nhập, không chỉnh tại trường vai trò cộng tác viên.
+                        </div>
+                      </>
+                    ) : (
                       <CustomSelect
-                        value={String(formData.linkedUserId ?? "")}
-                        onChange={(value) => setFormData({ ...formData, linkedUserId: value ? Number(value) : null })}
-                        options={assignableUserOptions}
+                        value={(formData.role || "writer") as Collaborator["role"]}
+                        onChange={(value) => setFormData({ ...formData, role: value as Collaborator["role"] })}
+                        options={roleOptions}
                       />
+                    )}
+                  </div>
+                </div>
+                {formData.id && (
+                  <div style={{ marginBottom: 18, padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.03)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 10 }}>Liên kết tài khoản đăng nhập</div>
+                    <div style={{ fontSize: 13, color: "var(--text-main)", marginBottom: 12 }}>
+                      {formData.linkedUserEmail
+                        ? `Đang liên kết: ${formData.linkedUserEmail}${formData.linkedUserRole ? ` • ${formData.linkedUserRole.toUpperCase()}` : ""}`
+                        : "Chưa liên kết tài khoản nào."}
                     </div>
-                  )}
+                    {currentLinkedUserIsAdmin ? (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        Tài khoản admin đang được giữ nguyên. Màn hình này chỉ cho phép gán lại các tài khoản CTV.
+                      </div>
+                    ) : (
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Gán tài khoản CTV</label>
+                        <CustomSelect
+                          value={String(formData.linkedUserId ?? "")}
+                          onChange={(value) => setFormData({ ...formData, linkedUserId: value ? Number(value) : null })}
+                          options={assignableUserOptions}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Chỉ tiêu KPI (Tháng)</label>
+                    <input className="form-input" type="number" value={formData.kpiStandard || 25} onChange={e => setFormData({ ...formData, kpiStandard: Number(e.target.value) })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Số điện thoại</label>
+                    <input className="form-input" value={formData.phone || ""} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="090..." />
+                  </div>
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Vị trí / Tiểu sử ngắn</label>
+                  <input className="form-input" value={formData.bio || ""} onChange={e => setFormData({ ...formData, bio: e.target.value })} placeholder="VD: Senior Writer | Tech Expert" />
+                </div>
+                <div className="grid-3" style={{ marginBottom: 0 }}>
+                  <div className="form-group">
+                    <label className="form-label">Facebook</label>
+                    <input className="form-input" value={formData.socialFacebook || ""} onChange={e => setFormData({ ...formData, socialFacebook: e.target.value })} placeholder="Link" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Zalo</label>
+                    <input className="form-input" value={formData.socialZalo || ""} onChange={e => setFormData({ ...formData, socialZalo: e.target.value })} placeholder="SĐT" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">TikTok</label>
+                    <input className="form-input" value={formData.socialTiktok || ""} onChange={e => setFormData({ ...formData, socialTiktok: e.target.value })} placeholder="@user" />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-ios-pill btn-ios-secondary" onClick={closeModal} disabled={isSaving}>Hủy bỏ</button>
+                <button className="btn-ios-pill btn-ios-primary" onClick={handleSave} disabled={isSaving} style={{ opacity: isSaving ? 0.75 : 1 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>save</span>
+                  {isSaving ? "Đang lưu..." : "Lưu thành viên"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      ) : (
+        <BottomSheet isOpen={showModal} onClose={closeModal} title={formData.id ? "Thông tin thành viên" : "Thêm cộng tác viên"}>
+          <div style={{ padding: "0 4px 40px 4px" }}>
+            {formError && (
+              <div style={{ marginBottom: 20, padding: 12, borderRadius: 12, background: "var(--danger-light)", color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>
+                {formError}
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label">Họ và tên *</label>
+              <input className="form-input" value={formData.name || ""} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Nguyễn Văn A" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Bút danh *</label>
+              <input className="form-input" value={formData.penName || ""} onChange={e => setFormData({ ...formData, penName: e.target.value })} placeholder="Bút danh" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Email tài khoản</label>
+              <input className="form-input" type="email" value={formData.email || ""} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="ctv@email.com" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Vai trò hệ thống</label>
+              {currentLinkedUserIsAdmin ? (
+                <input className="form-input" value={currentLinkedUser?.isLeader ? "Leader hệ thống" : "Admin team"} readOnly style={{ background: "rgba(255,255,255,0.01)", opacity: 0.75 }} />
+              ) : (
+                <CustomSelect
+                  value={(formData.role || "writer") as Collaborator["role"]}
+                  onChange={(value) => setFormData({ ...formData, role: value as Collaborator["role"] })}
+                  options={roleOptions}
+                />
               )}
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Chỉ tiêu KPI (Tháng)</label>
-                  <input className="form-input" type="number" value={formData.kpiStandard || 25} onChange={e => setFormData({ ...formData, kpiStandard: Number(e.target.value) })} />
+            </div>
+
+            {formData.id && (
+              <div style={{ marginBottom: 20, padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(0,0,0,0.02)" }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Liên kết tài khoản</div>
+                <div style={{ fontSize: 13, color: "var(--text-main)", marginBottom: 12 }}>
+                  {formData.linkedUserEmail || "Chưa liên kết tài khoản nào."}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Số điện thoại</label>
-                  <input className="form-input" value={formData.phone || ""} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="090..." />
-                </div>
+                {!currentLinkedUserIsAdmin && (
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Gán tài khản CTV</label>
+                    <CustomSelect
+                      value={String(formData.linkedUserId ?? "")}
+                      onChange={(value) => setFormData({ ...formData, linkedUserId: value ? Number(value) : null })}
+                      options={assignableUserOptions}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">KPI (Tháng)</label>
+                <input className="form-input" type="number" value={formData.kpiStandard || 25} onChange={e => setFormData({ ...formData, kpiStandard: Number(e.target.value) })} />
               </div>
               <div className="form-group">
-                <label className="form-label">Vị trí / Tiểu sử ngắn</label>
-                <input className="form-input" value={formData.bio || ""} onChange={e => setFormData({ ...formData, bio: e.target.value })} placeholder="VD: Senior Writer | Tech Expert" />
-              </div>
-              <div className="grid-3">
-                <div className="form-group">
-                  <label className="form-label">Facebook</label>
-                  <input className="form-input" value={formData.socialFacebook || ""} onChange={e => setFormData({ ...formData, socialFacebook: e.target.value })} placeholder="Link" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Zalo</label>
-                  <input className="form-input" value={formData.socialZalo || ""} onChange={e => setFormData({ ...formData, socialZalo: e.target.value })} placeholder="SĐT" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">TikTok</label>
-                  <input className="form-input" value={formData.socialTiktok || ""} onChange={e => setFormData({ ...formData, socialTiktok: e.target.value })} placeholder="@user" />
-                </div>
+                <label className="form-label">SĐT</label>
+                <input className="form-input" value={formData.phone || ""} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="090..." />
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn-ios-pill btn-ios-secondary" onClick={closeModal} disabled={isSaving}>Hủy bỏ</button>
-              <button className="btn-ios-pill btn-ios-primary" onClick={handleSave} disabled={isSaving} style={{ opacity: isSaving ? 0.75 : 1 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>save</span>
+
+            <div className="form-group">
+              <label className="form-label">Vị trí / Tiểu sử</label>
+              <input className="form-input" value={formData.bio || ""} onChange={e => setFormData({ ...formData, bio: e.target.value })} placeholder="VD: Senior Writer" />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 16 }}>
+              <div className="form-group">
+                <label className="form-label">Facebook</label>
+                <input className="form-input" value={formData.socialFacebook || ""} onChange={e => setFormData({ ...formData, socialFacebook: e.target.value })} placeholder="Link" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Zalo</label>
+                <input className="form-input" value={formData.socialZalo || ""} onChange={e => setFormData({ ...formData, socialZalo: e.target.value })} placeholder="SĐT" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">TikTok</label>
+                <input className="form-input" value={formData.socialTiktok || ""} onChange={e => setFormData({ ...formData, socialTiktok: e.target.value })} placeholder="@user" />
+              </div>
+            </div>
+
+            <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
+              <button className="btn-ios-pill btn-ios-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={closeModal} disabled={isSaving}>Hủy</button>
+              <button className="btn-ios-pill btn-ios-primary" style={{ flex: 2, justifyContent: "center" }} onClick={handleSave} disabled={isSaving}>
                 {isSaving ? "Đang lưu..." : "Lưu thành viên"}
               </button>
             </div>
           </div>
-        </div>
+        </BottomSheet>
       )}
 
-      {showDeleteModal && (
-        <div className="modal-overlay" onClick={() => !isDeleting && setShowDeleteModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Xóa thành viên</h3>
-              <button className="modal-close" onClick={() => !isDeleting && setShowDeleteModal(false)}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(239, 68, 68, 0.18)", background: "rgba(239, 68, 68, 0.04)", fontSize: 13, color: "var(--danger)", fontWeight: 600, lineHeight: 1.5 }}>
-                ⚠️ Thao tác này sẽ xóa vĩnh viễn thành viên, tài khoản đăng nhập, thông báo và bình luận liên quan. Bài viết sẽ được giữ lại.
+      {!isMobile ? (
+        showDeleteModal && (
+          <div className="modal-overlay" onClick={() => !isDeleting && setShowDeleteModal(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Xóa thành viên</h3>
+                <button className="modal-close" onClick={() => !isDeleting && setShowDeleteModal(false)}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                </button>
               </div>
-              <div className="form-group">
-                <label className="form-label">Chọn thành viên cần xóa</label>
-                <CustomSelect
-                  value={deleteTarget}
-                  onChange={setDeleteTarget}
-                  options={[
-                    { value: "", label: "— Chọn thành viên —" },
-                    ...deletableMembers.map((c) => ({
-                      value: String(c.id),
-                      label: `${c.name} (${c.penName}) — ${c.linkedUserRole === "admin" ? "Admin team" : c.role === "reviewer" ? "Reviewer" : "Writer"}`,
-                    })),
-                  ]}
-                  placeholder="Chọn thành viên"
-                />
-              </div>
-              {deleteTarget && (() => {
-                const target = collaborators.find((c) => c.id === Number(deleteTarget));
-                if (!target) return null;
-                const linkedUser = userAccounts.find((u) => u.collaboratorId === target.id);
-                return (
-                  <div style={{ padding: 16, borderRadius: 12, background: "rgba(0,0,0,0.02)", border: "1px solid var(--glass-border)" }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", marginBottom: 8 }}>Thông tin sẽ bị xóa:</div>
-                    <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.8 }}>
-                      <div>👤 <strong>{target.name}</strong> ({target.penName})</div>
-                      <div>📧 {target.email || "Không có email"}</div>
-                      <div>🔑 Tài khoản: {linkedUser ? linkedUser.email : "Không có tài khoản"}</div>
+              <div className="modal-body">
+                <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(239, 68, 68, 0.18)", background: "rgba(239, 68, 68, 0.04)", fontSize: 13, color: "var(--danger)", fontWeight: 600, lineHeight: 1.5 }}>
+                  ⚠️ Thao tác này sẽ xóa vĩnh viễn thành viên, tài khoản đăng nhập, thông báo và bình luận liên quan. Bài viết sẽ được giữ lại.
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Chọn thành viên cần xóa</label>
+                  <CustomSelect
+                    value={deleteTarget}
+                    onChange={setDeleteTarget}
+                    options={[
+                      { value: "", label: "— Chọn thành viên —" },
+                      ...deletableMembers.map((c) => ({
+                        value: String(c.id),
+                        label: `${c.name} (${c.penName}) — ${c.linkedUserRole === "admin" ? "Admin team" : c.role === "reviewer" ? "Reviewer" : "Writer"}`,
+                      })),
+                    ]}
+                    placeholder="Chọn thành viên"
+                  />
+                </div>
+                {deleteTarget && (() => {
+                  const target = collaborators.find((c) => c.id === Number(deleteTarget));
+                  if (!target) return null;
+                  const linkedUser = userAccounts.find((u) => u.collaboratorId === target.id);
+                  return (
+                    <div style={{ padding: 16, borderRadius: 12, background: "rgba(0,0,0,0.02)", border: "1px solid var(--glass-border)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", marginBottom: 8 }}>Thông tin sẽ bị xóa:</div>
+                      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.8 }}>
+                        <div>👤 <strong>{target.name}</strong> ({target.penName})</div>
+                        <div>📧 {target.email || "Không có email"}</div>
+                        <div>🔑 Tài khoản: {linkedUser ? linkedUser.email : "Không có tài khoản"}</div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
+              </div>
+              <div className="modal-footer">
+                <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Hủy bỏ</button>
+                <button
+                  className="btn-ios-pill"
+                  onClick={executeDelete}
+                  disabled={!deleteTarget || isDeleting}
+                  style={{
+                    background: deleteTarget ? "var(--danger)" : "rgba(239, 68, 68, 0.3)",
+                    color: "#fff",
+                    border: "none",
+                    opacity: isDeleting ? 0.75 : 1,
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_forever</span>
+                  {isDeleting ? "Đang xóa..." : "Xóa vĩnh viễn"}
+                </button>
+              </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Hủy bỏ</button>
+          </div>
+        )
+      ) : (
+        <BottomSheet isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Xóa thành viên">
+          <div style={{ padding: "0 4px 40px 4px" }}>
+            <div style={{ marginBottom: 20, padding: 12, borderRadius: 12, border: "1px solid rgba(239, 68, 68, 0.18)", background: "rgba(239, 68, 68, 0.04)", fontSize: 13, color: "var(--danger)", fontWeight: 600 }}>
+              ⚠️ Thao tác này sẽ xóa vĩnh viễn thành viên và các dữ liệu liên quan.
+            </div>
+            <div className="form-group">
+              <label className="form-label">Thành viên cần xóa</label>
+              <CustomSelect
+                value={deleteTarget}
+                onChange={setDeleteTarget}
+                options={[
+                  { value: "", label: "— Chọn thành viên —" },
+                  ...deletableMembers.map((c) => ({
+                    value: String(c.id),
+                    label: `${c.penName} (${c.name})`,
+                  })),
+                ]}
+                placeholder="Chọn thành viên"
+              />
+            </div>
+            {deleteTarget && (() => {
+              const target = collaborators.find((c) => c.id === Number(deleteTarget));
+              if (!target) return null;
+              return (
+                <div style={{ padding: 16, borderRadius: 12, background: "rgba(0,0,0,0.02)", border: "1px solid var(--glass-border)", marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", marginBottom: 8 }}>Thông tin xóa:</div>
+                  <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    <div>👤 {target.name} ({target.penName})</div>
+                    <div style={{ fontSize: 12, marginTop: 4 }}>Dữ liệu tài khoản, thông báo & bình luận sẽ mất sạch.</div>
+                  </div>
+                </div>
+              );
+            })()}
+            <div style={{ display: "flex", gap: 12 }}>
+              <button className="btn-ios-pill btn-ios-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Hủy</button>
               <button
                 className="btn-ios-pill"
                 onClick={executeDelete}
                 disabled={!deleteTarget || isDeleting}
                 style={{
+                  flex: 2,
+                  justifyContent: "center",
                   background: deleteTarget ? "var(--danger)" : "rgba(239, 68, 68, 0.3)",
-                  color: "#fff",
-                  border: "none",
-                  opacity: isDeleting ? 0.75 : 1,
+                  color: "#fff", border: "none"
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_forever</span>
-                {isDeleting ? "Đang xóa..." : "Xóa vĩnh viễn"}
+                {isDeleting ? "Đang xóa..." : "Xác nhận xóa"}
               </button>
             </div>
           </div>
-        </div>
+        </BottomSheet>
       )}
 
-      {showTeamModal && (
-        <div className="modal-overlay" onClick={() => !teamSaving && closeTeamModal()}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">Tạo team mới</h3>
-              <button className="modal-close" onClick={() => !teamSaving && closeTeamModal()}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
+      {!isMobile ? (
+        showTeamModal && (
+          <div className="modal-overlay" onClick={() => !teamSaving && closeTeamModal()}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">Tạo team mới</h3>
+                <button className="modal-close" onClick={() => !teamSaving && closeTeamModal()}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                </button>
+              </div>
+              <div className="modal-body">
+                {teamError && (
+                  <div
+                    role="alert"
+                    style={{
+                      marginBottom: 20,
+                      padding: "12px 16px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(239, 68, 68, 0.18)",
+                      background: "var(--danger-light)",
+                      color: "var(--danger)",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {teamError}
+                  </div>
+                )}
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Tên team *</label>
+                    <input className="form-input" value={teamForm.name} onChange={(e) => { setTeamForm({ ...teamForm, name: e.target.value }); if (teamError) setTeamError(""); }} placeholder="Team Nội dung công nghệ" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Mô tả ngắn</label>
+                    <input className="form-input" value={teamForm.description} onChange={(e) => setTeamForm({ ...teamForm, description: e.target.value })} placeholder="Phụ trách chuyên mục hoặc line nội dung" />
+                  </div>
+                </div>
+                <div style={{ marginBottom: 18, padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.03)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                  Điền email nếu muốn tạo luôn tài khoản owner cho team. Nếu để trống, leader có thể tạo member trước rồi bàn giao owner sau.
+                </div>
+                <div className="grid-3">
+                  <div className="form-group">
+                    <label className="form-label">Tên owner</label>
+                    <input className="form-input" value={teamForm.ownerName} onChange={(e) => setTeamForm({ ...teamForm, ownerName: e.target.value })} placeholder="Nguyễn Văn B" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Bút danh owner</label>
+                    <input className="form-input" value={teamForm.ownerPenName} onChange={(e) => setTeamForm({ ...teamForm, ownerPenName: e.target.value })} placeholder="Editor B" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email owner</label>
+                    <input className="form-input" type="email" value={teamForm.ownerEmail} onChange={(e) => setTeamForm({ ...teamForm, ownerEmail: e.target.value })} placeholder="admin-team@email.com" />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-ios-pill btn-ios-secondary" onClick={closeTeamModal} disabled={teamSaving}>Hủy bỏ</button>
+                <button className="btn-ios-pill btn-ios-primary" onClick={createTeam} disabled={teamSaving} style={{ opacity: teamSaving ? 0.75 : 1 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>group_add</span>
+                  {teamSaving ? "Đang tạo..." : "Tạo team"}
+                </button>
+              </div>
             </div>
-            <div className="modal-body">
-              {teamError && (
-                <div
-                  role="alert"
-                  style={{
-                    marginBottom: 20,
-                    padding: "12px 16px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(239, 68, 68, 0.18)",
-                    background: "var(--danger-light)",
-                    color: "var(--danger)",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {teamError}
-                </div>
-              )}
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Tên team *</label>
-                  <input className="form-input" value={teamForm.name} onChange={(e) => { setTeamForm({ ...teamForm, name: e.target.value }); if (teamError) setTeamError(""); }} placeholder="Team Nội dung công nghệ" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Mô tả ngắn</label>
-                  <input className="form-input" value={teamForm.description} onChange={(e) => setTeamForm({ ...teamForm, description: e.target.value })} placeholder="Phụ trách chuyên mục hoặc line nội dung" />
-                </div>
+          </div>
+        )
+      ) : (
+        <BottomSheet isOpen={showTeamModal} onClose={() => !teamSaving && closeTeamModal()} title="Tạo team mới">
+          <div style={{ padding: "0 4px 40px 4px" }}>
+            {teamError && (
+              <div style={{ marginBottom: 20, padding: 12, borderRadius: 12, background: "var(--danger-light)", color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>
+                {teamError}
               </div>
-              <div style={{ marginBottom: 18, padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.03)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
-                Điền email nếu muốn tạo luôn tài khoản owner cho team. Nếu để trống, leader có thể tạo member trước rồi bàn giao owner sau.
+            )}
+            <div className="form-group">
+              <label className="form-label">Tên team *</label>
+              <input className="form-input" value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} placeholder="Tên team" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Mô tả ngắn</label>
+              <input className="form-input" value={teamForm.description} onChange={(e) => setTeamForm({ ...teamForm, description: e.target.value })} placeholder="Phụ trách team" />
+            </div>
+
+            <div style={{ margin: "24px 0 16px 0", padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(0,0,0,0.02)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+              💡 Tùy chọn: Nhập thông tin owner để tự động tạo tài khoản leader cho team mới.
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Tên owner</label>
+              <input className="form-input" value={teamForm.ownerName} onChange={(e) => setTeamForm({ ...teamForm, ownerName: e.target.value })} placeholder="Họ tên" />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">Bút danh</label>
+                <input className="form-input" value={teamForm.ownerPenName} onChange={(e) => setTeamForm({ ...teamForm, ownerPenName: e.target.value })} placeholder="Bút danh" />
               </div>
-              <div className="grid-3">
-                <div className="form-group">
-                  <label className="form-label">Tên owner</label>
-                  <input className="form-input" value={teamForm.ownerName} onChange={(e) => setTeamForm({ ...teamForm, ownerName: e.target.value })} placeholder="Nguyễn Văn B" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Bút danh owner</label>
-                  <input className="form-input" value={teamForm.ownerPenName} onChange={(e) => setTeamForm({ ...teamForm, ownerPenName: e.target.value })} placeholder="Editor B" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email owner</label>
-                  <input className="form-input" type="email" value={teamForm.ownerEmail} onChange={(e) => setTeamForm({ ...teamForm, ownerEmail: e.target.value })} placeholder="admin-team@email.com" />
-                </div>
+              <div className="form-group">
+                <label className="form-label">Email owner</label>
+                <input className="form-input" type="email" value={teamForm.ownerEmail} onChange={(e) => setTeamForm({ ...teamForm, ownerEmail: e.target.value })} placeholder="Email" />
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn-ios-pill btn-ios-secondary" onClick={closeTeamModal} disabled={teamSaving}>Hủy bỏ</button>
-              <button className="btn-ios-pill btn-ios-primary" onClick={createTeam} disabled={teamSaving} style={{ opacity: teamSaving ? 0.75 : 1 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>group_add</span>
+
+            <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
+              <button className="btn-ios-pill btn-ios-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={closeTeamModal} disabled={teamSaving}>Hủy</button>
+              <button className="btn-ios-pill btn-ios-primary" style={{ flex: 2, justifyContent: "center" }} onClick={createTeam} disabled={teamSaving}>
                 {teamSaving ? "Đang tạo..." : "Tạo team"}
               </button>
             </div>
           </div>
-        </div>
+        </BottomSheet>
       )}
 
-      {showTransferModal && (
-        <div className="modal-overlay" onClick={() => !transferring && closeTransferModal()}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Bàn giao owner team</h3>
-              <button className="modal-close" onClick={() => !transferring && closeTransferModal()}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: 18, padding: 16, borderRadius: 16, border: "1px solid rgba(37, 99, 235, 0.16)", background: "rgba(37, 99, 235, 0.05)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
-                {currentTeam
-                  ? `Bạn đang bàn giao team ${currentTeam.name}. Tài khoản được chọn sẽ trở thành admin team mới và owner hiện tại sẽ bị hạ về tài khoản CTV nếu không phải leader.`
-                  : "Chọn team trước khi bàn giao owner."}
+      {!isMobile ? (
+        showTransferModal && (
+          <div className="modal-overlay" onClick={() => !transferring && closeTransferModal()}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Bàn giao owner team</h3>
+                <button className="modal-close" onClick={() => !transferring && closeTransferModal()}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                </button>
               </div>
-              <div className="form-group">
-                <label className="form-label">Chọn tài khoản nhận bàn giao</label>
-                <CustomSelect
-                  value={transferTargetUserId}
-                  onChange={setTransferTargetUserId}
-                  options={[
-                    { value: "", label: "— Chọn tài khoản —" },
-                    ...transferCandidateOptions,
-                  ]}
-                  placeholder="Chọn tài khoản trong team"
-                />
-              </div>
-              {transferCandidateOptions.length === 0 && (
-                <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                  Team này chưa có tài khoản phù hợp để nhận bàn giao. Hãy tạo thành viên có email đăng nhập trước.
+              <div className="modal-body">
+                <div style={{ marginBottom: 18, padding: 16, borderRadius: 16, border: "1px solid rgba(37, 99, 235, 0.16)", background: "rgba(37, 99, 235, 0.05)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                  {currentTeam
+                    ? `Bạn đang bàn giao team ${currentTeam.name}. Tài khoản được chọn sẽ trở thành admin team mới và owner hiện tại sẽ bị hạ về tài khoản CTV nếu không phải leader.`
+                    : "Chọn team trước khi bàn giao owner."}
                 </div>
-              )}
+                <div className="form-group">
+                  <label className="form-label">Chọn tài khoản nhận bàn giao</label>
+                  <CustomSelect
+                    value={transferTargetUserId}
+                    onChange={setTransferTargetUserId}
+                    options={[
+                      { value: "", label: "— Chọn tài khoản —" },
+                      ...transferCandidateOptions,
+                    ]}
+                    placeholder="Chọn tài khoản trong team"
+                  />
+                </div>
+                {transferCandidateOptions.length === 0 && (
+                  <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    Team này chưa có tài khoản phù hợp để nhận bàn giao. Hãy tạo thành viên có email đăng nhập trước.
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn-ios-pill btn-ios-secondary" onClick={closeTransferModal} disabled={transferring}>Hủy bỏ</button>
+                <button className="btn-ios-pill btn-ios-primary" onClick={transferTeamOwner} disabled={!transferTargetUserId || transferring} style={{ opacity: transferring ? 0.75 : 1 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>swap_horiz</span>
+                  {transferring ? "Đang bàn giao..." : "Xác nhận bàn giao"}
+                </button>
+              </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn-ios-pill btn-ios-secondary" onClick={closeTransferModal} disabled={transferring}>Hủy bỏ</button>
-              <button className="btn-ios-pill btn-ios-primary" onClick={transferTeamOwner} disabled={!transferTargetUserId || transferring} style={{ opacity: transferring ? 0.75 : 1 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>swap_horiz</span>
-                {transferring ? "Đang bàn giao..." : "Xác nhận bàn giao"}
+          </div>
+        )
+      ) : (
+        <BottomSheet isOpen={showTransferModal} onClose={() => !transferring && closeTransferModal()} title="Bàn giao owner team">
+          <div style={{ padding: "0 4px 40px 4px" }}>
+            <div style={{ marginBottom: 20, padding: 16, borderRadius: 16, border: "1px solid rgba(37, 99, 235, 0.16)", background: "rgba(37, 99, 235, 0.05)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
+              {currentTeam ? `Bàn giao team ${currentTeam.name}.` : "Chọn team."} Tài khoản nhận sẽ là admin team mới.
+            </div>
+            <div className="form-group">
+              <label className="form-label">Tài khoản nhận bàn giao</label>
+              <CustomSelect
+                value={transferTargetUserId}
+                onChange={setTransferTargetUserId}
+                options={[
+                  { value: "", label: "— Chọn tài khoản —" },
+                  ...transferCandidateOptions,
+                ]}
+                placeholder="Chọn người nhận"
+              />
+            </div>
+            {transferCandidateOptions.length === 0 && (
+              <div style={{ fontSize: 12, color: "var(--danger)", padding: "8px 0" }}>
+                Team chưa có tài khoản đủ điều kiện nhận bàn giao.
+              </div>
+            )}
+            <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
+              <button className="btn-ios-pill btn-ios-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={closeTransferModal} disabled={transferring}>Hủy</button>
+              <button className="btn-ios-pill btn-ios-primary" style={{ flex: 2, justifyContent: "center" }} onClick={transferTeamOwner} disabled={!transferTargetUserId || transferring}>
+                {transferring ? "Đang xử lý..." : "Xác nhận"}
               </button>
             </div>
           </div>
-        </div>
+        </BottomSheet>
       )}
     </>
   );

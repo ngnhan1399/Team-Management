@@ -4,6 +4,9 @@ import React, { useCallback, useDeferredValue, useEffect, useState } from "react
 import { useAuth } from "./auth-context";
 import dynamic from "next/dynamic";
 import CustomSelect from "./CustomSelect";
+import { useIsMobile } from "./useMediaQuery";
+import MobileArticleCard from "./MobileArticleCard";
+import BottomSheet from "./BottomSheet";
 import {
   ARTICLE_PAGE_SIZE,
   ARTICLE_STATUS_OPTIONS,
@@ -55,6 +58,7 @@ export default function ArticlesPage() {
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
   type ArticleListQuery = { page: number; search: string; filters: ArticleFilters };
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const articlesRequestAbortRef = React.useRef<AbortController | null>(null);
   const collaboratorsRequestRef = React.useRef<Promise<void> | null>(null);
@@ -1644,15 +1648,71 @@ export default function ArticlesPage() {
     );
   };
 
+  const renderArticleCards = (rows: Article[], emptyMessage: string) => {
+    if (rows.length === 0) {
+      return (
+        <div style={{ padding: 48, textAlign: "center", color: "var(--text-muted)" }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>📄</div>
+          <div style={{ fontWeight: 700 }}>{emptyMessage}</div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mobile-only" style={{ display: "flex", flexDirection: "column", gap: 12, padding: "0 1px" }}>
+        {rows.map((a) => (
+          <MobileArticleCard
+            key={a.id}
+            article={a}
+            onEdit={() => openArticleModal({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) })}
+            onComments={() => openComments(a)}
+            onDelete={() => deleteSingleArticle(a)}
+            canEdit={canEditArticle(a)}
+            canDelete={canManageArticles || a.canDelete}
+            showAuthor={canManageArticles}
+            isDeleting={deletingArticleIds.includes(a.id)}
+            unreadComments={Number(a.unreadCommentCount || 0)}
+          />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <>
-      <div>
-      <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Quản lý bài viết</h2>
-        </div>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {canManageArticles && (
+      <div className="articles-page-container">
+        <header style={{ marginBottom: isMobile ? 12 : 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+          {!isMobile && (
+            <div>
+              <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Quản lý bài viết</h2>
+            </div>
+          )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", width: isMobile ? "100%" : "auto" }}>
+          {canCreateArticles && (
+            <button 
+              className="btn-ios-pill btn-ios-primary" 
+              onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? MANAGER_DEFAULT_PEN_NAME : user?.collaborator?.penName, reviewerName: "", status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}
+              style={{ flex: isMobile ? 1 : "initial", justifyContent: "center", order: isMobile ? -1 : 0 }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+              Thêm bài mới
+            </button>
+          )}
+          {canSyncArticles && (
+            <button
+              className="btn-ios-pill btn-ios-secondary"
+              onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true })}
+              disabled={googleSyncLoading}
+              title={canManageArticles
+                ? "Đồng bộ tab tháng mới nhất trên Google Sheet"
+                : `Đồng bộ tab tháng mới nhất trên Google Sheet trong phạm vi dữ liệu của ${collaboratorLabel}`}
+              style={{ flex: isMobile ? 1 : "initial", justifyContent: "center" }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
+              {isMobile ? "Đồng bộ" : "Đồng bộ ngay"}
+            </button>
+          )}
+          {canManageArticles && !isMobile && (
             <>
               <input
                 ref={importInputRef}
@@ -1687,32 +1747,7 @@ export default function ArticlesPage() {
               </label>
             </>
           )}
-          {canSyncArticles && (
-            <>
-              <button
-                className="btn-ios-pill btn-ios-primary"
-                onClick={() => executeGoogleSheetSync({ closeModalOnSuccess: true })}
-                disabled={googleSyncLoading}
-                title={canManageArticles
-                  ? "Đồng bộ tab tháng mới nhất trên Google Sheet"
-                  : `Đồng bộ tab tháng mới nhất trên Google Sheet trong phạm vi dữ liệu của ${collaboratorLabel}`}
-                style={{ minWidth: 170, justifyContent: "center" }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
-                {googleSyncLoading ? "Đang đồng bộ..." : "Đồng bộ ngay"}
-              </button>
-              <button
-                className="btn-ios-pill btn-ios-secondary"
-                onClick={openGoogleSyncModal}
-                disabled={googleSyncLoading}
-                style={{ minWidth: 210, justifyContent: "center" }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sync</span>
-                Chọn tháng để đồng bộ
-              </button>
-            </>
-          )}
-          {canBulkAssignReviewer && (
+          {canBulkAssignReviewer && !isMobile && (
             <button
               className="btn-ios-pill btn-ios-secondary"
               onClick={toggleSelectionMode}
@@ -1726,24 +1761,6 @@ export default function ArticlesPage() {
               {selectionMode ? "Thoát chọn" : "Chọn hàng loạt"}
             </button>
           )}
-          {canManageArticles && (
-            <button data-testid="articles-open-delete-tool" className="btn-ios-pill" onClick={openDeleteTool} style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete_sweep</span>
-              Xóa dữ liệu
-            </button>
-          )}
-          {canManageArticles && (
-            <a href="/api/export" className="btn-ios-pill btn-ios-secondary" style={{ textDecoration: "none" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>upload</span>
-              Xuất
-            </a>
-          )}
-          {canCreateArticles && (
-            <button className="btn-ios-pill btn-ios-primary" onClick={() => openArticleModal({ date: new Date().toISOString().split("T")[0], penName: canManageArticles ? MANAGER_DEFAULT_PEN_NAME : user?.collaborator?.penName, reviewerName: "", status: DEFAULT_ARTICLE_STATUS, wordCountRange: "" })}>
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
-              Thêm bài viết
-            </button>
-          )}
         </div>
       </header>
 
@@ -1755,32 +1772,34 @@ export default function ArticlesPage() {
       </div>
 
       <div className="glass-card" style={{ padding: 20, marginBottom: 32 }}>
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <div style={{ flex: 1, position: "relative" }}>
-            <span className="material-symbols-outlined" style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 20 }}>search</span>
+            <span className="material-symbols-outlined" style={{ position: "absolute", left: isMobile ? 12 : 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 18 }}>search</span>
             <input
               data-testid="articles-search"
               type="text"
-              placeholder="Tìm theo tiêu đề, tác giả, nội dung..."
+              placeholder={isMobile ? "Tìm bài viết..." : "Tìm theo tiêu đề, tác giả, nội dung..."}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              style={{ width: "100%", height: 44, padding: "0 16px 0 48px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--glass-border)", borderRadius: 12, color: "var(--text-main)", fontSize: 14 }}
+              style={{ width: "100%", height: isMobile ? 40 : 44, padding: isMobile ? "0 12px 0 38px" : "0 16px 0 48px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--glass-border)", borderRadius: 12, color: "var(--text-main)", fontSize: 14 }}
             />
           </div>
-          <button className="btn-ios-pill btn-ios-secondary" onClick={toggleFilters} style={{ height: 44 }}>
+          <button className="btn-ios-pill btn-ios-secondary" onClick={toggleFilters} style={{ height: isMobile ? 40 : 44, padding: isMobile ? "0 10px" : "0 16px" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>tune</span>
-            Bộ lọc {activeFilterCount > 0 && <span style={{ marginLeft: 6, padding: "2px 6px", background: "var(--accent-blue)", color: "white", borderRadius: 6, fontSize: 10, fontWeight: 800 }}>{activeFilterCount}</span>}
+            {!isMobile && "Bộ lọc"} {activeFilterCount > 0 && <span style={{ marginLeft: 6, padding: "2px 6px", background: "var(--accent-blue)", color: "white", borderRadius: 6, fontSize: 10, fontWeight: 800 }}>{activeFilterCount}</span>}
           </button>
-          {activeFilterCount > 0 && (
+          {!isMobile && activeFilterCount > 0 && (
             <button className="btn-ios-pill" onClick={clearFilters} style={{ height: 44, background: "rgba(239, 68, 68, 0.1)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.2)" }}>
               Xóa lọc
             </button>
           )}
-          <button className="btn-ios-pill btn-ios-secondary" onClick={() => { void checkVisibleLinks(true); }} disabled={linkCheckLoading} style={{ height: 44 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link_scan</span>
-            {linkCheckLoading ? "Đang kiểm tra link..." : "Kiểm tra link"}
-          </button>
+          {!isMobile && (
+            <button className="btn-ios-pill btn-ios-secondary" onClick={() => { void checkVisibleLinks(true); }} disabled={linkCheckLoading} style={{ height: 44 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link_scan</span>
+              {linkCheckLoading ? "Đang kiểm tra link..." : "Kiểm tra link"}
+            </button>
+          )}
         </div>
 
         {canBulkAssignReviewer && selectionMode && (
@@ -1831,7 +1850,7 @@ export default function ArticlesPage() {
           </div>
         )}
 
-        {showFilters && (
+        {showFilters && !isMobile && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, borderTop: "1px solid var(--glass-border)", paddingTop: 24, animation: "modalFadeIn 0.2s ease" }}>
             {canManageArticles && (
               <div className="form-group">
@@ -1946,7 +1965,7 @@ export default function ArticlesPage() {
       ) : showSplitArticleSections ? (
         <div style={{ display: "grid", gap: 24 }}>
           {articleSections.map((section) => (
-            <section key={section.key} className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
+            <section key={section.key} className="glass-card" style={{ padding: 0, overflow: "hidden", background: isMobile ? "transparent" : undefined, boxShadow: isMobile ? "none" : undefined, border: isMobile ? "none" : undefined }}>
               <div
                 data-testid={`article-section-${section.key}`}
                 style={{
@@ -1954,33 +1973,53 @@ export default function ArticlesPage() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   gap: 12,
-                  padding: "18px 20px",
-                  borderBottom: "1px solid var(--glass-border)",
-                  background: section.background,
+                  padding: isMobile ? "12px 0" : "18px 20px",
+                  borderBottom: isMobile ? "none" : "1px solid var(--glass-border)",
+                  background: isMobile ? "transparent" : section.background,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 20, color: section.accent }}>{section.icon}</span>
-                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--text-main)" }}>{section.title}</h3>
+                  <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: "var(--text-main)" }}>{section.title}</h3>
                 </div>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 38, height: 38, padding: "0 12px", borderRadius: 999, background: "rgba(255, 255, 255, 0.7)", color: section.accent, fontSize: 16, fontWeight: 800 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: isMobile ? 32 : 38, height: isMobile ? 32 : 38, padding: isMobile ? "0 8px" : "0 12px", borderRadius: 999, background: isMobile ? "rgba(0,0,0,0.05)" : "rgba(255, 255, 255, 0.7)", color: section.accent, fontSize: isMobile ? 14 : 16, fontWeight: 800 }}>
                   {section.rows.length}
                 </span>
               </div>
-              {renderArticleTable(section.rows, section.emptyMessage, section.allowBulkAssign)}
+              {isMobile ? renderArticleCards(section.rows, section.emptyMessage) : renderArticleTable(section.rows, section.emptyMessage, section.allowBulkAssign)}
             </section>
           ))}
         </div>
       ) : (
-        <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
-          {renderArticleTable(articles, "Chưa có bài viết nào", canBulkAssignReviewer)}
+        <div className="glass-card" style={{ padding: 0, overflow: "hidden", background: isMobile ? "transparent" : undefined, boxShadow: isMobile ? "none" : undefined, border: isMobile ? "none" : undefined }}>
+          {isMobile ? renderArticleCards(articles, "Chưa có bài viết nào") : renderArticleTable(articles, "Chưa có bài viết nào", canBulkAssignReviewer)}
         </div>
       )}
       {pagination.totalPages > 1 && (
-        <div className="pagination">
-          <button disabled={pagination.page <= 1} onClick={() => fetchArticles(pagination.page - 1, appliedSearch, filters)}>← Trước</button>
-          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Trang {pagination.page} / {pagination.totalPages} ({pagination.total} bài)</span>
-          <button disabled={pagination.page >= pagination.totalPages} onClick={() => fetchArticles(pagination.page + 1, appliedSearch, filters)}>Sau →</button>
+        <div className={isMobile ? "flex items-center justify-between gap-4 mt-8 pb-10" : "pagination"}>
+          <button 
+            disabled={pagination.page <= 1} 
+            onClick={() => fetchArticles(pagination.page - 1, appliedSearch, filters)}
+            className={isMobile ? "flex-1 h-12 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-bold active:scale-95 transition-all disabled:opacity-30" : ""}
+          >
+            {isMobile ? "Trang trước" : "← Trước"}
+          </button>
+          {!isMobile && (
+            <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Trang {pagination.page} / {pagination.totalPages} ({pagination.total} bài)</span>
+          )}
+          {isMobile && (
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1">Trang</span>
+              <span className="text-sm font-black text-slate-800 dark:text-white">{pagination.page} / {pagination.totalPages}</span>
+            </div>
+          )}
+          <button 
+            disabled={pagination.page >= pagination.totalPages} 
+            onClick={() => fetchArticles(pagination.page + 1, appliedSearch, filters)}
+            className={isMobile ? "flex-1 h-12 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-bold active:scale-95 transition-all disabled:opacity-30" : ""}
+          >
+            {isMobile ? "Trang sau" : "Sau →"}
+          </button>
         </div>
       )}
       {showModal && (
@@ -2408,6 +2447,99 @@ export default function ArticlesPage() {
           article={previewArticle}
           onClose={() => setPreviewArticle(null)}
         />
+      )}
+
+      {isMobile && (
+        <BottomSheet
+          isOpen={showFilters}
+          onClose={() => setShowFilters(false)}
+          title="Bộ lọc bài viết"
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 18, paddingBottom: 20 }}>
+            {canManageArticles && (
+              <div className="form-group">
+                <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Bút danh</label>
+                <CustomSelect
+                  value={filters.penName || ""}
+                  onChange={(v) => applyFilter("penName", v)}
+                  options={[{ value: "", label: "Tất cả bút danh" }, ...collaborators.map(c => ({ value: c.penName, label: getDisplayedPenName(c.penName) }))]}
+                  placeholder="Tất cả bút danh"
+                  menuMode="portal-bottom"
+                />
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Trạng thái</label>
+              <CustomSelect
+                value={filters.status || ""}
+                onChange={(v) => applyFilter("status", v)}
+                options={ARTICLE_STATUS_OPTIONS}
+                placeholder="Tất cả"
+                menuMode="portal-bottom"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Danh mục</label>
+              <CustomSelect
+                value={filters.category || ""}
+                onChange={(v) => applyFilter("category", v)}
+                options={[{ value: "", label: "Tất cả" }, ...visibleCategoryOptions.map((category) => ({ value: category, label: category }))]}
+                placeholder="Tất cả"
+                menuMode="portal-bottom"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Loại bài</label>
+              <CustomSelect
+                value={filters.articleType || ""}
+                onChange={(v) => applyFilter("articleType", v)}
+                options={[{ value: "", label: "Tất cả" }, ...visibleArticleTypeOptions.map(t => ({ value: t, label: t }))]}
+                placeholder="Tất cả"
+                menuMode="portal-bottom"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" style={{ marginBottom: 6, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Tháng/Năm</label>
+              <div className="flex gap-2">
+                <div style={{ flex: 1 }}>
+                  <CustomSelect
+                    value={filters.month || ""}
+                    onChange={(v) => applyFilter("month", v)}
+                    options={MONTH_OPTIONS}
+                    placeholder="Tháng"
+                    menuMode="portal-bottom"
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <CustomSelect
+                    value={filters.year || ""}
+                    onChange={(v) => applyFilter("year", v)}
+                    options={YEAR_OPTIONS}
+                    placeholder="Năm"
+                    menuMode="portal-bottom"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+              <button 
+                className="btn-ios-pill" 
+                onClick={clearFilters}
+                style={{ background: "rgba(239, 68, 68, 0.08)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.16)", justifyContent: "center" }}
+              >
+                Xóa tất cả
+              </button>
+              <button 
+                className="btn-ios-pill btn-ios-primary" 
+                onClick={() => setShowFilters(false)}
+                style={{ justifyContent: "center" }}
+              >
+                Áp dụng
+              </button>
+            </div>
+          </div>
+        </BottomSheet>
       )}
     </>
   );

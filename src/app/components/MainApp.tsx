@@ -10,6 +10,8 @@ import { APP_NAVIGATION_START_EVENT } from "./navigation-events";
 import { useAuth } from "./auth-context";
 import { emitRealtimePayload } from "./realtime";
 import type { Page } from "./types";
+import { useIsMobile } from "./useMediaQuery";
+import BottomTabBar from "./BottomTabBar";
 
 const loadArticlesPage = () => import("./ArticlesPage");
 const loadAuditLogsPage = () => import("./AuditLogsPage");
@@ -315,6 +317,8 @@ export default function MainApp() {
     { id: "audit", label: "Audit Logs", icon: "history", section: "Quản lý", adminOnly: true, leaderOnly: true },
   ];
 
+  const isMobile = useIsMobile();
+
   return (
     <div className="app-shell">
       <RealtimeToastLayer />
@@ -387,12 +391,9 @@ export default function MainApp() {
             <button className="mobile-nav-trigger" type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu điều hướng">
               <span className="material-symbols-outlined" style={{ fontSize: 22 }}>menu</span>
             </button>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>
-                {mobileRoleLabel}
-              </p>
-              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {displayName}
+            <div style={{ minWidth: 0, flex: 1, paddingLeft: 8 }}>
+              <p style={{ fontSize: 15, fontWeight: 800, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>
+                {pageLabels[page]}
               </p>
             </div>
             {(pendingPage || isPageTransitionPending) && (
@@ -400,37 +401,28 @@ export default function MainApp() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "var(--text-muted)",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
+                  justifyContent: "center",
+                  width: 32,
+                  height: 32,
+                  color: "var(--accent-blue)",
+                  animation: "spin 2s linear infinite"
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>progress_activity</span>
-                {pageLabels[pendingPage ?? page]}
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>progress_activity</span>
               </div>
             )}
             <button
               type="button"
-              className="mobile-nav-trigger"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 relative active:scale-90 transition-transform"
               onMouseEnter={() => preloadPage("notifications")}
               onFocus={() => preloadPage("notifications")}
               onTouchStart={() => preloadPage("notifications")}
               onClick={() => navigateToPage("notifications")}
               aria-label="Mở thông báo"
-              style={{ position: "relative" }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 22 }}>notifications</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>notifications</span>
               {unreadCount > 0 && (
-                <span style={{ position: "absolute", top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>
-                  {unreadCount}
-                </span>
+                <span style={{ position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: 999, background: "var(--danger)", border: "2px solid #fff" }} />
               )}
             </button>
           </div>
@@ -445,6 +437,17 @@ export default function MainApp() {
           {page === "profile" && <ProfilePage />}
         </div>
       </main>
+
+      {isMobile && (
+        <BottomTabBar 
+          currentPage={page} 
+          onNavigate={(p) => {
+            navigateToPage(p);
+            setSidebarOpen(false);
+          }} 
+          unreadCount={unreadCount}
+        />
+      )}
     </div>
   );
 }

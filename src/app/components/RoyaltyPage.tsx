@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import CustomSelect from "./CustomSelect";
 import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
+import { useIsMobile } from "./useMediaQuery";
 import type {
   Collaborator,
   PaymentItem,
@@ -25,6 +26,7 @@ let royaltyCollaboratorsCacheKey = "";
 
 export default function RoyaltyPage() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [rates, setRates] = useState<RoyaltyRateItem[]>([]);
   const [calculation, setCalculation] = useState<RoyaltyCalculationRow[]>([]);
   const [dashboard, setDashboard] = useState<RoyaltyDashboardData | null>(null);
@@ -320,34 +322,50 @@ export default function RoyaltyPage() {
   return (
     <>
       <header className="page-shell-header">
-        <div>
-          <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Nhuận bút</h2>
-        </div>
+        {!isMobile && (
+          <div>
+            <h2 style={{ fontSize: 32, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.04em" }}>Nhuận bút</h2>
+          </div>
+        )}
       </header>
 
-      <div style={{ display: "flex", gap: 8, padding: 6, background: "rgba(255,255,255,0.03)", borderRadius: 16, width: "100%", maxWidth: "100%", marginBottom: 32, border: "1px solid var(--glass-border)", overflowX: "auto" }}>
+      <div style={{ 
+        display: "flex", 
+        gap: 8, 
+        padding: isMobile ? 4 : 6, 
+        background: "rgba(255,255,255,0.03)", 
+        borderRadius: 16, 
+        width: "100%", 
+        maxWidth: "100%", 
+        marginBottom: isMobile ? 18 : 32, 
+        border: "1px solid var(--glass-border)", 
+        overflowX: "auto",
+        scrollbarWidth: "none"
+      }}>
         {royaltyTabs.map(t => (
           <button
             key={t.id}
             data-testid={`royalty-tab-${t.id}`}
             onClick={() => setTab(t.id)}
             style={{
-              padding: "10px 20px",
+              padding: isMobile ? "8px 14px" : "10px 20px",
               borderRadius: 12,
               border: "none",
-              background: tab === t.id ? "var(--glass-bg-accent)" : "transparent",
-              color: tab === t.id ? "var(--accent-blue)" : "var(--text-muted)",
-              fontSize: 14,
+              background: tab === t.id ? "var(--accent-blue)" : "transparent",
+              color: tab === t.id ? "#fff" : "var(--text-muted)",
+              fontSize: isMobile ? 13 : 14,
               fontWeight: 700,
               display: "flex",
-              flex: "0 0 auto",
+              flex: isMobile ? "1 0 auto" : "0 0 auto",
+              justifyContent: "center",
               alignItems: "center",
               gap: 8,
               cursor: "pointer",
-              transition: "all 0.2s var(--ease-apple)"
+              transition: "all 0.2s var(--ease-apple)",
+              whiteSpace: "nowrap"
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{t.icon}</span>
+            <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 16 : 18 }}>{t.icon}</span>
             {t.label}
           </button>
         ))}
@@ -401,55 +419,67 @@ export default function RoyaltyPage() {
                 </div>
               )}
 
-              <div className="royalty-overview-grid" style={{ marginBottom: 32 }}>
+              <div className="royalty-overview-grid" style={{ marginBottom: 32, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(220px, 1fr))", gap: isMobile ? 10 : 20 }}>
                 {[
                   { label: "Tổng nhuận bút", value: fmt(dashboard.currentMonth?.totalAmount || 0), icon: "account_balance_wallet", color: "var(--accent-blue)" },
                   { label: "Nhuận viết", value: fmt(dashboard.currentMonth?.writerAmount || 0), icon: "edit_note", color: "var(--accent-teal)" },
                   { label: "Nhuận duyệt", value: fmt(dashboard.currentMonth?.reviewerAmount || 0), icon: "fact_check", color: "var(--accent-orange)" },
                   { label: "Bài viết", value: dashboard.currentMonth?.writerArticles || 0, icon: "article", color: "var(--accent-blue)" },
                   { label: "Bài duyệt", value: dashboard.currentMonth?.reviewerArticles || 0, icon: "task", color: "var(--accent-purple)" },
-                  { label: "Ngân sách còn lại", value: hasBudget ? fmt(dashboard.budget.remaining) : "—", icon: "troubleshoot", color: "var(--accent-orange)" }
+                  { label: "Cấp độ", value: "Silver", icon: "stars", color: "var(--accent-orange)" }
                 ].map((s, i) => (
-                  <div key={i} className="glass-card" style={{ display: "flex", alignItems: "center", gap: 20 }}>
-                    <div style={{ width: 48, height: 48, borderRadius: 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 24, color: s.color }}>{s.icon}</span>
+                  <div key={i} className="glass-card" style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 8 : 20, padding: isMobile ? 12 : 20 }}>
+                    <div style={{ width: isMobile ? 32 : 48, height: isMobile ? 32 : 48, borderRadius: isMobile ? 10 : 14, background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 18 : 24, color: s.color }}>{s.icon}</span>
                     </div>
                     <div>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{s.label}</p>
-                      <p style={{ fontSize: 24, fontWeight: 800, color: "var(--text-main)" }}>{s.value}</p>
+                      <p style={{ fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: isMobile ? 2 : 4 }}>{s.label}</p>
+                      <p style={{ fontSize: isMobile ? 18 : 24, fontWeight: 800, color: "var(--text-main)" }}>{s.value}</p>
                     </div>
                   </div>
                 ))}
               </div>
 
               {isLeader && (
-                <div className="glass-card" style={{ padding: 24, marginBottom: 32, display: "flex", gap: 20, alignItems: "flex-end", background: "rgba(0,0,0,0.01)" }}>
+                <div className="glass-card" style={{ padding: isMobile ? 16 : 24, marginBottom: 32, display: "flex", flexDirection: isMobile ? "column" : "row", gap: 16, alignItems: isMobile ? "stretch" : "flex-end", background: "rgba(0,0,0,0.01)" }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.05em" }}>🎯 Ngân sách mục tiêu cho {monthNames[overviewMonth - 1]}/{overviewYear}</label>
-                    <input className="form-input" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border)" }} type="number" value={budgetInput} onChange={e => setBudgetInput(e.target.value)} placeholder="Nhập số tiền (VD: 10.000.000)" />
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.05em" }}>🎯 Ngân sách cho {monthNames[overviewMonth - 1]}/{overviewYear}</label>
+                    <input className="form-input" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border)", height: 44 }} type="number" value={budgetInput} onChange={e => setBudgetInput(e.target.value)} placeholder="Nhập số tiền..." />
                   </div>
-                  <button className="btn-ios-pill btn-ios-primary" onClick={handleSetBudget} disabled={budgetSaving}>
+                  <button className="btn-ios-pill btn-ios-primary" onClick={handleSetBudget} disabled={budgetSaving} style={{ height: 44, justifyContent: "center" }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 20 }}>save</span>
-                    Lưu ngân sách
+                    Lưu
                   </button>
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 32, marginBottom: 32 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(400px, 1fr))", gap: isMobile ? 16 : 32, marginBottom: 32 }}>
                 <div className="card">
                   <h3 className="text-xl font-bold mb-8">Biểu đồ theo quý</h3>
-                  <div className="royalty-chart">
+                  <div className={isMobile ? "royalty-chart-horizontal" : "royalty-chart"}>
                     {dashboard.monthlyData?.map((m, i: number) => {
                       const heightPct = maxAmount > 0 ? Math.max((m.totalAmount / maxAmount) * 100, 2) : 2;
                       const isActivePeriod = m.month === overviewMonth && m.year === overviewYear;
-                      return (
-                        <div key={i} className="royalty-chart-bar">
-                          <div className="royalty-chart-bar-fill" style={{ height: `${heightPct}%`, background: isActivePeriod ? "var(--accent-blue)" : "rgba(59, 130, 246, 0.15)" }}>
-                            <div className="chart-tooltip">{fmt(m.totalAmount)}</div>
+                      if (!isMobile) {
+                        return (
+                          <div key={i} className="royalty-chart-bar">
+                            <div className="royalty-chart-bar-fill" style={{ height: `${heightPct}%`, background: isActivePeriod ? "var(--accent-blue)" : "rgba(59, 130, 246, 0.15)" }}>
+                              <div className="chart-tooltip">{fmt(m.totalAmount)}</div>
+                            </div>
+                            <span className="royalty-chart-bar-label">{monthNames[m.month - 1]}</span>
                           </div>
-                          <span className="royalty-chart-bar-label">{monthNames[m.month - 1]}</span>
-                        </div>
-                      );
+                        );
+                      } else {
+                        return (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                            <span style={{ width: 60, fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>{monthNames[m.month - 1]}</span>
+                            <div style={{ flex: 1, height: 28, background: "rgba(255,255,255,0.03)", borderRadius: 8, overflow: "hidden", position: "relative" }}>
+                              <div style={{ width: `${heightPct}%`, height: "100%", background: isActivePeriod ? "var(--accent-blue)" : "rgba(59, 130, 246, 0.15)", borderRadius: 8, transition: "width 0.8s ease" }} />
+                              <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 10, fontWeight: 800, color: isActivePeriod ? "#fff" : "var(--text-main)" }}>{fmt(m.totalAmount)}</span>
+                            </div>
+                          </div>
+                        );
+                      }
                     })}
                   </div>
                 </div>
@@ -458,10 +488,10 @@ export default function RoyaltyPage() {
                   <h3 className="text-xl font-bold mb-8">Mức sử dụng ngân sách</h3>
                   {hasBudget ? (
                     <>
-                      <div className="budget-gauge" style={{ background: `conic-gradient(${gaugeColor} ${gaugeAngle}deg, rgba(0,0,0,0.02) ${gaugeAngle}deg)` }}>
-                        <div className="budget-gauge-inner">
-                          <div className="budget-gauge-percent" style={{ fontWeight: 800, color: "var(--text-main)" }}>{budgetPct}%</div>
-                          <div className="budget-gauge-label">DUNG LƯỢNG</div>
+                      <div className="budget-gauge" style={{ background: `conic-gradient(${gaugeColor} ${gaugeAngle}deg, rgba(0,0,0,0.02) ${gaugeAngle}deg)`, width: isMobile ? 180 : 220, height: isMobile ? 180 : 220 }}>
+                        <div className="budget-gauge-inner" style={{ inset: isMobile ? 24 : 28 }}>
+                          <div className="budget-gauge-percent" style={{ fontWeight: 800, color: "var(--text-main)", fontSize: isMobile ? 32 : 40 }}>{budgetPct}%</div>
+                          <div className="budget-gauge-label" style={{ fontSize: isMobile ? 10 : 12 }}>DUNG LƯỢNG</div>
                         </div>
                       </div>
                       <div className="mt-8 font-bold text-sm text-muted">
@@ -486,25 +516,27 @@ export default function RoyaltyPage() {
 
                   {contentBalance.totalArticles > 0 ? (
                     <>
-                      <div style={{ position: "relative", width: 220, height: 220, borderRadius: "50%", background: contentBalancePie, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.05)" }}>
-                        <div style={{ position: "absolute", inset: 28, borderRadius: "50%", background: "var(--bg-card)", border: "1px solid var(--glass-border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                          <div style={{ fontSize: 36, fontWeight: 900, color: "var(--text-main)", lineHeight: 1 }}>{contentBalance.totalArticles}</div>
-                          <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Bài đủ điều kiện</div>
+                      <div style={{ position: "relative", width: isMobile ? 180 : 220, height: isMobile ? 180 : 220, borderRadius: "50%", background: contentBalancePie, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.05)" }}>
+                        <div style={{ position: "absolute", inset: isMobile ? 24 : 28, borderRadius: "50%", background: "var(--bg-card)", border: "1px solid var(--glass-border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                          <div style={{ fontSize: isMobile ? 32 : 36, fontWeight: 900, color: "var(--text-main)", lineHeight: 1 }}>{contentBalance.totalArticles}</div>
+                          <div style={{ marginTop: 6, fontSize: isMobile ? 10 : 12, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", maxWidth: isMobile ? 100 : "none" }}>Bài đủ điều kiện</div>
                         </div>
                       </div>
 
-                      <div style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginTop: 24 }}>
+                      <div style={{ width: "100%", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginTop: 24 }}>
                         {[
                           { label: "Viết mới", count: contentBalance.newArticles, percentage: contentBalance.newPercentage, color: "var(--accent-blue)" },
                           { label: "Viết lại", count: contentBalance.rewriteArticles, percentage: contentBalance.rewritePercentage, color: "var(--accent-orange)" },
                         ].map((item) => (
-                          <div key={item.label} style={{ padding: 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)", textAlign: "left" }}>
+                          <div key={item.label} style={{ padding: isMobile ? 14 : 16, borderRadius: 16, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)", textAlign: "left" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                               <span style={{ width: 12, height: 12, borderRadius: "50%", background: item.color, boxShadow: `0 0 0 4px ${item.color}20` }} />
                               <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{item.label}</span>
                             </div>
-                            <div style={{ fontSize: 28, fontWeight: 900, color: "var(--text-main)", lineHeight: 1 }}>{item.count}</div>
-                            <div style={{ marginTop: 8, fontSize: 13, color: "var(--text-muted)" }}>{item.percentage}% tổng bài</div>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                              <div style={{ fontSize: 28, fontWeight: 900, color: "var(--text-main)", lineHeight: 1 }}>{item.count}</div>
+                              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{item.percentage}% tổng bài</div>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -612,24 +644,34 @@ export default function RoyaltyPage() {
 
         return (
           <>
-            <div className="obsidian-glass" style={{ padding: 24, borderRadius: 24, marginBottom: 32, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <div className="form-group" style={{ marginBottom: 0, width: 140 }}>
-                <label className="form-label">Tháng</label>
-                <CustomSelect value={String(calcMonth)} onChange={(value) => setCalcMonth(parseInt(value, 10))} options={monthSelectOptions} />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0, width: 120 }}>
-                <label className="form-label">Năm</label>
-                <CustomSelect value={String(calcYear)} onChange={(value) => setCalcYear(parseInt(value, 10))} options={yearSelectOptions} />
+            <div className="obsidian-glass" style={{ 
+              padding: isMobile ? 16 : 24, 
+              borderRadius: 24, 
+              marginBottom: isMobile ? 24 : 32, 
+              display: "flex", 
+              flexDirection: isMobile ? "column" : "row", 
+              gap: 16, 
+              alignItems: isMobile ? "stretch" : "flex-end" 
+            }}>
+              <div style={{ display: "flex", gap: 12 }}>
+                <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                  <label className="form-label">Tháng</label>
+                  <CustomSelect value={String(calcMonth)} onChange={(value) => setCalcMonth(parseInt(value, 10))} options={monthSelectOptions} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                  <label className="form-label">Năm</label>
+                  <CustomSelect value={String(calcYear)} onChange={(value) => setCalcYear(parseInt(value, 10))} options={yearSelectOptions} />
+                </div>
               </div>
               {isAdmin && (
-                <div className="form-group" style={{ marginBottom: 0, minWidth: 200 }}>
+                <div className="form-group" style={{ marginBottom: 0, minWidth: isMobile ? "auto" : 200 }}>
                   <label className="form-label">Cộng tác viên</label>
                   <CustomSelect value={calcPenName} onChange={setCalcPenName} options={collaboratorSelectOptions} />
                 </div>
               )}
-              <button className="btn-ios-pill btn-ios-primary" onClick={fetchCalculation} style={{ height: 44 }}>
+              <button className="btn-ios-pill btn-ios-primary" onClick={fetchCalculation} style={{ height: 44, justifyContent: "center" }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 20 }}>refresh</span>
-                Cập nhật báo cáo
+                {isMobile ? "Cập nhật" : "Cập nhật báo cáo"}
               </button>
             </div>
 
@@ -663,64 +705,103 @@ export default function RoyaltyPage() {
                   </div>
                 </div>
 
-                <div className="glass-card" style={{ padding: 0, overflow: "hidden", marginTop: 32 }}>
-                  <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)" }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>Chi tiết theo CTV</h3>
-                  </div>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
-                        <tr>
-                          <th style={{ padding: "12px 24px", textAlign: "left", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Cộng tác viên</th>
-                          <th style={{ padding: "12px 24px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài viết</th>
-                          <th style={{ padding: "12px 24px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài duyệt</th>
-                          <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận viết</th>
-                          <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận duyệt</th>
-                          <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Tổng nhuận bút</th>
-                          <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Chi tiết</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {calculation.map((c) => (
-                          <React.Fragment key={c.penName}>
-                            <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
-                              <td style={{ padding: "16px 24px", fontWeight: 700, color: "var(--text-main)" }}>{c.penName}</td>
-                              <td style={{ padding: "16px 24px", textAlign: "center", color: "var(--accent-teal)", fontWeight: 800 }}>{c.writerArticles}</td>
-                              <td style={{ padding: "16px 24px", textAlign: "center", color: "var(--accent-purple)", fontWeight: 800 }}>{c.reviewerArticles}</td>
-                              <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-teal)", fontWeight: 800 }}>{fmt(c.writerAmount)}</td>
-                              <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-purple)", fontWeight: 800 }}>{fmt(c.reviewerAmount)}</td>
-                              <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-blue)", fontWeight: 800 }}>{fmt(c.totalAmount)}</td>
-                              <td style={{ padding: "16px 24px", textAlign: "right" }}>
-                                <button
-                                  className="btn-ios-pill btn-ios-secondary"
-                                  style={{ padding: "6px 12px" }}
-                                  onClick={() => setExpandedWriter(expandedWriter === c.penName ? null : c.penName)}
-                                >
-                                  {expandedWriter === c.penName ? "Thu gọn" : "Xem thêm"}
-                                </button>
-                              </td>
-                            </tr>
-                            {expandedWriter === c.penName && (
-                              <tr>
-                                <td colSpan={7} style={{ padding: "16px 24px", background: "rgba(255,255,255,0.01)" }}>
-                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-                                    {Object.entries(c.breakdown || {}).map(([k, v]: [string, RoyaltyBreakdownItem]) => (
-                                      <div key={k} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid var(--glass-border)" }}>
-                                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 4 }}>{k}</div>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{v.count} bài × {fmt(v.unitPrice)}</div>
-                                        <div style={{ fontSize: 15, fontWeight: 800, color: "var(--accent-blue)", marginTop: 4 }}>{fmt(v.total)}</div>
-                                      </div>
-                                    ))}
-                                  </div>
+                {!isMobile ? (
+                  <div className="glass-card" style={{ padding: 0, overflow: "hidden", marginTop: 32 }}>
+                    <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)" }}>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>Chi tiết theo CTV</h3>
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid var(--glass-border)" }}>
+                          <tr>
+                            <th style={{ padding: "12px 24px", textAlign: "left", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Cộng tác viên</th>
+                            <th style={{ padding: "12px 24px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài viết</th>
+                            <th style={{ padding: "12px 24px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài duyệt</th>
+                            <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận viết</th>
+                            <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận duyệt</th>
+                            <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Tổng nhuận bút</th>
+                            <th style={{ padding: "12px 24px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Chi tiết</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {calculation.map((c) => (
+                            <React.Fragment key={c.penName}>
+                              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
+                                <td style={{ padding: "16px 24px", fontWeight: 700, color: "var(--text-main)" }}>{c.penName}</td>
+                                <td style={{ padding: "16px 24px", textAlign: "center", color: "var(--accent-teal)", fontWeight: 800 }}>{c.writerArticles}</td>
+                                <td style={{ padding: "16px 24px", textAlign: "center", color: "var(--accent-purple)", fontWeight: 800 }}>{c.reviewerArticles}</td>
+                                <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-teal)", fontWeight: 800 }}>{fmt(c.writerAmount)}</td>
+                                <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-purple)", fontWeight: 800 }}>{fmt(c.reviewerAmount)}</td>
+                                <td style={{ padding: "16px 24px", textAlign: "right", color: "var(--accent-blue)", fontWeight: 800 }}>{fmt(c.totalAmount)}</td>
+                                <td style={{ padding: "16px 24px", textAlign: "right" }}>
+                                  <button
+                                    className="btn-ios-pill btn-ios-secondary"
+                                    style={{ padding: "6px 12px" }}
+                                    onClick={() => setExpandedWriter(expandedWriter === c.penName ? null : c.penName)}
+                                  >
+                                    {expandedWriter === c.penName ? "Thu gọn" : "Xem thêm"}
+                                  </button>
                                 </td>
                               </tr>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </tbody>
-                    </table>
+                              {expandedWriter === c.penName && (
+                                <tr>
+                                  <td colSpan={7} style={{ padding: "16px 24px", background: "rgba(255,255,255,0.01)" }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+                                      {Object.entries(c.breakdown || {}).map(([k, v]: [string, RoyaltyBreakdownItem]) => (
+                                        <div key={k} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid var(--glass-border)" }}>
+                                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 4 }}>{k}</div>
+                                          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{v.count} bài × {fmt(v.unitPrice)}</div>
+                                          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--accent-blue)", marginTop: 4 }}>{fmt(v.total)}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
+                    {calculation.map((c) => (
+                      <div key={c.penName} className="glass-card" style={{ padding: 16 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                          <div>
+                            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-main)" }}>{c.penName}</div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                              {c.writerArticles} bài viết • {c.reviewerArticles} bài duyệt
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: "var(--accent-blue)" }}>{fmt(c.totalAmount)}</div>
+                            <button 
+                              onClick={() => setExpandedWriter(expandedWriter === c.penName ? null : c.penName)}
+                              style={{ border: "none", background: "none", color: "var(--accent-blue)", fontSize: 12, fontWeight: 700, marginTop: 4, padding: 0 }}
+                            >
+                              {expandedWriter === c.penName ? "Ẩn chi tiết" : "Xem chi tiết"}
+                            </button>
+                          </div>
+                        </div>
+                        {expandedWriter === c.penName && (
+                          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--glass-border)", display: "flex", flexDirection: "column", gap: 10 }}>
+                            {Object.entries(c.breakdown || {}).map(([k, v]: [string, RoyaltyBreakdownItem]) => (
+                              <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>{k}</div>
+                                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{v.count} × {fmt(v.unitPrice)}</div>
+                                </div>
+                                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-main)" }}>{fmt(v.total)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </>
@@ -729,34 +810,56 @@ export default function RoyaltyPage() {
 
       {tab === "workflow" && (
         <>
-          <div className="obsidian-glass" style={{ padding: 24, borderRadius: 24, marginBottom: 24, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-            <div className="form-group" style={{ marginBottom: 0, width: 140 }}>
-              <label className="form-label">Tháng</label>
-              <CustomSelect dataTestId="payment-month-select" value={String(paymentMonth)} onChange={(value) => setPaymentMonth(parseInt(value, 10))} options={monthSelectOptions} />
+          <div className="obsidian-glass" style={{ 
+            padding: isMobile ? 16 : 24, 
+            borderRadius: 24, 
+            marginBottom: 24, 
+            display: "flex", 
+            flexDirection: isMobile ? "column" : "row", 
+            gap: 16, 
+            alignItems: isMobile ? "stretch" : "flex-end" 
+          }}>
+            <div style={{ display: "flex", gap: 12 }}>
+              <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                <label className="form-label">Tháng</label>
+                <CustomSelect dataTestId="payment-month-select" value={String(paymentMonth)} onChange={(value) => setPaymentMonth(parseInt(value, 10))} options={monthSelectOptions} />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                <label className="form-label">Năm</label>
+                <CustomSelect dataTestId="payment-year-select" value={String(paymentYear)} onChange={(value) => setPaymentYear(parseInt(value, 10))} options={yearSelectOptions} />
+              </div>
             </div>
-            <div className="form-group" style={{ marginBottom: 0, width: 120 }}>
-              <label className="form-label">Năm</label>
-              <CustomSelect dataTestId="payment-year-select" value={String(paymentYear)} onChange={(value) => setPaymentYear(parseInt(value, 10))} options={yearSelectOptions} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 0, width: 180 }}>
+            <div className="form-group" style={{ marginBottom: 0, width: isMobile ? "100%" : 180 }}>
               <label className="form-label">Trạng thái</label>
               <CustomSelect dataTestId="payment-status-select" value={paymentStatusFilter} onChange={setPaymentStatusFilter} options={paymentStatusOptions} />
             </div>
             {isAdmin && (
-              <div className="form-group" style={{ marginBottom: 0, minWidth: 220 }}>
+              <div className="form-group" style={{ marginBottom: 0, minWidth: isMobile ? "auto" : 220 }}>
                 <label className="form-label">Cộng tác viên</label>
                 <CustomSelect dataTestId="payment-penname-select" value={paymentPenName} onChange={setPaymentPenName} options={collaboratorSelectOptions} />
               </div>
             )}
-            <button data-testid="payment-refresh-button" className="btn-ios-pill btn-ios-primary" onClick={fetchPayments} style={{ height: 44 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
-              Cập nhật danh sách
-            </button>
-            {isAdmin && (
+            <div style={{ display: "flex", gap: 8, marginTop: isMobile ? 8 : 0 }}>
+              <button data-testid="payment-refresh-button" className="btn-ios-pill btn-ios-primary" onClick={fetchPayments} style={{ height: 44, flex: 1, justifyContent: "center" }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
+                {isMobile ? "Cập nhật" : "Cập nhật danh sách"}
+              </button>
+              {isAdmin && isMobile && (
+                <button 
+                  className="btn-ios-pill btn-ios-secondary" 
+                  onClick={generatePayments} 
+                  disabled={paymentGenerating} 
+                  style={{ height: 44, flex: 1, justifyContent: "center" }}
+                >
+                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>calculate</span>
+                </button>
+              )}
+            </div>
+            {isAdmin && !isMobile && (
               <>
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)", marginBottom: 10 }}>
                   <input type="checkbox" checked={forceGenerate} onChange={(e) => setForceGenerate(e.target.checked)} />
-                  Ghi đè kỳ đã duyệt/đã trả
+                  Ghi đè
                 </label>
                 <button data-testid="payment-generate-button" className="btn-ios-pill btn-ios-secondary" onClick={generatePayments} disabled={paymentGenerating} style={{ height: 44 }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>calculate</span>
@@ -787,116 +890,181 @@ export default function RoyaltyPage() {
             </div>
           )}
 
-          <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid var(--glass-border)" }}>
-                  <tr>
-                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Cộng tác viên</th>
-                    <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Kỳ</th>
-                    <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài viết</th>
-                    <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài duyệt</th>
-                    <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận viết</th>
-                    <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận duyệt</th>
-                    <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Tổng tiền</th>
-                    <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Trạng thái</th>
-                    <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paymentsLoading ? (
+          {!isMobile ? (
+            <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid var(--glass-border)" }}>
                     <tr>
-                      <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>⏳ Đang tải thanh toán...</td>
+                      <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Cộng tác viên</th>
+                      <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Kỳ</th>
+                      <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài viết</th>
+                      <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Bài duyệt</th>
+                      <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận viết</th>
+                      <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Nhuận duyệt</th>
+                      <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Tổng tiền</th>
+                      <th style={{ padding: "12px 20px", textAlign: "center", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Trạng thái</th>
+                      <th style={{ padding: "12px 20px", textAlign: "right", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" }}>Thao tác</th>
                     </tr>
-                  ) : payments.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
-                        Chưa có dữ liệu thanh toán.
-                        {!isAdmin ? <div style={{ marginTop: 8, fontSize: 13 }}>Hệ thống chỉ hiển thị nhuận bút thuộc {collaboratorLabel}.</div> : null}
-                      </td>
-                    </tr>
-                  ) : (
-                    payments.map((p) => (
-                      <React.Fragment key={p.id}>
-                        <tr data-testid={`payment-row-${p.id}`} style={{ borderBottom: "1px solid var(--glass-border)" }}>
-                          <td style={{ padding: "14px 20px", fontSize: 13, color: "var(--text-main)", fontWeight: 700 }}>{p.penName}</td>
-                          <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.month}/{p.year}</td>
-                          <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.writerArticles}</td>
-                          <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.reviewerArticles}</td>
-                          <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-teal)", fontWeight: 800 }}>{fmt(p.writerAmount)}</td>
-                          <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-purple)", fontWeight: 800 }}>{fmt(p.reviewerAmount)}</td>
-                          <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-blue)", fontWeight: 800 }}>{fmt(p.totalAmount)}</td>
-                          <td style={{ padding: "14px 20px", textAlign: "center" }}>
-                            <span data-testid={`payment-status-badge-${p.id}`} style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 6,
-                              padding: "4px 10px",
-                              borderRadius: 8,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: p.isEstimated ? "#7c3aed" : p.status === "pending" ? "#f97316" : p.status === "approved" ? "#3b82f6" : "#10b981",
-                              background: p.isEstimated ? "rgba(124,58,237,0.12)" : p.status === "pending" ? "rgba(249,115,22,0.12)" : p.status === "approved" ? "rgba(59,130,246,0.12)" : "rgba(16,185,129,0.12)",
-                            }}>
-                              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                                {p.isEstimated ? "auto_awesome" : p.status === "pending" ? "schedule" : p.status === "approved" ? "fact_check" : "paid"}
+                  </thead>
+                  <tbody>
+                    {paymentsLoading ? (
+                      <tr>
+                        <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>⏳ Đang tải thanh toán...</td>
+                      </tr>
+                    ) : payments.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+                          Chưa có dữ liệu thanh toán.
+                          {!isAdmin ? <div style={{ marginTop: 8, fontSize: 13 }}>Hệ thống chỉ hiển thị nhuận bút thuộc {collaboratorLabel}.</div> : null}
+                        </td>
+                      </tr>
+                    ) : (
+                      payments.map((p) => (
+                        <React.Fragment key={p.id}>
+                          <tr data-testid={`payment-row-${p.id}`} style={{ borderBottom: "1px solid var(--glass-border)" }}>
+                            <td style={{ padding: "14px 20px", fontSize: 13, color: "var(--text-main)", fontWeight: 700 }}>{p.penName}</td>
+                            <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.month}/{p.year}</td>
+                            <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.writerArticles}</td>
+                            <td style={{ padding: "14px 20px", textAlign: "center", fontSize: 13, color: "var(--text-main)" }}>{p.reviewerArticles}</td>
+                            <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-teal)", fontWeight: 800 }}>{fmt(p.writerAmount)}</td>
+                            <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-purple)", fontWeight: 800 }}>{fmt(p.reviewerAmount)}</td>
+                            <td style={{ padding: "14px 20px", textAlign: "right", fontSize: 14, color: "var(--accent-blue)", fontWeight: 800 }}>{fmt(p.totalAmount)}</td>
+                            <td style={{ padding: "14px 20px", textAlign: "center" }}>
+                              <span style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "4px 10px",
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: p.isEstimated ? "#7c3aed" : p.status === "pending" ? "#f97316" : p.status === "approved" ? "#3b82f6" : "#10b981",
+                                background: p.isEstimated ? "rgba(124,58,237,0.12)" : p.status === "pending" ? "rgba(249,115,22,0.12)" : p.status === "approved" ? "rgba(59,130,246,0.12)" : "rgba(16,185,129,0.12)",
+                              }}>
+                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                                  {p.isEstimated ? "auto_awesome" : p.status === "pending" ? "schedule" : p.status === "approved" ? "fact_check" : "paid"}
+                                </span>
+                                {p.isEstimated ? "Tạm tính" : p.status === "pending" ? "Chờ duyệt" : p.status === "approved" ? "Đã duyệt" : "Đã thanh toán"}
                               </span>
-                              {p.isEstimated ? "Tạm tính" : p.status === "pending" ? "Chờ duyệt" : p.status === "approved" ? "Đã duyệt" : "Đã thanh toán"}
-                            </span>
-                          </td>
-                          <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                            <div style={{ display: "inline-flex", gap: 8 }}>
-                              <button data-testid={`payment-toggle-${p.id}`} className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 10px" }} onClick={() => setExpandedPaymentId(expandedPaymentId === p.id ? null : p.id)}>
-                                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{expandedPaymentId === p.id ? "expand_less" : "expand_more"}</span>
-                              </button>
-                              {isAdmin && p.status === "pending" && (
-                                <button data-testid={`payment-approve-${p.id}`} className="btn-ios-pill btn-ios-primary" style={{ padding: "6px 12px" }} disabled={paymentActionId === p.id} onClick={() => paymentAction(p.id, "approve")}>
-                                  {paymentActionId === p.id ? "..." : "Duyệt"}
+                            </td>
+                            <td style={{ padding: "14px 20px", textAlign: "right" }}>
+                              <div style={{ display: "inline-flex", gap: 8 }}>
+                                <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 10px" }} onClick={() => setExpandedPaymentId(expandedPaymentId === p.id ? null : p.id)}>
+                                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{expandedPaymentId === p.id ? "expand_less" : "expand_more"}</span>
                                 </button>
-                              )}
-                              {isAdmin && p.status === "approved" && (
-                                <button data-testid={`payment-mark-paid-${p.id}`} className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px", borderColor: "rgba(16,185,129,0.3)", color: "#10b981" }} disabled={paymentActionId === p.id} onClick={() => paymentAction(p.id, "mark-paid")}>
-                                  {paymentActionId === p.id ? "..." : "Đánh dấu đã trả"}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                        {expandedPaymentId === p.id && (
-                          <tr>
-                            <td colSpan={9} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
-                                {Object.entries(p.details || {}).length === 0 ? (
-                                  <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Không có breakdown chi tiết.</div>
-                                ) : (
-                                  Object.entries(p.details || {}).map(([k, v]) => (
-                                    <div key={k} style={{ padding: 12, borderRadius: 10, border: "1px solid var(--glass-border)", background: "rgba(0,0,0,0.02)" }}>
-                                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>{k}</div>
-                                      <div style={{ fontSize: 13, color: "var(--text-main)" }}>{v.count} bài × {fmt(v.unitPrice)}</div>
-                                      <div style={{ fontSize: 14, color: "var(--accent-blue)", fontWeight: 700, marginTop: 3 }}>{fmt(v.total)}</div>
-                                    </div>
-                                  ))
+                                {isAdmin && p.status === "pending" && (
+                                  <button className="btn-ios-pill btn-ios-primary" style={{ padding: "6px 12px" }} disabled={paymentActionId === p.id} onClick={() => paymentAction(p.id, "approve")}>
+                                    {paymentActionId === p.id ? "..." : "Duyệt"}
+                                  </button>
                                 )}
-                              </div>
-                              <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)" }}>
-                                {p.isEstimated ? "Dòng tạm tính được dựng từ các bài viết đã duyệt hiện tại." : `Tạo: ${new Date(p.createdAt).toLocaleString("vi-VN")}`}
-                                {!p.isEstimated && (
-                                  <>
-                                    {p.approvedAt ? ` • Duyệt: ${new Date(p.approvedAt).toLocaleString("vi-VN")}` : ""}
-                                    {p.paidAt ? ` • Thanh toán: ${new Date(p.paidAt).toLocaleString("vi-VN")}` : ""}
-                                  </>
+                                {isAdmin && p.status === "approved" && (
+                                  <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px", borderColor: "rgba(16,185,129,0.3)", color: "#10b981" }} disabled={paymentActionId === p.id} onClick={() => paymentAction(p.id, "mark-paid")}>
+                                    {paymentActionId === p.id ? "..." : "Đã trả"}
+                                  </button>
                                 )}
                               </div>
                             </td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                          {expandedPaymentId === p.id && (
+                            <tr>
+                              <td colSpan={9} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+                                  {Object.entries(p.details || {}).length === 0 ? (
+                                    <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Không có chi tiết.</div>
+                                  ) : (
+                                    Object.entries(p.details || {}).map(([k, v]) => (
+                                      <div key={k} style={{ padding: 12, borderRadius: 10, border: "1px solid var(--glass-border)", background: "rgba(0,0,0,0.02)" }}>
+                                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>{k}</div>
+                                        <div style={{ fontSize: 13, color: "var(--text-main)" }}>{v.count} bài × {fmt(v.unitPrice)}</div>
+                                        <div style={{ fontSize: 14, color: "var(--accent-blue)", fontWeight: 700, marginTop: 3 }}>{fmt(v.total)}</div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {paymentsLoading ? (
+                <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>⏳ Đang tải...</div>
+              ) : payments.length === 0 ? (
+                <div className="empty-state">Chưa có dữ liệu thanh toán.</div>
+              ) : (
+                payments.map((p) => (
+                  <div key={p.id} className="glass-card" style={{ padding: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-main)" }}>{p.penName}</div>
+                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Kỳ {p.month}/{p.year}</div>
+                      </div>
+                      <span style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "3px 8px",
+                        borderRadius: 6,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: p.isEstimated ? "#7c3aed" : p.status === "pending" ? "#f97316" : p.status === "approved" ? "#3b82f6" : "#10b981",
+                        background: p.isEstimated ? "rgba(124,58,237,0.12)" : p.status === "pending" ? "rgba(249,115,22,0.12)" : p.status === "approved" ? "rgba(59,130,246,0.12)" : "rgba(16,185,129,0.12)",
+                      }}>
+                        {p.isEstimated ? "Tạm tính" : p.status === "pending" ? "Chờ" : p.status === "approved" ? "Duyệt" : "Đã trả"}
+                      </span>
+                    </div>
+                    
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Viết: {p.writerArticles}</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--accent-teal)" }}>{fmt(p.writerAmount)}</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Duyệt: {p.reviewerArticles}</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--accent-purple)" }}>{fmt(p.reviewerAmount)}</p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 12, borderTop: "1px solid var(--glass-border)" }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>Tổng cộng</div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: "var(--accent-blue)" }}>{fmt(p.totalAmount)}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 10px", height: 36 }} onClick={() => setExpandedPaymentId(expandedPaymentId === p.id ? null : p.id)}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{expandedPaymentId === p.id ? "expand_less" : "expand_more"}</span>
+                        </button>
+                        {isAdmin && p.status === "pending" && (
+                          <button className="btn-ios-pill btn-ios-primary" style={{ padding: "0 12px", fontSize: 12, height: 36 }} disabled={paymentActionId === p.id} onClick={() => paymentAction(p.id, "approve")}>Duyệt</button>
+                        )}
+                        {isAdmin && p.status === "approved" && (
+                          <button className="btn-ios-pill btn-ios-success" style={{ padding: "0 12px", fontSize: 12, height: 36 }} disabled={paymentActionId === p.id} onClick={() => paymentAction(p.id, "mark-paid")}>Đã trả</button>
+                        )}
+                      </div>
+                    </div>
+
+                    {expandedPaymentId === p.id && (
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed var(--glass-border)", display: "flex", flexDirection: "column", gap: 8 }}>
+                        {Object.entries(p.details || {}).map(([k, v]) => (
+                          <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                            <span style={{ color: "var(--text-muted)" }}>{k} ({v.count})</span>
+                            <span style={{ fontWeight: 700 }}>{fmt(v.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </>
       )}
     </>

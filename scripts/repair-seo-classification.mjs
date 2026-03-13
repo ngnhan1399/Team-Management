@@ -2,6 +2,7 @@ import { createPoolFromEnv } from "./db-bootstrap.mjs";
 
 const APPLY = process.argv.includes("--apply");
 const CREATE_MISSING_PENDING = process.argv.includes("--create-missing-pending");
+const REVIEWER_ROYALTY_PRICE = 15000;
 
 function foldText(value) {
   return String(value || "")
@@ -71,9 +72,9 @@ function canonicalizeSeoArticle(row) {
   }
 
   let wordCountRange = row.word_count_range ?? null;
-  if (foldedArticleType.includes("1k5")) {
+  if (!wordCountRange && foldedArticleType.includes("1k5")) {
     wordCountRange = "1500-2000";
-  } else if (foldedArticleType.includes("2k")) {
+  } else if (!wordCountRange && foldedArticleType.includes("2k")) {
     wordCountRange = "Từ 2000 trở lên";
   }
 
@@ -100,8 +101,38 @@ function canonicalizeSeoArticle(row) {
   };
 }
 
-function isBudgetEligibleContributor(profile) {
-  return profile && profile.role === "writer" && profile.userRole !== "admin";
+function isBudgetEligibleContributor(profile, allowedRoles = ["writer"]) {
+  return profile && allowedRoles.includes(profile.role) && profile.userRole !== "admin";
+}
+
+function resolveContributionPrice(role, writerPrice) {
+  return role === "reviewer" ? REVIEWER_ROYALTY_PRICE : writerPrice;
+}
+
+function appendContribution(calculationMap, key, options) {
+  if (!calculationMap.has(key)) {
+    calculationMap.set(key, {
+      teamId: options.teamId,
+      month: options.month,
+      year: options.year,
+      penName: options.penName,
+      totalArticles: 0,
+      totalAmount: 0,
+      details: {},
+    });
+  }
+
+  const current = calculationMap.get(key);
+  current.totalArticles += 1;
+  current.totalAmount += options.price;
+
+  const detailPrefix = options.role === "reviewer" ? "Duyệt bài" : "Viết bài";
+  const detailKey = `${detailPrefix} • ${options.articleType} (${options.contentType})`;
+  if (!current.details[detailKey]) {
+    current.details[detailKey] = { count: 0, unitPrice: options.price, total: 0 };
+  }
+  current.details[detailKey].count += 1;
+  current.details[detailKey].total += options.price;
 }
 
 function resolveContributorProfile(penName, profiles) {
@@ -196,18 +227,13 @@ async function main() {
 
     if (paymentPeriods.length > 0) {
       const royaltyArticleResult = await pool.query(`
-        select id, team_id, pen_name, category, article_type, content_type, word_count_range, date
+        select id, team_id, pen_name, reviewer_name, category, article_type, content_type, word_count_range, date
         from articles
         where status in ('Published', 'Approved')
       `);
 
       const calculationMap = new Map();
       for (const row of royaltyArticleResult.rows) {
-        const contributorProfile = resolveContributorProfile(row.pen_name, contributorProfiles);
-        if (!isBudgetEligibleContributor(contributorProfile)) {
-          continue;
-        }
-
         const canonical = canonicalizeSeoArticle(row);
         const dateMatch = String(row.date || "").trim().match(/^(\d{4})-(\d{2})-\d{2}/);
         if (!dateMatch) {
@@ -216,7 +242,7 @@ async function main() {
 
         const year = Number(dateMatch[1]);
         const month = Number(dateMatch[2]);
-        const teamId = contributorProfile?.teamId ?? (row.team_id == null ? null : Number(row.team_id));
+        const teamId = row.team_id == null ? null : Number(row.team_id);
         const relevantPeriod = paymentPeriods.find((period) =>
           period.month === month
           && period.year === year
@@ -225,33 +251,42 @@ async function main() {
         if (!relevantPeriod) {
           continue;
         }
-
-        const canonicalPenName = contributorProfile?.penName || String(row.pen_name || "").trim();
-        const mapKey = `${teamId ?? 0}|${month}|${year}|${foldText(canonicalPenName)}`;
-        const price = rateMap.get(`${canonical.articleType}|${row.content_type}`) || 0;
-
-        if (!calculationMap.has(mapKey)) {
-          calculationMap.set(mapKey, {
+        const writerPrice = rateMap.get(`${canonical.articleType}|${row.content_type}`) || 0;
+        const writerProfile = resolveContributorProfile(row.pen_name, contributorProfiles);
+        if (isBudgetEligibleContributor(writerProfile, ["writer"])) {
+          const canonicalPenName = writerProfile?.penName || String(row.pen_name || "").trim();
+          const mapKey = `${teamId ?? 0}|${month}|${year}|${foldText(canonicalPenName)}`;
+          appendContribution(calculationMap, mapKey, {
             teamId,
             month,
             year,
             penName: canonicalPenName,
-            totalArticles: 0,
-            totalAmount: 0,
-            details: {},
+            role: "writer",
+            articleType: canonical.articleType,
+            contentType: row.content_type,
+            price: resolveContributionPrice("writer", writerPrice),
           });
         }
 
-        const current = calculationMap.get(mapKey);
-        current.totalArticles += 1;
-        current.totalAmount += price;
-
-        const detailKey = `${canonical.articleType} (${row.content_type})`;
-        if (!current.details[detailKey]) {
-          current.details[detailKey] = { count: 0, unitPrice: price, total: 0 };
+        const reviewerName = String(row.reviewer_name || "").trim();
+        if (reviewerName) {
+          const reviewerProfile = resolveContributorProfile(reviewerName, contributorProfiles);
+          if (isBudgetEligibleContributor(reviewerProfile, ["reviewer"])) {
+            const canonicalReviewerPenName = reviewerProfile?.penName || reviewerName;
+            const reviewerTeamId = reviewerProfile?.teamId ?? teamId;
+            const reviewerKey = `${reviewerTeamId ?? 0}|${month}|${year}|${foldText(canonicalReviewerPenName)}`;
+            appendContribution(calculationMap, reviewerKey, {
+              teamId: reviewerTeamId,
+              month,
+              year,
+              penName: canonicalReviewerPenName,
+              role: "reviewer",
+              articleType: canonical.articleType,
+              contentType: row.content_type,
+              price: resolveContributionPrice("reviewer", writerPrice),
+            });
+          }
         }
-        current.details[detailKey].count += 1;
-        current.details[detailKey].total += price;
       }
 
       const pendingPaymentByKey = new Map(

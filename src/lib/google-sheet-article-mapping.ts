@@ -123,8 +123,8 @@ function resolveCanonicalWordCountRange(input: {
 }) {
   const foldedArticleType = foldGoogleSheetArticleText(input.articleType);
   return (
-    inferSpecialSeoWordCountRangeFromArticleType(foldedArticleType)
-    ?? normalizeWordCountRangeToApp(input.wordCountRange)
+    normalizeWordCountRangeToApp(input.wordCountRange)
+    ?? inferSpecialSeoWordCountRangeFromArticleType(foldedArticleType)
     ?? inferWordCountRangeFromFoldedText(foldedArticleType)
   );
 }
