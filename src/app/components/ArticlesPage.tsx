@@ -1148,7 +1148,7 @@ export default function ArticlesPage() {
     const labels: Record<string, string> = { NeedsFix: "Sửa lỗi", Published: "Đã duyệt", Draft: "Bản nháp", Submitted: "Chờ duyệt", Reviewing: "Đang duyệt", Rejected: "Từ chối", Approved: "Đã duyệt" };
     const style = map[s] || map.Draft;
     return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8, background: style.bg, color: style.text, fontSize: 12, fontWeight: 700 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, maxWidth: "100%", padding: "4px 10px", borderRadius: 8, background: style.bg, color: style.text, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
         <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{style.icon}</span>
         {labels[s] || s}
       </span>
@@ -1197,19 +1197,23 @@ export default function ArticlesPage() {
 
     return (
       <span
+        title={articleType}
         style={{
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 10,
+          maxWidth: "100%",
+          fontSize: 9,
           fontWeight: 800,
           color: style.color,
           background: style.background,
           border: style.border,
-          padding: "5px 9px",
+          padding: "5px 8px",
           borderRadius: 999,
           textTransform: "uppercase",
           whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
           lineHeight: 1.2,
         }}
       >
@@ -1295,7 +1299,7 @@ export default function ArticlesPage() {
   const showSplitArticleSections = shouldShowSplitArticleSections;
   const ctvArticles = articles.filter((article) => article.authorBucket !== "editorial");
   const editorialArticles = articles.filter((article) => article.authorBucket === "editorial");
-  const articleTableMinWidth = showSplitArticleSections ? 1160 : 1220;
+  const articleTableMinWidth = showSplitArticleSections ? 1360 : 1420;
   const articleSections = [
     {
       key: "ctv",
@@ -1319,15 +1323,15 @@ export default function ArticlesPage() {
 
   const renderArticleTable = (rows: Article[], emptyMessage: string) => (
     <div style={{ overflowX: "auto", position: "relative", zIndex: 0 }}>
-      <table style={{ width: "100%", minWidth: articleTableMinWidth, borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
+      <table style={{ width: "100%", minWidth: articleTableMinWidth, borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
         <colgroup>
           <col style={{ width: "6%" }} />
-          <col style={{ width: "9%" }} />
-          <col style={{ width: "26%" }} />
-          <col style={{ width: "11%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "32%" }} />
           <col style={{ width: "12%" }} />
           <col style={{ width: "10%" }} />
-          <col style={{ width: "9%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "10%" }} />
           <col style={{ width: "5%" }} />
           <col style={{ width: "12%" }} />
         </colgroup>
