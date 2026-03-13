@@ -241,14 +241,6 @@ export async function GET(request: NextRequest) {
                 writerArticles: number;
                 reviewerArticles: number;
             }> = {};
-            const contributorAmounts: Record<string, {
-                penName: string;
-                amount: number;
-                writerAmount: number;
-                reviewerAmount: number;
-                writerArticles: number;
-                reviewerArticles: number;
-            }> = {};
             const visibleCurrentPeriodArticles = new Map<string, RoyaltySourceArticle>();
 
             const appendVisibleContribution = (
@@ -287,8 +279,29 @@ export async function GET(request: NextRequest) {
                     monthlyMap[key].reviewerArticles += 1;
                 }
 
-                if (!contributorAmounts[contributorPenName]) {
-                    contributorAmounts[contributorPenName] = {
+                if (articleMonth === currentMonth && articleYear === currentYear) {
+                    visibleCurrentPeriodArticles.set(
+                        `${article.penName}::${article.reviewerName || ""}::${article.articleType}::${article.contentType}::${article.date}`,
+                        article
+                    );
+                }
+            };
+            const currentPeriodContributorAmounts: Record<string, {
+                penName: string;
+                amount: number;
+                writerAmount: number;
+                reviewerAmount: number;
+                writerArticles: number;
+                reviewerArticles: number;
+            }> = {};
+
+            const appendCurrentPeriodContributorAmount = (
+                contributorPenName: string,
+                role: "writer" | "reviewer",
+                amount: number
+            ) => {
+                if (!currentPeriodContributorAmounts[contributorPenName]) {
+                    currentPeriodContributorAmounts[contributorPenName] = {
                         penName: contributorPenName,
                         amount: 0,
                         writerAmount: 0,
@@ -298,20 +311,13 @@ export async function GET(request: NextRequest) {
                     };
                 }
 
-                contributorAmounts[contributorPenName].amount += amount;
+                currentPeriodContributorAmounts[contributorPenName].amount += amount;
                 if (role === "writer") {
-                    contributorAmounts[contributorPenName].writerAmount += amount;
-                    contributorAmounts[contributorPenName].writerArticles += 1;
+                    currentPeriodContributorAmounts[contributorPenName].writerAmount += amount;
+                    currentPeriodContributorAmounts[contributorPenName].writerArticles += 1;
                 } else {
-                    contributorAmounts[contributorPenName].reviewerAmount += amount;
-                    contributorAmounts[contributorPenName].reviewerArticles += 1;
-                }
-
-                if (articleMonth === currentMonth && articleYear === currentYear) {
-                    visibleCurrentPeriodArticles.set(
-                        `${article.penName}::${article.reviewerName || ""}::${article.articleType}::${article.contentType}::${article.date}`,
-                        article
-                    );
+                    currentPeriodContributorAmounts[contributorPenName].reviewerAmount += amount;
+                    currentPeriodContributorAmounts[contributorPenName].reviewerArticles += 1;
                 }
             };
 
@@ -332,28 +338,36 @@ export async function GET(request: NextRequest) {
                 const writerProfile = resolveRoyaltyContributorProfile(article.penName, contributorProfiles);
                 if (isBudgetEligibleContributor(writerProfile, ["writer"])) {
                     const contributorPenName = resolveRoyaltyContributorPenName(article.penName, contributorProfiles) || article.penName;
+                    const contributionPrice = resolveRoyaltyContributionPrice("writer", writerPrice);
                     appendVisibleContribution(
                         contributorPenName,
                         "writer",
-                        resolveRoyaltyContributionPrice("writer", writerPrice),
+                        contributionPrice,
                         articleYear,
                         articleMonth,
                         article
                     );
+                    if (articleMonth === currentMonth && articleYear === currentYear) {
+                        appendCurrentPeriodContributorAmount(contributorPenName, "writer", contributionPrice);
+                    }
                 }
 
                 const reviewerName = String(article.reviewerName || "").trim();
                 const reviewerProfile = resolveRoyaltyContributorProfile(reviewerName, contributorProfiles);
                 if (reviewerName && isBudgetEligibleContributor(reviewerProfile, ["reviewer"])) {
                     const contributorPenName = resolveRoyaltyContributorPenName(reviewerName, contributorProfiles) || reviewerName;
+                    const contributionPrice = resolveRoyaltyContributionPrice("reviewer", writerPrice);
                     appendVisibleContribution(
                         contributorPenName,
                         "reviewer",
-                        resolveRoyaltyContributionPrice("reviewer", writerPrice),
+                        contributionPrice,
                         articleYear,
                         articleMonth,
                         article
                     );
+                    if (articleMonth === currentMonth && articleYear === currentYear) {
+                        appendCurrentPeriodContributorAmount(contributorPenName, "reviewer", contributionPrice);
+                    }
                 }
             }
 
@@ -392,7 +406,7 @@ export async function GET(request: NextRequest) {
                 }))
             );
 
-            const topWriters = Object.values(contributorAmounts)
+            const topWriters = Object.values(currentPeriodContributorAmounts)
                 .sort((left, right) => right.amount - left.amount)
                 .slice(0, 10);
 
