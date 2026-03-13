@@ -127,6 +127,7 @@ export default function ArticlesPage() {
   const isReviewer = user?.role === "ctv" && collaboratorRole === "reviewer";
   const isWriter = user?.role === "ctv" && collaboratorRole === "writer";
   const canManageArticles = isAdmin;
+  const canBulkAssignReviewer = canManageArticles || isReviewer;
   const canCreateArticles = isAdmin || isWriter;
   const canSyncArticles = isAdmin || isWriter;
   const shouldShowSplitArticleSections = canManageArticles || isReviewer;
@@ -138,6 +139,7 @@ export default function ArticlesPage() {
     ? [...ARTICLE_TYPE_OPTIONS, ...EDITORIAL_ONLY_ARTICLE_TYPE_OPTIONS]
     : ARTICLE_TYPE_OPTIONS;
   const collaboratorLabel = getDisplayedPenName(user?.collaborator?.penName) || user?.collaborator?.name || "tài khoản của bạn";
+  const reviewerSelfAssignmentName = user?.collaborator?.name || user?.collaborator?.penName || "";
   const reviewerIdentityValues = Array.from(new Set([
     user?.collaborator?.name,
     user?.collaborator?.penName,
@@ -423,7 +425,12 @@ export default function ArticlesPage() {
     setSelectedArticleIds((prev) => Array.from(new Set([...prev, ...visibleArticleIds])));
   };
   const assignReviewerToSelection = async () => {
-    if (!canManageArticles || selectedArticleIds.length === 0 || bulkAssigningReviewer) {
+    const targetReviewerName = canManageArticles ? (bulkReviewerName || null) : (reviewerSelfAssignmentName || null);
+    if (!canBulkAssignReviewer || selectedArticleIds.length === 0 || bulkAssigningReviewer) {
+      return;
+    }
+    if (!canManageArticles && !targetReviewerName) {
+      showUiToast("Khong the nhan bai", "Tài khoản reviewer hiện chưa có tên hiển thị hợp lệ để nhận bài.", "error");
       return;
     }
 
@@ -435,7 +442,7 @@ export default function ArticlesPage() {
         body: JSON.stringify({
           action: "bulk-assign-reviewer",
           ids: selectedArticleIds,
-          reviewerName: bulkReviewerName || null,
+          reviewerName: targetReviewerName,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -445,8 +452,8 @@ export default function ArticlesPage() {
 
       showUiToast(
         "Da cap nhat nguoi duyet",
-        bulkReviewerName
-          ? `Đã gán ${getDisplayedPenName(bulkReviewerName)} cho ${data.updatedCount || selectedArticleIds.length} bài.`
+        targetReviewerName
+          ? `Đã gán ${getDisplayedPenName(targetReviewerName)} cho ${data.updatedCount || selectedArticleIds.length} bài.`
           : `Đã bỏ phân công reviewer cho ${data.updatedCount || selectedArticleIds.length} bài.`,
         "success"
       );
@@ -1683,7 +1690,7 @@ export default function ArticlesPage() {
               </button>
             </>
           )}
-          {canManageArticles && (
+          {canBulkAssignReviewer && (
             <button
               className="btn-ios-pill btn-ios-secondary"
               onClick={toggleSelectionMode}
@@ -1754,7 +1761,7 @@ export default function ArticlesPage() {
           </button>
         </div>
 
-        {canManageArticles && selectionMode && (
+        {canBulkAssignReviewer && selectionMode && (
           <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--glass-border)", display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
             <div style={{ minWidth: 180 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>
@@ -1764,16 +1771,27 @@ export default function ArticlesPage() {
                 {selectedArticleIds.length} bài
               </div>
             </div>
-            <div style={{ minWidth: 260, flex: "1 1 260px" }}>
-              <label className="form-label" style={{ marginBottom: 8, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Gán người duyệt</label>
-              <CustomSelect
-                value={bulkReviewerName}
-                onChange={setBulkReviewerName}
-                options={reviewerSelectOptions}
-                placeholder="Chọn người duyệt"
-                menuMode="portal-bottom"
-              />
-            </div>
+            {canManageArticles ? (
+              <div style={{ minWidth: 260, flex: "1 1 260px" }}>
+                <label className="form-label" style={{ marginBottom: 8, textTransform: "uppercase", fontSize: 11, fontWeight: 700 }}>Gán người duyệt</label>
+                <CustomSelect
+                  value={bulkReviewerName}
+                  onChange={setBulkReviewerName}
+                  options={reviewerSelectOptions}
+                  placeholder="Chọn người duyệt"
+                  menuMode="portal-bottom"
+                />
+              </div>
+            ) : (
+              <div style={{ minWidth: 240, flex: "1 1 240px" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>
+                  Reviewer nhận bài
+                </div>
+                <div style={{ height: 44, display: "flex", alignItems: "center", padding: "0 14px", borderRadius: 12, background: "rgba(0,0,0,0.03)", border: "1px solid var(--glass-border)", color: "var(--text-main)", fontWeight: 700 }}>
+                  {getDisplayedPenName(reviewerSelfAssignmentName) || "Reviewer hiện tại"}
+                </div>
+              </div>
+            )}
             <button className="btn-ios-pill btn-ios-secondary" onClick={toggleSelectVisibleArticles} style={{ height: 44 }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
                 {selectedVisibleCount === visibleArticleIds.length && visibleArticleIds.length > 0 ? "deselect" : "select_all"}
@@ -1786,7 +1804,7 @@ export default function ArticlesPage() {
             </button>
             <button className="btn-ios-pill btn-ios-primary" onClick={assignReviewerToSelection} disabled={selectedArticleIds.length === 0 || bulkAssigningReviewer} style={{ height: 44 }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>assignment_ind</span>
-              {bulkAssigningReviewer ? "Đang cập nhật..." : "Phân công reviewer"}
+              {bulkAssigningReviewer ? "Đang cập nhật..." : canManageArticles ? "Phân công reviewer" : "Nhận bài đã chọn"}
             </button>
           </div>
         )}

@@ -1029,10 +1029,11 @@ export async function PUT(request: NextRequest) {
     const rawBody = (await request.json()) as Record<string, unknown>;
     const action = normalizeString(rawBody.action);
     const canManageArticles = hasArticleManagerAccess(context);
+    const canSelfAssignReviewer = hasArticleReviewAccess(context) && !canManageArticles;
 
     if (action === "bulk-assign-reviewer") {
-      if (!canManageArticles) {
-        return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+      if (!canManageArticles && !canSelfAssignReviewer) {
+        return NextResponse.json({ success: false, error: "Reviewer access required" }, { status: 403 });
       }
 
       const ids = Array.from(new Set(
@@ -1044,8 +1045,20 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ success: false, error: "Danh sách bài viết không hợp lệ" }, { status: 400 });
       }
 
-      const reviewerName = normalizeString(rawBody.reviewerName) || null;
-      if (reviewerName) {
+      const identityCandidates = getContextIdentityCandidates(context);
+      const requestedReviewerName = normalizeString(rawBody.reviewerName) || null;
+      const reviewerName = canManageArticles
+        ? requestedReviewerName
+        : (getContextDisplayName(context).trim() || requestedReviewerName || null);
+
+      if (canSelfAssignReviewer && !reviewerName) {
+        return NextResponse.json({ success: false, error: "Không xác định được tên reviewer hiện tại" }, { status: 400 });
+      }
+      if (canSelfAssignReviewer && reviewerName && !matchesIdentityCandidate(identityCandidates, reviewerName)) {
+        return NextResponse.json({ success: false, error: "Reviewer chỉ có thể tự nhận bài cho chính mình" }, { status: 403 });
+      }
+
+      if (reviewerName && canManageArticles) {
         const reviewerProfile = await db
           .select({ id: collaborators.id, teamId: collaborators.teamId, role: collaborators.role })
           .from(collaborators)
@@ -1061,7 +1074,7 @@ export async function PUT(request: NextRequest) {
       }
 
       const targets = await db
-        .select({ id: articles.id, teamId: articles.teamId })
+        .select({ id: articles.id, teamId: articles.teamId, reviewerName: articles.reviewerName, status: articles.status })
         .from(articles)
         .where(inArray(articles.id, ids))
         .all();
@@ -1071,6 +1084,9 @@ export async function PUT(request: NextRequest) {
       }
       if (targets.some((article) => !canAccessTeam(context, article.teamId))) {
         return NextResponse.json({ success: false, error: "Có bài viết nằm ngoài phạm vi team của bạn" }, { status: 403 });
+      }
+      if (canSelfAssignReviewer && targets.some((article) => article.status !== "Submitted" && !matchesIdentityCandidate(identityCandidates, article.reviewerName))) {
+        return NextResponse.json({ success: false, error: "Reviewer chỉ có thể nhận bài chờ duyệt hoặc bài đã thuộc scope của mình" }, { status: 403 });
       }
 
       const updatedAt = new Date().toISOString();
