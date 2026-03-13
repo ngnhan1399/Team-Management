@@ -53,16 +53,23 @@ import type {
 export default function ArticlesPage() {
   type LinkHealthStatus = "ok" | "broken" | "unknown";
   type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
+  type ArticleListQuery = { page: number; search: string; filters: ArticleFilters };
   const { user } = useAuth();
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const articlesRequestAbortRef = React.useRef<AbortController | null>(null);
   const collaboratorsRequestRef = React.useRef<Promise<void> | null>(null);
   const linkHealthRef = React.useRef<Record<string, LinkHealthEntry>>({});
+  const articleListQueryRef = React.useRef<ArticleListQuery>({
+    page: 1,
+    search: "",
+    filters: createCurrentMonthFilters(),
+  });
   const importInputId = React.useId();
   const [articles, setArticles] = useState<Article[]>([]);
   const deferredArticles = useDeferredValue(articles);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 0 });
@@ -173,21 +180,28 @@ export default function ArticlesPage() {
     return article.penName === user?.collaborator?.penName || article.createdByUserId === user?.id;
   }, [canManageArticles, isWriter, user]);
 
-  const fetchArticles = useCallback((p = 1, s = "", f: ArticleFilters = createCurrentMonthFilters()) => {
+  const fetchArticles = useCallback((p = 1, s = "", f: ArticleFilters = articleListQueryRef.current.filters) => {
+    const nextFilters = { ...f };
+    articleListQueryRef.current = {
+      page: p,
+      search: s,
+      filters: nextFilters,
+    };
     articlesRequestAbortRef.current?.abort();
     const controller = new AbortController();
     articlesRequestAbortRef.current = controller;
     setLoading(true);
+    setPagination((prev) => (prev.page === p ? prev : { ...prev, page: p }));
     const params = new URLSearchParams({ page: String(p), limit: String(ARTICLE_PAGE_SIZE) });
     if (s) params.set("search", s);
     if (isWriter && user?.collaborator?.penName) params.set("penName", user.collaborator.penName);
-    else if (f.penName) params.set("penName", f.penName);
-    if (f.status) params.set("status", f.status);
-    if (f.category) params.set("category", f.category);
-    if (f.articleType) params.set("articleType", f.articleType);
-    if (f.contentType) params.set("contentType", f.contentType);
-    if (f.month) params.set("month", f.month);
-    if (f.year) params.set("year", f.year);
+    else if (nextFilters.penName) params.set("penName", nextFilters.penName);
+    if (nextFilters.status) params.set("status", nextFilters.status);
+    if (nextFilters.category) params.set("category", nextFilters.category);
+    if (nextFilters.articleType) params.set("articleType", nextFilters.articleType);
+    if (nextFilters.contentType) params.set("contentType", nextFilters.contentType);
+    if (nextFilters.month) params.set("month", nextFilters.month);
+    if (nextFilters.year) params.set("year", nextFilters.year);
     fetch(`/api/articles?${params}`, { cache: "no-store", signal: controller.signal })
       .then(r => r.json())
       .then(d => {
@@ -209,7 +223,7 @@ export default function ArticlesPage() {
   }, [isWriter, user]);
 
   useEffect(() => {
-    fetchArticles(1, "", createCurrentMonthFilters());
+    fetchArticles(1, articleListQueryRef.current.search, articleListQueryRef.current.filters);
   }, [fetchArticles]);
 
   useEffect(() => () => {
@@ -322,12 +336,26 @@ export default function ArticlesPage() {
     };
   }, [checkVisibleLinks]);
 
-  const handleSearch = (e?: React.FormEvent) => { e?.preventDefault(); fetchArticles(1, search, filters); };
-  const applyFilter = (key: string, val: string) => { const f = { ...filters, [key]: val }; setFilters(f); fetchArticles(1, search, f); };
-  const clearFilters = () => { const f = createCurrentMonthFilters(); setFilters(f); fetchArticles(1, search, f); };
+  const handleSearch = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const nextSearch = searchInput.trim();
+    setSearchInput(nextSearch);
+    setAppliedSearch(nextSearch);
+    fetchArticles(1, nextSearch, filters);
+  };
+  const applyFilter = (key: string, val: string) => {
+    const f = { ...filters, [key]: val };
+    setFilters(f);
+    fetchArticles(1, appliedSearch, f);
+  };
+  const clearFilters = () => {
+    const f = createCurrentMonthFilters();
+    setFilters(f);
+    fetchArticles(1, appliedSearch, f);
+  };
   const activeFilterCount = Object.entries(filters).filter(([k, v]) => v !== "" && k !== "month" && k !== "year").length;
   const currentFilterDeleteCriteria: ArticleDeleteCriteria = {
-    search,
+    search: appliedSearch,
     titleQuery: "",
     penName: filters.penName,
     status: filters.status,
@@ -434,11 +462,11 @@ export default function ArticlesPage() {
 
   const openDeleteTool = () => {
     void ensureCollaboratorsLoaded();
-    const hasCurrentFilters = search.trim() !== "" || activeFilterCount > 0;
+    const hasCurrentFilters = appliedSearch.trim() !== "" || activeFilterCount > 0;
     setDeleteMode(hasCurrentFilters ? "current_filters" : "custom");
     setDeleteCriteria({
       ...EMPTY_DELETE_CRITERIA,
-      search,
+      search: appliedSearch,
       penName: filters.penName,
       status: filters.status,
       category: filters.category,
@@ -602,7 +630,7 @@ export default function ArticlesPage() {
           : `Da xoa ${data.deletedCount} bai viet va reset du lieu nhuận but lien quan.`,
         data.sheetSyncWarnings?.length ? "warning" : data.backgroundSyncQueued ? "info" : "success"
       );
-      fetchArticles(1, search, filters);
+      fetchArticles(1, appliedSearch, filters);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setDeleteError(message);
@@ -649,7 +677,8 @@ export default function ArticlesPage() {
           : `Da xoa "${article.title}".`,
         data.sheetSyncWarnings?.length ? "warning" : data.backgroundSyncQueued ? "info" : "success"
       );
-      fetchArticles(pagination.page, search, filters);
+      const currentQuery = articleListQueryRef.current;
+      fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
     } catch (error) {
       showUiToast("Xoa bai that bai", error instanceof Error ? error.message : String(error), "error");
     } finally {
@@ -683,13 +712,14 @@ export default function ArticlesPage() {
   }, []);
 
   const refreshArticlesView = useCallback(() => {
-    fetchArticles(pagination.page || 1, search, filters);
+    const currentQuery = articleListQueryRef.current;
+    fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
     if (commentArticle) {
       fetchComments(commentArticle.id);
     }
-  }, [commentArticle, fetchArticles, fetchComments, filters, pagination.page, search]);
+  }, [commentArticle, fetchArticles, fetchComments]);
 
-  useRealtimeRefresh(["articles", "dashboard"], refreshArticlesView);
+  useRealtimeRefresh(["articles"], refreshArticlesView);
 
   const openComments = (article: Article) => {
     setCommentArticle(article);
@@ -759,7 +789,8 @@ export default function ArticlesPage() {
       if (data.article) {
         mergeSavedArticleIntoList(data.article as Article, isEditing);
       } else {
-        fetchArticles(pagination.page || 1, search, filters);
+        const currentQuery = articleListQueryRef.current;
+        fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
       }
       if (data.backgroundSyncQueued) {
         const savedTitle = String(data.article?.title || formData.title || "bài viết");
@@ -858,7 +889,7 @@ export default function ArticlesPage() {
       if (res.ok && data.success) {
         setImportResult(data);
         setImportStep(3);
-        fetchArticles(1, search, filters);
+        fetchArticles(1, appliedSearch, filters);
       } else {
         throw new Error(data.error || "Import thất bại");
       }
@@ -895,7 +926,7 @@ export default function ArticlesPage() {
   }, []);
 
   const doesArticleMatchCurrentView = useCallback((article: Article) => {
-    const normalizedSearch = foldSearchText(search);
+    const normalizedSearch = foldSearchText(appliedSearch);
     if (normalizedSearch) {
       const collaborator = collaborators.find((item) => item.penName === article.penName);
       const haystack = [
@@ -950,7 +981,7 @@ export default function ArticlesPage() {
     }
 
     return true;
-  }, [articleMatchesReviewerScope, canManageArticles, collaborators, filters, isReviewer, isWriter, search, user]);
+  }, [appliedSearch, articleMatchesReviewerScope, canManageArticles, collaborators, filters, isReviewer, isWriter, user]);
 
   const mergeSavedArticleIntoList = useCallback((savedArticle: Article, isEditing: boolean) => {
     const shouldBeVisible = doesArticleMatchCurrentView(savedArticle);
@@ -994,7 +1025,8 @@ export default function ArticlesPage() {
       year: String(year),
     };
 
-    setSearch("");
+    setSearchInput("");
+    setAppliedSearch("");
     setFilters(nextFilters);
     setPagination((prev) => ({ ...prev, page: 1 }));
     fetchArticles(1, "", nextFilters);
@@ -1529,8 +1561,8 @@ export default function ArticlesPage() {
               data-testid="articles-search"
               type="text"
               placeholder="Tìm theo tiêu đề, tác giả, nội dung..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               style={{ width: "100%", height: 44, padding: "0 16px 0 48px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--glass-border)", borderRadius: 12, color: "var(--text-main)", fontSize: 14 }}
             />
@@ -1697,9 +1729,9 @@ export default function ArticlesPage() {
       )}
       {pagination.totalPages > 1 && (
         <div className="pagination">
-          <button disabled={pagination.page <= 1} onClick={() => fetchArticles(pagination.page - 1, search, filters)}>← Trước</button>
+          <button disabled={pagination.page <= 1} onClick={() => fetchArticles(pagination.page - 1, appliedSearch, filters)}>← Trước</button>
           <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Trang {pagination.page} / {pagination.totalPages} ({pagination.total} bài)</span>
-          <button disabled={pagination.page >= pagination.totalPages} onClick={() => fetchArticles(pagination.page + 1, search, filters)}>Sau →</button>
+          <button disabled={pagination.page >= pagination.totalPages} onClick={() => fetchArticles(pagination.page + 1, appliedSearch, filters)}>Sau →</button>
         </div>
       )}
       {showModal && (
