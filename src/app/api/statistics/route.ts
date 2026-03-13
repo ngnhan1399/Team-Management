@@ -40,6 +40,17 @@ type StatisticsWriterCountRow = {
   count: number;
 };
 
+const RECENT_ACTIVITY_WINDOW_DAYS = 21;
+const RECENT_ACTIVITY_TAKE = 8;
+const ACTIVE_DASHBOARD_STATUSES = new Set([
+  "Submitted",
+  "Reviewing",
+  "Approved",
+  "Published",
+  "NeedsFix",
+  "Rejected",
+]);
+
 function resolveCollaborator(articlePenName: string, directory: CollaboratorDirectoryItem[]) {
     const exact = directory.find((item) => item.penName === articlePenName);
     if (exact) return exact;
@@ -55,6 +66,11 @@ function resolveCollaborator(articlePenName: string, directory: CollaboratorDire
 function getActivityTimestamp(article: { id: number; date: string; createdAt?: string | null; updatedAt?: string | null }) {
   const value = article.updatedAt || article.createdAt || article.date;
   const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getArticleDateTimestamp(article: { date: string }) {
+  const timestamp = new Date(`${article.date}T12:00:00`).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
@@ -162,8 +178,34 @@ function mapArticlesByWriter(rows: StatisticsWriterCountRow[], collaboratorDirec
     .sort((left, right) => right.count - left.count || left.displayName.localeCompare(right.displayName, "vi"));
 }
 
+function selectRecentActivityArticles(rows: StatisticsArticleRow[]) {
+  if (rows.length === 0) return [];
+
+  const latestArticleDate = rows.reduce((latest, article) => Math.max(latest, getArticleDateTimestamp(article)), 0);
+  const recentThreshold = latestArticleDate - (RECENT_ACTIVITY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+  const recentRows = rows.filter((article) => getArticleDateTimestamp(article) >= recentThreshold);
+  const prioritizedRows = recentRows.filter((article) => (
+    ACTIVE_DASHBOARD_STATUSES.has(article.status)
+    || getActivityTimestamp(article) >= getArticleDateTimestamp(article)
+  ));
+  const feedRows = prioritizedRows.length > 0 ? prioritizedRows : recentRows;
+
+  return feedRows
+    .sort((left, right) => {
+      const byDate = getArticleDateTimestamp(right) - getArticleDateTimestamp(left);
+      if (byDate !== 0) return byDate;
+
+      const byActivity = getActivityTimestamp(right) - getActivityTimestamp(left);
+      if (byActivity !== 0) return byActivity;
+
+      return right.id - left.id;
+    })
+    .slice(0, RECENT_ACTIVITY_TAKE);
+}
+
 function mapLatestArticles(rows: StatisticsArticleRow[], collaboratorDirectory: CollaboratorDirectoryItem[]) {
-  return rows.map((article) => {
+  return selectRecentActivityArticles(rows).map((article) => {
     const resolvedCollaborator = resolveCollaborator(article.penName, collaboratorDirectory);
     return {
       id: article.id,
@@ -228,7 +270,7 @@ async function getScopedStatistics(
       date: articles.date,
       createdAt: articles.createdAt,
       updatedAt: articles.updatedAt,
-    }).from(articles).where(whereClause).orderBy(desc(articles.updatedAt), desc(articles.id)).limit(8).all() as Promise<StatisticsArticleRow[]>,
+    }).from(articles).where(whereClause).orderBy(desc(articles.date), desc(articles.updatedAt), desc(articles.id)).limit(60).all() as Promise<StatisticsArticleRow[]>,
   ]);
 
   return {
@@ -294,7 +336,7 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[],
       updatedAt: articles.updatedAt,
       contentType: articles.contentType,
       category: articles.category,
-    }).from(articles).where(articleWhere).orderBy(desc(articles.updatedAt), desc(articles.id)).limit(8).all() as Promise<StatisticsArticleRow[]>,
+    }).from(articles).where(articleWhere).orderBy(desc(articles.date), desc(articles.updatedAt), desc(articles.id)).limit(60).all() as Promise<StatisticsArticleRow[]>,
   ]);
 
   return {
@@ -441,9 +483,7 @@ export async function GET() {
         const articlesByMonth = groupCount(scopedArticles.map((article) => article.date))
             .map(({ key, count }) => ({ date: key, count }));
 
-        const latestArticles = [...scopedArticles]
-            .sort((left, right) => getActivityTimestamp(right) - getActivityTimestamp(left) || right.id - left.id)
-            .slice(0, 8)
+        const latestArticles = selectRecentActivityArticles(scopedArticles)
             .map((article) => ({
                 id: article.id,
                 articleId: article.articleId,
