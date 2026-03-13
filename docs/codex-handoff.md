@@ -1,5 +1,34 @@
 # Codex Handoff
 
+## Update 2026-03-13 (chuyển bài viết sang tháng sau + popup đăng ký lại)
+
+- Thêm action mới `move-to-next-month` trong `PUT /api/articles`.
+- Luồng mới chỉ áp dụng cho bài của `CTV`:
+  - admin mở modal `Chỉnh sửa bài viết`
+  - bấm `Chuyển sang tháng sau`
+  - hệ thống tự đổi `date` sang tháng kế tiếp và ép `status = NeedsFix`
+  - tạo notification `system` cho đúng tài khoản CTV với tiêu đề `Đăng ký lại bài trong Content Work`
+- `MainApp.tsx` giờ sẽ tự bật popup cho `CTV` khi có unread reminder này:
+  - nút `Đến trang đăng ký` mở form Content Work
+  - nút `Đã đăng ký` sẽ mark notification là read
+- Cố ý **không** đẩy mutation này ngược sang Google Sheet cũ ở bước move month:
+  - lý do: nguồn gốc đăng ký tháng mới phải đi từ Content Work form
+  - nếu tự đẩy ngược row cũ sang workbook ở đây rất dễ làm sai tháng hoặc sai nguồn row
+  - audit log đã ghi rõ note này trong action `article_moved_to_next_month`
+
+### File đã động vào
+
+- `src/lib/content-work-registration.ts`
+- `src/app/api/articles/route.ts`
+- `src/app/components/ArticlesPage.tsx`
+- `src/app/components/MainApp.tsx`
+- `docs/codex-handoff.md`
+
+### Kiểm tra đã chạy
+
+- `npx eslint src/app/components/ArticlesPage.tsx src/app/components/MainApp.tsx src/app/api/articles/route.ts src/lib/content-work-registration.ts` ✅
+- `npm run typecheck` ✅
+
 ## Update 2026-03-13 (CTV mở tab Bài viết lần đầu bị trống)
 
 - Đã sửa `ArticlesPage.tsx` để lần mở đầu của `CTV` không còn mặc định áp bộ lọc `tháng/năm hiện tại`.

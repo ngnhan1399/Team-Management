@@ -9,9 +9,10 @@ import BrandLogo from "./BrandLogo";
 import { APP_NAVIGATION_START_EVENT } from "./navigation-events";
 import { useAuth } from "./auth-context";
 import { emitRealtimePayload } from "./realtime";
-import type { Page } from "./types";
+import type { NotifItem, Page } from "./types";
 import { useIsMobile } from "./useMediaQuery";
 import BottomTabBar from "./BottomTabBar";
+import { CONTENT_WORK_REGISTRATION_TITLE, CONTENT_WORK_REGISTRATION_URL, isContentWorkRegistrationReminderTitle } from "@/lib/content-work-registration";
 
 const loadArticlesPage = () => import("./ArticlesPage");
 const loadAuditLogsPage = () => import("./AuditLogsPage");
@@ -77,6 +78,8 @@ export default function MainApp() {
   const [page, setPage] = useState<Page>("dashboard");
   const [pendingPage, setPendingPage] = useState<Page | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingRegistrationReminder, setPendingRegistrationReminder] = useState<NotifItem | null>(null);
+  const [markingRegistrationReminderRead, setMarkingRegistrationReminderRead] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isPageTransitionPending, startPageTransition] = useTransition();
   const seenRealtimeIdsRef = useRef<number[]>([]);
@@ -108,10 +111,19 @@ export default function MainApp() {
       .then(r => r.json())
       .then((d) => {
         const nextUnreadCount = Number(d.unreadCount || 0);
-        const latestUnread = Array.isArray(d.data) ? d.data[0] : null;
+        const unreadItems = Array.isArray(d.data) ? d.data as NotifItem[] : [];
+        const latestUnread = unreadItems[0] ?? null;
         const previousUnreadCount = lastUnreadCountRef.current;
+        const nextPendingRegistrationReminder = user?.role === "ctv"
+          ? unreadItems.find((item) =>
+              Number(item.id) > 0
+              && !item.isRead
+              && isContentWorkRegistrationReminderTitle(item.title)
+            ) || null
+          : null;
 
         setUnreadCount(nextUnreadCount);
+        setPendingRegistrationReminder(nextPendingRegistrationReminder);
         lastUnreadCountRef.current = nextUnreadCount;
 
         if (!unreadBaselineReadyRef.current) {
@@ -138,7 +150,7 @@ export default function MainApp() {
         });
       })
       .catch(() => { });
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => {
     refreshUnreadCount(false);
@@ -239,8 +251,42 @@ export default function MainApp() {
       seenNotificationToastIdsRef.current = [];
       lastUnreadCountRef.current = 0;
       unreadBaselineReadyRef.current = false;
+      setPendingRegistrationReminder(null);
+      setMarkingRegistrationReminderRead(false);
     }
   }, [user?.id]);
+
+  const handleOpenContentWorkRegistration = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.open(CONTENT_WORK_REGISTRATION_URL, "_blank", "noopener,noreferrer");
+    }
+  }, []);
+
+  const handleConfirmContentWorkRegistration = useCallback(async () => {
+    if (!pendingRegistrationReminder?.id || markingRegistrationReminderRead) {
+      return;
+    }
+
+    try {
+      setMarkingRegistrationReminderRead(true);
+      const res = await fetch("/api/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: pendingRegistrationReminder.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || "Không thể cập nhật trạng thái thông báo");
+      }
+
+      setPendingRegistrationReminder(null);
+      refreshUnreadCount(false);
+    } catch (error) {
+      window.alert(`❌ ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setMarkingRegistrationReminderRead(false);
+    }
+  }, [markingRegistrationReminderRead, pendingRegistrationReminder, refreshUnreadCount]);
 
   const preloadPage = useCallback((nextPage: Page) => {
     const loader = pageLoaders[nextPage];
@@ -440,6 +486,33 @@ export default function MainApp() {
           }} 
           unreadCount={unreadCount}
         />
+      )}
+      {user?.role === "ctv" && pendingRegistrationReminder && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal" style={{ width: "min(92vw, 520px)", maxWidth: 520 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">{CONTENT_WORK_REGISTRATION_TITLE}</h3>
+            </div>
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ padding: 16, borderRadius: 18, background: "rgba(37, 99, 235, 0.08)", border: "1px solid rgba(37, 99, 235, 0.16)" }}>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: "var(--text-main)" }}>
+                  {pendingRegistrationReminder.message || "Bài viết của bạn đã được chuyển sang tháng sau. Vui lòng đăng ký lại bài trong Content Work."}
+                </p>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: "var(--text-muted)" }}>
+                Mở form đăng ký trước, sau đó quay lại bấm <strong>Đã đăng ký</strong> để hoàn tất nhắc việc này.
+              </p>
+            </div>
+            <div className="modal-footer" style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "flex-end" }}>
+              <button className="btn-ios-pill btn-ios-secondary" onClick={handleOpenContentWorkRegistration} disabled={markingRegistrationReminderRead}>
+                Đến trang đăng ký
+              </button>
+              <button className="btn-ios-pill btn-ios-primary" onClick={handleConfirmContentWorkRegistration} disabled={markingRegistrationReminderRead}>
+                {markingRegistrationReminderRead ? "Đang cập nhật..." : "Đã đăng ký"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

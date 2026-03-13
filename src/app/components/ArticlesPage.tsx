@@ -97,6 +97,7 @@ export default function ArticlesPage() {
   const [collaboratorsLoaded, setCollaboratorsLoaded] = useState(false);
   const [formData, setFormData] = useState<Partial<Article>>({});
   const [savingArticle, setSavingArticle] = useState(false);
+  const [movingArticleToNextMonth, setMovingArticleToNextMonth] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [importStep, setImportStep] = useState(1);
@@ -1064,6 +1065,62 @@ export default function ArticlesPage() {
       }
     } finally {
       setSavingArticle(false);
+    }
+  };
+
+  const handleMoveToNextMonth = async () => {
+    if (!formData.id || movingArticleToNextMonth || savingArticle) return;
+    if (formData.authorBucket === "editorial") {
+      showUiToast("Khong the chuyen thang", "Bài của Biên tập/Admin không dùng tính năng chuyển sang tháng sau.", "warning");
+      return;
+    }
+
+    const articleTitle = String(formData.title || "bài viết");
+    const confirmed = window.confirm(`Chuyển "${articleTitle}" sang tháng sau và nhắc CTV đăng ký lại trong Content Work?`);
+    if (!confirmed) return;
+
+    try {
+      setMovingArticleToNextMonth(true);
+      const res = await fetch("/api/articles", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: formData.id,
+          action: "move-to-next-month",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Không thể chuyển bài viết sang tháng sau");
+      }
+
+      setShowModal(false);
+      setFormData({});
+      if (data.article) {
+        mergeSavedArticleIntoList(data.article as Article, true);
+      } else {
+        const currentQuery = articleListQueryRef.current;
+        fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
+      }
+
+      const movedToMonthLabel = String(data.movedToMonthLabel || "tháng sau");
+      if (data.registrationReminderQueued) {
+        showUiToast(
+          "Da chuyen bai sang thang sau",
+          `"${articleTitle}" da chuyen sang ${movedToMonthLabel}. CTV se nhan popup "Đăng ký lại bài trong Content Work".`,
+          "success"
+        );
+      } else {
+        showUiToast(
+          "Da chuyen bai sang thang sau",
+          `"${articleTitle}" da chuyen sang ${movedToMonthLabel}, nhưng hệ thống chưa tìm thấy tài khoản CTV để gửi popup nhắc việc.`,
+          "warning"
+        );
+      }
+    } catch (error) {
+      showUiToast("Chuyen bai that bai", error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setMovingArticleToNextMonth(false);
     }
   };
 
@@ -2399,12 +2456,27 @@ export default function ArticlesPage() {
                 </div>
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowModal(false)} disabled={savingArticle}>Hủy bỏ</button>
-              <button className="btn-ios-pill btn-ios-primary" onClick={handleSave} disabled={savingArticle}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>save</span>
-                {savingArticle ? "Đang lưu..." : "Lưu thông tin"}
-              </button>
+            <div className="modal-footer" style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                {canManageArticles && Boolean(formData.id) && formData.authorBucket !== "editorial" && (
+                  <button
+                    className="btn-ios-pill btn-ios-secondary"
+                    onClick={handleMoveToNextMonth}
+                    disabled={savingArticle || movingArticleToNextMonth}
+                    style={{ borderColor: "rgba(245, 158, 11, 0.28)", color: "#b45309", background: "rgba(245, 158, 11, 0.1)" }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>event_upcoming</span>
+                    {movingArticleToNextMonth ? "Đang chuyển..." : "Chuyển sang tháng sau"}
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginLeft: "auto" }}>
+                <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowModal(false)} disabled={savingArticle || movingArticleToNextMonth}>Hủy bỏ</button>
+                <button className="btn-ios-pill btn-ios-primary" onClick={handleSave} disabled={savingArticle || movingArticleToNextMonth}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>save</span>
+                  {savingArticle ? "Đang lưu..." : "Lưu thông tin"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

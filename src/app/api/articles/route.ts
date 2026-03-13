@@ -11,6 +11,8 @@ import {
 import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import { extractArticleIdFromLink } from "@/lib/article-link-id";
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
+import { CONTENT_WORK_REGISTRATION_TITLE } from "@/lib/content-work-registration";
+import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
@@ -102,6 +104,68 @@ const EDITORIAL_PEN_NAMES = new Set(["nhan btv", "nhân btv"]);
 function isEditorialPenName(value: string | null | undefined) {
   const normalized = normalizeString(value).toLowerCase();
   return EDITORIAL_PEN_NAMES.has(normalized);
+}
+
+function formatTwoDigit(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function buildNextMonthDate(dateValue: string | null | undefined) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalizeString(dateValue));
+  const now = new Date();
+  const currentYear = match ? Number(match[1]) : now.getFullYear();
+  const currentMonth = match ? Number(match[2]) : now.getMonth() + 1;
+  const currentDay = match ? Number(match[3]) : now.getDate();
+  const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+  const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+  const nextMonthLastDay = new Date(nextYear, nextMonth, 0).getDate();
+  const nextDay = Math.min(Math.max(currentDay, 1), nextMonthLastDay);
+
+  return `${nextYear}-${formatTwoDigit(nextMonth)}-${formatTwoDigit(nextDay)}`;
+}
+
+function formatMonthYearLabel(dateValue: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalizeString(dateValue));
+  if (!match) return "tháng tới";
+  return `tháng ${Number(match[2])}/${match[1]}`;
+}
+
+async function resolveArticleReminderRecipient(article: { teamId: number | null; penName: string }) {
+  const normalizedTeamId = normalizeTeamId(article.teamId);
+  const identityValues = expandCollaboratorIdentityValues([article.penName]);
+  if (!normalizedTeamId || identityValues.length === 0) {
+    return null;
+  }
+
+  const candidates = await db
+    .select({
+      userId: users.id,
+      userRole: users.role,
+      penName: collaborators.penName,
+      name: collaborators.name,
+    })
+    .from(users)
+    .innerJoin(collaborators, eq(users.collaboratorId, collaborators.id))
+    .where(eq(users.teamId, normalizedTeamId))
+    .all();
+
+  const recipient = candidates.find((candidate) =>
+    candidate.userRole === "ctv"
+    && matchesIdentityCandidate(identityValues, candidate.penName)
+  ) || candidates.find((candidate) =>
+    candidate.userRole === "ctv"
+    && matchesIdentityCandidate(identityValues, candidate.name)
+  );
+
+  if (!recipient) {
+    return null;
+  }
+
+  return {
+    userId: Number(recipient.userId),
+    penName: recipient.penName,
+    name: recipient.name,
+  };
 }
 
 async function runNonBlockingStep<T>(task: () => Promise<T>, options: NonBlockingStepOptions<T>): Promise<T> {
@@ -1213,6 +1277,101 @@ export async function PUT(request: NextRequest) {
       });
 
       return NextResponse.json({ success: true, updatedCount: ids.length, reviewerName });
+    }
+
+    if (action === "move-to-next-month") {
+      if (!canManageArticles) {
+        return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+      }
+
+      const id = Number(rawBody.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return NextResponse.json({ success: false, error: "ID bài viết không hợp lệ" }, { status: 400 });
+      }
+
+      const existing = await db.select().from(articles).where(eq(articles.id, id)).get();
+      if (!existing) {
+        return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+      }
+      if (!canAccessTeam(context, existing.teamId)) {
+        return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+      }
+
+      const [existingWithMetadata] = await attachArticleResponseMetadata([existing], context.user.id, canManageArticles);
+      if (existingWithMetadata?.authorBucket === "editorial") {
+        return NextResponse.json(
+          { success: false, error: "Chỉ chuyển sang tháng sau cho bài của CTV" },
+          { status: 400 }
+        );
+      }
+
+      const movedToDate = buildNextMonthDate(existing.date);
+      const nextMonthLabel = formatMonthYearLabel(movedToDate);
+      const updatedAt = new Date().toISOString();
+      const registrationRecipient = await resolveArticleReminderRecipient({
+        teamId: existing.teamId,
+        penName: existing.penName,
+      });
+
+      await db.update(articles)
+        .set({
+          date: movedToDate,
+          status: "NeedsFix",
+          updatedAt,
+        })
+        .where(eq(articles.id, id))
+        .run();
+
+      scheduleBackgroundWork(async () => {
+        await runNonBlockingStep(
+          () => writeAuditLog({
+            userId: context.user.id,
+            action: "article_moved_to_next_month",
+            entity: "article",
+            entityId: id,
+            payload: {
+              previousDate: existing.date,
+              movedToDate,
+              previousStatus: existing.status,
+              nextStatus: "NeedsFix",
+              registrationRecipientUserId: registrationRecipient?.userId ?? null,
+              note: "Google Sheet không tự chuyển tháng ở bước này; CTV cần đăng ký lại trong Content Work.",
+            },
+          }),
+          { scope: "articles.put.moveNextMonth.audit", fallback: undefined }
+        );
+
+        if (registrationRecipient?.userId) {
+          await runNonBlockingStep(
+            () => createNotification({
+              fromUserId: context.user.id,
+              toUserId: registrationRecipient.userId,
+              toPenName: registrationRecipient.penName ?? existing.penName,
+              type: "system",
+              title: CONTENT_WORK_REGISTRATION_TITLE,
+              message: `Bài "${existing.title}" đã được chuyển sang ${nextMonthLabel}. Vui lòng đăng ký lại bài trong Content Work.`,
+              relatedArticleId: id,
+            }),
+            { scope: "articles.put.moveNextMonth.notification", fallback: undefined }
+          );
+        }
+
+        await runNonBlockingStep(
+          () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
+          { scope: "articles.put.moveNextMonth.realtime", fallback: null }
+        );
+      });
+
+      const article = await loadArticleResponseRow(id, context.user.id, canManageArticles);
+
+      return NextResponse.json({
+        success: true,
+        article,
+        movedToDate,
+        movedToMonthLabel: nextMonthLabel,
+        registrationReminderQueued: Boolean(registrationRecipient?.userId),
+        backgroundSyncQueued: false,
+      });
     }
 
     const body = rawBody as ArticleUpdateInput;
