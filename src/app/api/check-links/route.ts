@@ -70,10 +70,13 @@ const LINK_CHECK_CONCURRENCY = 8;
 const LINK_CHECK_TIMEOUT_MS = 10_000;
 const GENERIC_SOFT_404_PATTERNS = [
   ["page not found"],
+  ["404 page"],
+  ["404 not found"],
   ["trang khong ton tai"],
   ["khong tim thay trang"],
-  ["404", "ve trang chu"],
-  ["404", "go to homepage"],
+  ["trang nay khong ton tai"],
+  ["duong dan khong ton tai"],
+  ["not found", "go to homepage"],
 ] as const;
 const HOST_SOFT_404_PATTERNS = [
   {
