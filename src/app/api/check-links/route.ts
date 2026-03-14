@@ -180,6 +180,7 @@ async function checkLinkStatus(url: string): Promise<CheckedLinkStatus> {
   try {
     const headResponse = await fetchWithTimeout(url, { method: "HEAD" }).catch(() => null);
     const headFinalUrl = headResponse?.url || url;
+    const headLooksHealthy = Boolean(headResponse?.ok && !isRedirectedArticleIdMismatch(url, headFinalUrl));
 
     if (headResponse && headResponse.status >= 400 && headResponse.status !== 403 && headResponse.status !== 405) {
       return { url, finalUrl: headFinalUrl, status: "broken", reason: `head:${headResponse.status}` };
@@ -196,6 +197,15 @@ async function checkLinkStatus(url: string): Promise<CheckedLinkStatus> {
 
     const getResponse = await fetchWithTimeout(url, { method: "GET" });
     const finalUrl = getResponse.url || headFinalUrl || url;
+    if (!getResponse.ok && headLooksHealthy && (getResponse.status === 403 || getResponse.status === 429)) {
+      return {
+        url,
+        finalUrl,
+        status: "ok",
+        reason: `head-ok:get-blocked:${getResponse.status}`,
+      };
+    }
+
     if (!getResponse.ok || isRedirectedArticleIdMismatch(url, finalUrl)) {
       return {
         url,
