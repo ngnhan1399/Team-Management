@@ -351,23 +351,23 @@ function findNextAvailableArticleRowNumber_(sheet, headerInfo, startRowNumber) {
   const trackedColumns = getTrackedArticleColumns_(headerInfo);
   const articleLastColumn = getArticleTableLastColumn_(headerInfo);
   if (!trackedColumns.length || !articleLastColumn) {
-    return Math.max(headerInfo.rowNumber + 1, startRowNumber);
+    return 0;
   }
 
   const searchStartRow = Math.max(headerInfo.rowNumber + 1, startRowNumber);
   const maxRows = sheet.getMaxRows();
-  if (searchStartRow <= maxRows) {
-    const values = sheet.getRange(searchStartRow, 1, maxRows - searchStartRow + 1, articleLastColumn).getDisplayValues();
-    for (let index = 0; index < values.length; index += 1) {
-      if (isArticleAreaBlank_(values[index], trackedColumns)) {
-        return searchStartRow + index;
-      }
+  if (searchStartRow > maxRows) {
+    return 0;
+  }
+
+  const values = sheet.getRange(searchStartRow, 1, maxRows - searchStartRow + 1, articleLastColumn).getDisplayValues();
+  for (let index = 0; index < values.length; index += 1) {
+    if (isArticleAreaBlank_(values[index], trackedColumns)) {
+      return searchStartRow + index;
     }
   }
 
-  const rowsToAdd = Math.max(1, searchStartRow - maxRows);
-  sheet.insertRowsAfter(maxRows, rowsToAdd);
-  return searchStartRow;
+  return 0;
 }
 
 function copyTemplateRow_(sheet, headerInfo, templateRowNumber, targetRowNumber) {
@@ -384,6 +384,10 @@ function copyTemplateRow_(sheet, headerInfo, templateRowNumber, targetRowNumber)
 function appendArticleRow_(sheet, headerInfo, article) {
   const lastArticleRow = findLastArticleRowNumber_(sheet, headerInfo);
   const targetRowNumber = findNextAvailableArticleRowNumber_(sheet, headerInfo, lastArticleRow + 1);
+  if (!targetRowNumber) {
+    return 0;
+  }
+
   const templateRowNumber = Math.max(headerInfo.rowNumber + 1, lastArticleRow || headerInfo.rowNumber + 1);
   copyTemplateRow_(sheet, headerInfo, templateRowNumber, targetRowNumber);
 
@@ -402,9 +406,13 @@ function appendArticleRow_(sheet, headerInfo, article) {
   return targetRowNumber;
 }
 
-function deleteArticleRow_(sheet, rowNumber) {
+function deleteArticleRow_(sheet, headerInfo, rowNumber) {
   if (!rowNumber || rowNumber < 1) return false;
-  sheet.deleteRow(rowNumber);
+
+  const articleLastColumn = getArticleTableLastColumn_(headerInfo);
+  if (!articleLastColumn) return false;
+
+  sheet.getRange(rowNumber, 1, 1, articleLastColumn).clearContent();
   return true;
 }
 
@@ -697,19 +705,19 @@ function doPost(e) {
 
     return jsonResponse_({
       success: false,
-      error: `Không tìm thấy dòng tương ứng cho bài "${article.title || article.articleId || ''}" trong tab ${sheet.getName()}.`,
+      error: `Không tìm thấy dòng tương ứng cho bài "${article.title || article.articleId || ''}" trong tab ${sheet.getName()}, hoặc không còn hàng trống để ghi mới.`,
     });
   }
 
   if (String(body.action || '') === 'deleteArticle') {
-    deleteArticleRow_(sheet, rowNumber);
+    deleteArticleRow_(sheet, headerInfo, rowNumber);
     SpreadsheetApp.flush();
     const parsedSheet = parseMonthlySheetName_(sheet.getName());
     const sourceRowKey = String(body.sourceRowKey || resolveSourceRowKey_(article)).trim();
 
     return jsonResponse_({
       success: true,
-      message: `Đã xóa dòng ${rowNumber} trong tab ${sheet.getName()}.`,
+      message: `Đã xóa dữ liệu dòng ${rowNumber} trong tab ${sheet.getName()}.`,
       rowNumber,
       deleted: true,
       notFoundAcrossWorkbook: false,
@@ -739,3 +747,5 @@ function doPost(e) {
     updatedFields,
   });
 }
+
+

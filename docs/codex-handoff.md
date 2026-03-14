@@ -12,7 +12,8 @@
   - dùng lại hàng trống đó để ghi dữ liệu
   - chỉ copy format/data validation trong vùng cột bài viết
   - không đụng vào phần KPI/nhuận bên phải
-  - chỉ khi hết hẳn hàng trống thì mới thêm hàng ở **cuối** sheet, không chèn giữa bảng
+  - nếu hết hàng trống thì **báo lỗi và dừng**, không tự thêm hàng mới
+  - khi xóa bài chỉ clear dữ liệu vùng bài viết của dòng đó, không `delete row`
 
 ### File đã động vào
 
@@ -734,3 +735,5 @@ npm run build
 
 ## Rủi ro / ghi chú
 - Bản vá hiện dùng `tableLayout: fixed` và thu cột `Ngày`, `Người duyệt`, `Link`; nếu sau này badge hoặc text trong các cột này bị nới lại, cụm thao tác có thể lại trôi ra mép phải.
+
+

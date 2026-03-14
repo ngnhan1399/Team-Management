@@ -83,7 +83,7 @@ Nếu bạn tạo bài mới bằng form trong công cụ:
 - thử tìm bài tương ứng trong tab đó để tránh trùng
 - nếu chưa có thì ưu tiên dùng lại **hàng trống kế tiếp ngay dưới bảng bài viết**
 - không còn `insert row` chen giữa sheet như trước, nên sẽ không đẩy lệch các block KPI/nhuận ở bên phải
-- chỉ khi vùng bài viết đã dùng hết hàng có sẵn thì script mới nới thêm hàng ở **cuối sheet**
+- nếu không còn hàng trống sẵn trong vùng bài viết thì script sẽ **dừng và báo lỗi**, không tự thêm hàng mới
 - đồng thời tạo liên kết `article_sync_links` để các lần sync sau tiếp tục đi đúng cùng một dòng
 
 Các trường sẽ được ghi sang sheet theo mapping:
@@ -114,6 +114,7 @@ Các trường sẽ được ghi sang sheet theo mapping:
 - Nếu khóa nhận diện dòng thay đổi sau khi app cập nhật dữ liệu, lần sync sau vẫn sẽ tự bắt lại đúng dòng thay vì xóa nhầm bài.
 - Các tab mới thêm vào vẫn được nhận diện nếu tên tab có dạng tháng/năm, ví dụ `Tháng 032026`, `Tháng 03/2026`, `Tháng 3 2026`, hoặc `Bản sao của Tháng ...`.
 - Script Apps Script mới chỉ copy format/data validation trong vùng cột của bảng bài viết, không chạm vào các cột KPI/nhuận ở bên phải.
+- Khi xóa bài từ app, script chỉ **xóa dữ liệu trong vùng bài viết của dòng đó**, không `delete row` để tránh kéo lệch cả sheet.
 
 ## Khi cập nhật Apps Script
 
@@ -130,4 +131,6 @@ cần làm lại các bước sau trên Google Apps Script:
 3. `Triển khai` lại web app.
 4. Dùng URL web app mới nhất nếu Google tạo deployment URL khác.
 
-Nếu không redeploy lại Apps Script, web app cũ vẫn sẽ chạy logic cũ và tiếp tục `insert row` giữa sheet.
+Nếu không redeploy lại Apps Script, web app cũ vẫn sẽ chạy logic cũ và tiếp tục thay đổi cấu trúc sheet ngoài ý muốn.
+
+
