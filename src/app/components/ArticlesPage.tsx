@@ -372,7 +372,7 @@ export default function ArticlesPage() {
 
     if (visibleItems.length === 0) {
       showUiToast(
-        "Khong co link can kiem tra",
+        "Không có link cần kiểm tra",
         deferredArticles.some((article) => article.link && article.link.startsWith("http"))
           ? "Các link đang hiển thị đã có trạng thái kiểm tra. Bạn có thể bấm lại để recheck."
           : "Không có bài nào trong danh sách hiện tại có link hợp lệ để kiểm tra.",
@@ -415,13 +415,13 @@ export default function ArticlesPage() {
       ].filter(Boolean).join(", ");
 
       showUiToast(
-        "Da kiem tra link",
+        "Đã kiểm tra link",
         toastDetails ? `Đã xử lý ${visibleItems.length} link: ${toastDetails}.` : "Không có thay đổi mới về trạng thái link.",
         brokenCount > 0 ? "warning" : "success"
       );
     } catch (error) {
       showUiToast(
-        "Kiem tra link that bai",
+        "Kiểm tra link thất bại",
         error instanceof Error ? error.message : "Không thể kiểm tra link lúc này.",
         "error"
       );
@@ -495,7 +495,7 @@ export default function ArticlesPage() {
       return;
     }
     if (!canManageArticles && !targetReviewerName) {
-      showUiToast("Khong the nhan bai", "Tài khoản reviewer hiện chưa có tên hiển thị hợp lệ để nhận bài.", "error");
+      showUiToast("Không thể nhận bài", "Tài khoản reviewer hiện chưa có tên hiển thị hợp lệ để nhận bài.", "error");
       return;
     }
 
@@ -516,7 +516,7 @@ export default function ArticlesPage() {
       }
 
       showUiToast(
-        "Da cap nhat nguoi duyet",
+        "Đã cập nhật người duyệt",
         targetReviewerName
           ? `Đã gán ${getDisplayedPenName(targetReviewerName)} cho ${data.updatedCount || selectedArticleIds.length} bài.`
           : `Đã bỏ phân công reviewer cho ${data.updatedCount || selectedArticleIds.length} bài.`,
@@ -527,7 +527,7 @@ export default function ArticlesPage() {
       const currentQuery = articleListQueryRef.current;
       fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
     } catch (error) {
-      showUiToast("Cap nhat reviewer that bai", error instanceof Error ? error.message : String(error), "error");
+      showUiToast("Cập nhật reviewer thất bại", error instanceof Error ? error.message : String(error), "error");
     } finally {
       setBulkAssigningReviewer(false);
     }
@@ -780,7 +780,7 @@ export default function ArticlesPage() {
 
     setDeleteExecuting(true);
     setDeleteError("");
-    showUiToast("Dang xoa du lieu", `He thong dang xu ly ${deletePreview.total} bai viet.`, "info");
+    showUiToast("Đang xóa dữ liệu", `Hệ thống đang xử lý ${deletePreview.total} bài viết.`, "info");
     try {
       const criteria = deleteMode === "current_filters" ? currentFilterDeleteCriteria : deleteCriteria;
       const res = await fetch("/api/articles", {
@@ -799,19 +799,19 @@ export default function ArticlesPage() {
       setShowDeleteModal(false);
       setDeletePreview(null);
       showUiToast(
-        "Da xoa bai viet",
+        "Đã xóa bài viết",
         data.sheetSyncWarnings?.length
-          ? `Da xoa ${data.deletedCount} bai viet. Co ${data.sheetSyncWarnings.length} canh bao dong bo Google Sheet.`
+          ? `Đã xóa ${data.deletedCount} bài viết. Có ${data.sheetSyncWarnings.length} cảnh báo đồng bộ Google Sheet.`
           : data.backgroundSyncQueued
-            ? `Da xoa ${data.deletedCount} bai viet. Google Sheet dang dong bo nen.`
-          : `Da xoa ${data.deletedCount} bai viet va reset du lieu nhuận but lien quan.`,
+            ? `Đã xóa ${data.deletedCount} bài viết. Google Sheet đang đồng bộ nền.`
+          : `Đã xóa ${data.deletedCount} bài viết và reset dữ liệu nhuận bút liên quan.`,
         data.sheetSyncWarnings?.length ? "warning" : data.backgroundSyncQueued ? "info" : "success"
       );
       fetchArticles(1, appliedSearch, filters);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setDeleteError(message);
-      showUiToast("Xoa that bai", message, "error");
+      showUiToast("Xóa thất bại", message, "error");
     } finally {
       setDeleteExecuting(false);
     }
@@ -821,7 +821,7 @@ export default function ArticlesPage() {
     if (deletingArticleIds.includes(article.id)) return;
 
     if (!article.canDelete && !canManageArticles) {
-      showUiToast("Khong the xoa bai", "Ban chi co the xoa bai do chinh minh tao.", "error");
+      showUiToast("Không thể xóa bài", "Bạn chỉ có thể xóa bài do chính mình tạo.", "error");
       return;
     }
 
@@ -829,7 +829,7 @@ export default function ArticlesPage() {
     if (!confirmed) return;
 
     setDeletingArticleIds((prev) => (prev.includes(article.id) ? prev : [...prev, article.id]));
-    showUiToast("Dang xoa bai viet", `Dang xu ly "${article.title}".`, "info");
+    showUiToast("Đang xóa bài viết", `Đang xử lý "${article.title}".`, "info");
     try {
       const res = await fetch(`/api/articles?id=${article.id}`, { method: "DELETE" });
       const data = await res.json();
@@ -846,18 +846,18 @@ export default function ArticlesPage() {
         };
       });
       showUiToast(
-        "Da xoa bai viet",
+        "Đã xóa bài viết",
         data.sheetSyncWarnings?.length
-          ? `Da xoa "${article.title}". Google Sheet con ${data.sheetSyncWarnings.length} canh bao can kiem tra.`
+          ? `Đã xóa "${article.title}". Google Sheet còn ${data.sheetSyncWarnings.length} cảnh báo cần kiểm tra.`
           : data.backgroundSyncQueued
-            ? `Da xoa "${article.title}". Google Sheet dang dong bo nen.`
-          : `Da xoa "${article.title}".`,
+            ? `Đã xóa "${article.title}". Google Sheet đang đồng bộ nền.`
+          : `Đã xóa "${article.title}".`,
         data.sheetSyncWarnings?.length ? "warning" : data.backgroundSyncQueued ? "info" : "success"
       );
       const currentQuery = articleListQueryRef.current;
       fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
     } catch (error) {
-      showUiToast("Xoa bai that bai", error instanceof Error ? error.message : String(error), "error");
+      showUiToast("Xóa bài thất bại", error instanceof Error ? error.message : String(error), "error");
     } finally {
       setDeletingArticleIds((prev) => prev.filter((id) => id !== article.id));
     }
@@ -1009,8 +1009,8 @@ export default function ArticlesPage() {
       if (data.backgroundSyncQueued) {
         const savedTitle = String(data.article?.title || formData.title || "bài viết");
         showUiToast(
-          isEditing ? "Da cap nhat bai viet" : "Da luu bai viet",
-          `"${savedTitle}" da luu. Google Sheet dang dong bo nen.`,
+          isEditing ? "Đã cập nhật bài viết" : "Đã lưu bài viết",
+          `"${savedTitle}" đã lưu. Google Sheet đang đồng bộ nền.`,
           "info"
         );
       }
@@ -1029,7 +1029,7 @@ export default function ArticlesPage() {
   const handleMoveToNextMonth = async () => {
     if (!formData.id || movingArticleToNextMonth || savingArticle) return;
     if (formData.authorBucket === "editorial") {
-      showUiToast("Khong the chuyen thang", "Bài của Biên tập/Admin không dùng tính năng chuyển sang tháng sau.", "warning");
+      showUiToast("Không thể chuyển tháng", "Bài của Biên tập/Admin không dùng tính năng chuyển sang tháng sau.", "warning");
       return;
     }
 
@@ -1064,19 +1064,19 @@ export default function ArticlesPage() {
       const movedToMonthLabel = String(data.movedToMonthLabel || "tháng sau");
       if (data.registrationReminderQueued) {
         showUiToast(
-          "Da chuyen bai sang thang sau",
-          `"${articleTitle}" da chuyen sang ${movedToMonthLabel}. CTV se nhan popup "Đăng ký lại bài trong Content Work".`,
+          "Đã chuyển bài sang tháng sau",
+          `"${articleTitle}" đã chuyển sang ${movedToMonthLabel}. CTV sẽ nhận popup "Đăng ký lại bài trong Content Work".`,
           "success"
         );
       } else {
         showUiToast(
-          "Da chuyen bai sang thang sau",
-          `"${articleTitle}" da chuyen sang ${movedToMonthLabel}, nhưng hệ thống chưa tìm thấy tài khoản CTV để gửi popup nhắc việc.`,
+          "Đã chuyển bài sang tháng sau",
+          `"${articleTitle}" đã chuyển sang ${movedToMonthLabel}, nhưng hệ thống chưa tìm thấy tài khoản CTV để gửi popup nhắc việc.`,
           "warning"
         );
       }
     } catch (error) {
-      showUiToast("Chuyen bai that bai", error instanceof Error ? error.message : String(error), "error");
+      showUiToast("Chuyển bài thất bại", error instanceof Error ? error.message : String(error), "error");
     } finally {
       setMovingArticleToNextMonth(false);
     }
@@ -1335,7 +1335,7 @@ export default function ArticlesPage() {
       focusSyncedArticles(syncResult.month, syncResult.year);
       if (shouldShowToast) {
         showUiToast(
-          "Da dong bo Google Sheet",
+          "Đã đồng bộ Google Sheet",
           `Đã đồng bộ dữ liệu tháng ${syncResult.month}/${syncResult.year}.`,
           "success"
         );
@@ -1348,7 +1348,7 @@ export default function ArticlesPage() {
       setGoogleSyncResult(null);
       if (shouldShowToast) {
         showUiToast(
-          "Dong bo that bai",
+          "Đồng bộ thất bại",
           error instanceof Error ? error.message : String(error),
           "error"
         );
@@ -2839,3 +2839,5 @@ export default function ArticlesPage() {
 }
 
 /* ══════════════════════════ TEAM ══════════════════════════ */
+
+

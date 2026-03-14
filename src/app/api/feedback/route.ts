@@ -144,8 +144,8 @@ export async function POST(request: NextRequest) {
           fromUserId: context.user.id,
           toUserId: adminId,
           type: "info" as const,
-          title: "Feedback moi tu nguoi dung",
-          message: `${getContextDisplayName(context)} da gui feedback: ${title}`,
+          title: "Feedback mới từ người dùng",
+          message: `${getContextDisplayName(context)} đã gửi feedback: ${title}`,
         }))
       );
     }
@@ -223,8 +223,8 @@ export async function PUT(request: NextRequest) {
         fromUserId: context.user.id,
         toUserId: existing.userId,
         type: "system",
-        title: "Feedback cua ban da duoc cap nhat",
-        message: `Trang thai feedback "${existing.title}" da chuyen sang: ${FEEDBACK_STATUS_LABELS[status]}.`,
+        title: "Feedback của bạn đã được cập nhật",
+        message: `Trạng thái feedback "${existing.title}" đã chuyển sang: ${FEEDBACK_STATUS_LABELS[status]}.`,
       }]);
     }
 
@@ -252,3 +252,4 @@ export async function PUT(request: NextRequest) {
     return handleServerError("feedback.put", error);
   }
 }
+

@@ -282,8 +282,8 @@ export async function PUT(request: NextRequest) {
                 fromUserId: context.user.id,
                 toUserId: adminUser.id,
                 type: "error_fix",
-                title: "✅ CTV da sua loi bai viet",
-                message: `CTV da sua loi bai "${article.title}":\n${ctvResponse}`,
+                title: "✅ CTV đã sửa lỗi bài viết",
+                message: `CTV đã sửa lỗi bài "${article.title}":\n${ctvResponse}`,
                 relatedArticleId: review.articleId,
             });
         }
@@ -319,3 +319,4 @@ export async function PUT(request: NextRequest) {
         return handleServerError("articles.review.put", error);
     }
 }
+

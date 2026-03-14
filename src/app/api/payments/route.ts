@@ -598,8 +598,8 @@ export async function PUT(request: NextRequest) {
       await notifyPaymentStatus(
         context.user.id,
         payment.penName,
-        "Nhuan but da duoc duyet",
-        `Nhuan but ky ${payment.month}/${payment.year} cua ban da duoc duyet.`,
+        "Nhuận bút đã được duyệt",
+        `Nhuận bút kỳ ${payment.month}/${payment.year} của bạn đã được duyệt.`,
         payment.teamId
       );
 
@@ -632,8 +632,8 @@ export async function PUT(request: NextRequest) {
     await notifyPaymentStatus(
       context.user.id,
       payment.penName,
-      "Nhuan but da thanh toan",
-      `Nhuan but ky ${payment.month}/${payment.year} cua ban da duoc thanh toan.`,
+      "Nhuận bút đã thanh toán",
+      `Nhuận bút kỳ ${payment.month}/${payment.year} của bạn đã được thanh toán.`,
       payment.teamId
     );
 
@@ -655,3 +655,4 @@ export async function PUT(request: NextRequest) {
     return handleServerError("payments.put", error);
   }
 }
+

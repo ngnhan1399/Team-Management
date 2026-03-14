@@ -108,36 +108,36 @@ export function diagnoseRuntimeError(error: unknown): RuntimeIssue {
     return {
       code: "database_unreachable",
       message: looksLikeLocalFallback(message)
-        ? "Khong ket noi duoc PostgreSQL tai 127.0.0.1:5432. Thuong do DATABASE_URL production dang thieu hoac sai."
-        : "Khong ket noi duoc PostgreSQL. Kiem tra DATABASE_URL hoac bo bien Nile, DATABASE_SSL va trang thai database server.",
+        ? "Không kết nối được PostgreSQL tại 127.0.0.1:5432. Thường do DATABASE_URL production đang thiếu hoặc sai."
+        : "Không kết nối được PostgreSQL. Kiểm tra DATABASE_URL hoặc bộ biến Nile, DATABASE_SSL và trạng thái database server.",
     };
   }
 
   if (code === "ENOTFOUND") {
     return {
       code: "database_host_not_found",
-      message: "Khong tim thay host PostgreSQL. Kiem tra lai host trong DATABASE_URL.",
+      message: "Không tìm thấy host PostgreSQL. Kiểm tra lại host trong DATABASE_URL.",
     };
   }
 
   if (code === "28P01" || normalizedMessage.includes("password authentication failed")) {
     return {
       code: "database_auth_failed",
-      message: "Xac thuc PostgreSQL that bai. Kiem tra user/password trong DATABASE_URL hoac bo bien Nile.",
+      message: "Xác thực PostgreSQL thất bại. Kiểm tra user/password trong DATABASE_URL hoặc bộ biến Nile.",
     };
   }
 
   if (code === "3D000" || normalizedMessage.includes("does not exist")) {
     return {
       code: "database_missing",
-      message: "Database dich khong ton tai hoac chua duoc tao dung ten.",
+      message: "Database đích không tồn tại hoặc chưa được tạo đúng tên.",
     };
   }
 
   if (normalizedMessage.includes("jwt_secret")) {
     return {
       code: "invalid_jwt_secret",
-      message: "JWT_SECRET dang thieu hoac khong hop le.",
+      message: "JWT_SECRET đang thiếu hoặc không hợp lệ.",
     };
   }
 
@@ -146,3 +146,4 @@ export function diagnoseRuntimeError(error: unknown): RuntimeIssue {
     message: "He thong gap loi runtime khi khoi tao auth/database.",
   };
 }
+
