@@ -68,7 +68,7 @@ function shouldUseBrowserFallback(url: string) {
 }
 
 async function getFallbackBrowser() {
-  if (!process.env.VERCEL) {
+  if (process.platform !== "linux") {
     return null;
   }
 
@@ -113,7 +113,7 @@ export async function checkLinkStatusWithBrowser(url: string): Promise<BrowserLi
 
   const browser = await getFallbackBrowser();
   if (!browser) {
-    return null;
+    return { finalUrl: url, status: "unknown", reason: "browser:unavailable" };
   }
 
   let page: Page | null = null;
@@ -155,8 +155,9 @@ export async function checkLinkStatusWithBrowser(url: string): Promise<BrowserLi
     }
 
     return { finalUrl, status: "ok", reason: `browser:${responseStatus || 200}` };
-  } catch {
-    return null;
+  } catch (error) {
+    const errorName = error instanceof Error ? error.name : "unknown";
+    return { finalUrl: url, status: "unknown", reason: `browser:error:${errorName}` };
   } finally {
     await page?.close().catch(() => undefined);
   }
