@@ -11,7 +11,20 @@ jobs:
   run-link-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger scheduled link check
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run scheduled link check
         env:
           LINK_CHECK_URL: ${{ secrets.LINK_CHECK_URL }}
           LINK_CHECK_AUTOMATION_TOKEN: ${{ secrets.LINK_CHECK_AUTOMATION_TOKEN }}
@@ -21,8 +34,4 @@ jobs:
             exit 0
           fi
 
-          curl --fail --silent --show-error \
-            -X POST "$LINK_CHECK_URL" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $LINK_CHECK_AUTOMATION_TOKEN" \
-            --data '{"trigger":"scheduled"}'
+          node scripts/link-check-browser-runner.mjs

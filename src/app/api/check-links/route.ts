@@ -41,10 +41,20 @@ type LinkCheckResultItem = {
   finalUrl?: string;
 };
 
+type LinkCheckPersistItem = {
+  articleId: number;
+  url: string;
+  status: LinkHealthStatus;
+  reason?: string;
+  finalUrl?: string;
+};
+
 type LinkCheckBody = {
   items?: unknown;
+  checkedItems?: unknown;
   urls?: unknown;
   trigger?: unknown;
+  phase?: unknown;
   slotKey?: unknown;
   limit?: unknown;
 };
@@ -124,6 +134,30 @@ function parseRequestItems(value: unknown) {
 function parseLegacyUrls(value: unknown) {
   if (!Array.isArray(value)) return [];
   return Array.from(new Set(value.map((entry) => normalizeLinkCandidate(entry)).filter(Boolean)));
+}
+
+function parsePersistedItems(value: unknown): LinkCheckPersistItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.reduce<LinkCheckPersistItem[]>((acc, item) => {
+    if (!item || typeof item !== "object") return acc;
+    const candidate = item as {
+      articleId?: unknown;
+      url?: unknown;
+      status?: unknown;
+      reason?: unknown;
+      finalUrl?: unknown;
+    };
+    const articleId = Number(candidate.articleId);
+    const url = normalizeLinkCandidate(candidate.url);
+    const status = normalizeString(candidate.status) as LinkHealthStatus;
+    const finalUrl = normalizeLinkCandidate(candidate.finalUrl) || url;
+    const reason = normalizeString(candidate.reason) || undefined;
+    if (!Number.isFinite(articleId) || articleId <= 0 || !url) return acc;
+    if (status !== "ok" && status !== "broken" && status !== "unknown") return acc;
+    acc.push({ articleId, url, status, reason, finalUrl });
+    return acc;
+  }, []);
 }
 
 function detectSoft404Reason(hostname: string, html: string) {
@@ -345,6 +379,22 @@ async function runPersistedChecks(rows: ArticleLinkRow[], slotKey: string | null
   return { items, results };
 }
 
+async function persistProvidedChecks(rows: ArticleLinkRow[], checkedItems: LinkCheckPersistItem[], slotKey: string | null) {
+  const statusMap = new Map<number, CheckedLinkStatus>();
+  for (const item of checkedItems) {
+    statusMap.set(item.articleId, {
+      url: item.url,
+      finalUrl: item.finalUrl || item.url,
+      status: item.status,
+      reason: item.reason,
+    });
+  }
+
+  const items = await persistLinkHealth(rows, statusMap, slotKey);
+  const results = Object.fromEntries(items.map((item) => [item.url, item.status]));
+  return { items, results };
+}
+
 async function selectArticleRowsByIds(articleIds: number[]) {
   if (articleIds.length === 0) return [];
 
@@ -430,7 +480,9 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({} as LinkCheckBody));
   const trigger = normalizeString(body.trigger) === "scheduled" ? "scheduled" : "manual";
+  const phase = normalizeString(body.phase);
   const requestItems = parseRequestItems(body.items);
+  const checkedItems = parsePersistedItems(body.checkedItems);
   const legacyUrls = parseLegacyUrls(body.urls);
   const requestedLimit = Number(body.limit);
 
@@ -464,12 +516,33 @@ export async function POST(request: NextRequest) {
     const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
       ? Math.min(Math.floor(requestedLimit), LINK_CHECK_SCHEDULED_MAX_ITEMS)
       : LINK_CHECK_SCHEDULED_MAX_ITEMS;
-    const rows = requestItems.length > 0
-      ? await selectArticleRowsByIds(Array.from(new Set(requestItems.map((item) => item.articleId))))
+    if (phase === "persist" && checkedItems.length === 0) {
+      return NextResponse.json({ success: false, error: "Thiếu kết quả browser check để lưu." }, { status: 400 });
+    }
+
+    const scheduledIds = phase === "persist"
+      ? Array.from(new Set(checkedItems.map((item) => item.articleId)))
+      : Array.from(new Set(requestItems.map((item) => item.articleId)));
+    const rows = scheduledIds.length > 0
+      ? await selectArticleRowsByIds(scheduledIds)
       : await loadScheduledRows(limit);
     const scopedRows = rows.filter((row) => normalizeLinkCandidate(row.link)).slice(0, limit);
 
-    const { items, results } = await runPersistedChecks(scopedRows, slotKey);
+    if (phase === "prepare") {
+      return NextResponse.json({
+        success: true,
+        trigger,
+        phase: "prepare",
+        slotKey,
+        limit,
+        items: scopedRows.map((row) => ({ articleId: row.id, url: row.link || "" })),
+      });
+    }
+
+    const persisted = phase === "persist"
+      ? await persistProvidedChecks(scopedRows, checkedItems, slotKey)
+      : await runPersistedChecks(scopedRows, slotKey);
+    const { items, results } = persisted;
     const counts = countStatuses(items);
 
     await writeAuditLog({
@@ -479,6 +552,7 @@ export async function POST(request: NextRequest) {
       payload: {
         slotKey,
         limit,
+        phase: phase === "persist" ? "persist" : "run",
         processed: items.length,
         ...counts,
       },
@@ -488,7 +562,15 @@ export async function POST(request: NextRequest) {
       await publishRealtimeEvent(["articles"]);
     }
 
-    return NextResponse.json({ success: true, trigger, slotKey, items, results, counts });
+    return NextResponse.json({
+      success: true,
+      trigger,
+      phase: phase === "persist" ? "persist" : "run",
+      slotKey,
+      items,
+      results,
+      counts,
+    });
   }
 
   const context = await getCurrentUserContext();
