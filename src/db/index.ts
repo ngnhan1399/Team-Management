@@ -229,6 +229,9 @@ const bootstrapStatements = [
     word_count_range TEXT,
     status TEXT NOT NULL DEFAULT 'Submitted',
     link TEXT,
+    link_health_status TEXT,
+    link_health_checked_at TEXT,
+    link_health_check_slot TEXT,
     review_link TEXT,
     reviewer_name TEXT,
     notes TEXT,
@@ -417,7 +420,7 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "6";
+const BOOTSTRAP_SCHEMA_VERSION = "7";
 
 async function getOrCreateDefaultTeamId() {
   const existingDefault = await pool.query(
@@ -466,6 +469,9 @@ export async function initializeDatabase() {
   await ensureColumnExists("payments", "paid_at", "TEXT");
   await ensureColumnExists("payments", "updated_at", "TEXT DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists("articles", "created_by_user_id", "INTEGER");
+  await ensureColumnExists("articles", "link_health_status", "TEXT");
+  await ensureColumnExists("articles", "link_health_checked_at", "TEXT");
+  await ensureColumnExists("articles", "link_health_check_slot", "TEXT");
   await ensureColumnExists("articles", "review_link", "TEXT");
   await ensureColumnExists("users", "is_leader", "BOOLEAN NOT NULL DEFAULT false");
   await ensureColumnExists("users", "team_id", "INTEGER");

@@ -1,0 +1,28 @@
+name: Scheduled Link Check
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+    - cron: "0 7 * * *"
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scheduled link check
+        env:
+          LINK_CHECK_URL: ${{ secrets.LINK_CHECK_URL }}
+          LINK_CHECK_AUTOMATION_TOKEN: ${{ secrets.LINK_CHECK_AUTOMATION_TOKEN }}
+        run: |
+          if [ -z "$LINK_CHECK_URL" ] || [ -z "$LINK_CHECK_AUTOMATION_TOKEN" ]; then
+            echo "LINK_CHECK_URL or LINK_CHECK_AUTOMATION_TOKEN is missing. Skipping."
+            exit 0
+          fi
+
+          curl --fail --silent --show-error \
+            -X POST "$LINK_CHECK_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $LINK_CHECK_AUTOMATION_TOKEN" \
+            --data '{"trigger":"scheduled"}'

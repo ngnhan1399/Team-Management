@@ -64,6 +64,9 @@ export interface Article {
   wordCountRange: string;
   status: string;
   link: string;
+  linkHealthStatus?: "ok" | "broken" | "unknown" | null;
+  linkHealthCheckedAt?: string | null;
+  linkHealthCheckSlot?: string | null;
   reviewLink?: string | null;
   reviewerName: string;
   notes: string;

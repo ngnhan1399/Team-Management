@@ -1,202 +1,495 @@
-import { getCurrentUserContext } from "@/lib/auth";
+import { db, ensureDatabaseInitialized } from "@/db";
+import { articles, auditLogs } from "@/db/schema";
+import {
+  getContextArticleOwnerCandidates,
+  getContextIdentityCandidates,
+  getCurrentUserContext,
+  hasArticleManagerAccess,
+  hasArticleReviewAccess,
+  matchesIdentityCandidate,
+} from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
+import { extractArticleIdFromLink } from "@/lib/article-link-id";
+import {
+  LINK_CHECK_MANUAL_MAX_ITEMS,
+  LINK_CHECK_SCHEDULED_LOOKBACK_DAYS,
+  LINK_CHECK_SCHEDULED_MAX_ITEMS,
+  type LinkHealthStatus,
+  getLatestDueLinkCheckSlot,
+} from "@/lib/link-health";
+import { normalizeString } from "@/lib/normalize";
+import { publishRealtimeEvent } from "@/lib/realtime";
+import { canAccessTeam, getContextTeamId, isLeader } from "@/lib/teams";
+import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
-type LinkCheckStatus = "ok" | "broken" | "unknown";
+export const maxDuration = 60;
+
+type LinkCheckRequestItem = {
+  articleId: number;
+  url: string;
+};
+
+type LinkCheckResultItem = {
+  articleId: number;
+  url: string;
+  status: LinkHealthStatus;
+  checkedAt: string;
+  slotKey: string | null;
+};
+
+type LinkCheckBody = {
+  items?: unknown;
+  urls?: unknown;
+  trigger?: unknown;
+  slotKey?: unknown;
+  limit?: unknown;
+};
+
+type ArticleLinkRow = {
+  id: number;
+  teamId: number | null;
+  penName: string;
+  reviewerName: string | null;
+  status: string;
+  link: string | null;
+  createdByUserId: number | null;
+  date: string;
+  updatedAt: string;
+  linkHealthCheckedAt: string | null;
+};
+
+type CheckedLinkStatus = {
+  url: string;
+  finalUrl: string;
+  status: LinkHealthStatus;
+};
 
 const HTML_SNIFF_LIMIT_BYTES = 32 * 1024;
+const LINK_CHECK_CONCURRENCY = 8;
+const LINK_CHECK_TIMEOUT_MS = 10_000;
 const GENERIC_SOFT_404_PATTERNS = [
-    ["page not found"],
-    ["trang khong ton tai"],
-    ["khong tim thay trang"],
-    ["404", "ve trang chu"],
-    ["404", "go to homepage"],
+  ["page not found"],
+  ["trang khong ton tai"],
+  ["khong tim thay trang"],
+  ["404", "ve trang chu"],
+  ["404", "go to homepage"],
 ] as const;
 const HOST_SOFT_404_PATTERNS = [
-    {
-        hostnamePattern: /(^|\.)fptshop\.com\.vn$/i,
-        patterns: [
-            ["duong dan da het han truy cap hoac khong ton tai"],
-            ["trang het han truy cap hoac khong ton tai"],
-        ] as const,
-    },
+  {
+    hostnamePattern: /(^|\.)fptshop\.com\.vn$/i,
+    patterns: [
+      ["duong dan da het han truy cap hoac khong ton tai"],
+      ["trang het han truy cap hoac khong ton tai"],
+    ] as const,
+  },
 ] as const;
 
-function isPrivateHostname(hostname: string) {
-    const normalized = hostname.trim().toLowerCase();
-    if (!normalized) return true;
-
-    return (
-        normalized === "localhost" ||
-        normalized.endsWith(".localhost") ||
-        normalized === "127.0.0.1" ||
-        normalized === "::1" ||
-        normalized.startsWith("10.") ||
-        normalized.startsWith("127.") ||
-        normalized.startsWith("192.168.") ||
-        normalized.startsWith("169.254.") ||
-        /^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)
-    );
+function foldForPattern(value: unknown) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
-function isLikelyReachableStatus(status: number) {
-    return (status >= 200 && status < 400) || [401, 403, 405, 416, 429].includes(status);
+function normalizeLinkCandidate(value: unknown) {
+  const normalized = normalizeString(value);
+  if (!normalized || !/^https?:\/\//i.test(normalized)) {
+    return "";
+  }
+  return normalized;
 }
 
-function isConfirmedBrokenStatus(status: number) {
-    return [404, 410, 451].includes(status);
+function parseRequestItems(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const articleId = Number((item as { articleId?: unknown }).articleId);
+      const url = normalizeLinkCandidate((item as { url?: unknown }).url);
+      if (!Number.isFinite(articleId) || articleId <= 0 || !url) return null;
+      return { articleId, url };
+    })
+    .filter((item): item is LinkCheckRequestItem => Boolean(item));
 }
 
-function classifyResponseStatus(status: number): LinkCheckStatus {
-    if (isLikelyReachableStatus(status)) return "ok";
-    if (isConfirmedBrokenStatus(status)) return "broken";
-    return "unknown";
+function parseLegacyUrls(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((entry) => normalizeLinkCandidate(entry)).filter(Boolean)));
 }
 
-function normalizeText(value: string) {
-    return value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/\s+/g, " ")
-        .trim();
+function isSoft404Html(hostname: string, html: string) {
+  const foldedHtml = foldForPattern(html);
+  if (!foldedHtml) return false;
+
+  if (GENERIC_SOFT_404_PATTERNS.some((pattern) => pattern.every((token) => foldedHtml.includes(token)))) {
+    return true;
+  }
+
+  const hostPatterns = HOST_SOFT_404_PATTERNS.find((entry) => entry.hostnamePattern.test(hostname));
+  return Boolean(hostPatterns?.patterns.some((pattern) => pattern.every((token) => foldedHtml.includes(token))));
 }
 
-function isHtmlResponse(response: Response) {
-    const contentType = response.headers.get("content-type")?.toLowerCase() || "";
-    return contentType.includes("text/html") || contentType.includes("application/xhtml+xml");
+function isSameHostname(originalUrl: string, finalUrl: string) {
+  try {
+    return new URL(originalUrl).hostname === new URL(finalUrl).hostname;
+  } catch {
+    return false;
+  }
 }
 
-async function readResponseSample(response: Response, maxBytes = HTML_SNIFF_LIMIT_BYTES) {
-    if (!response.body) {
-        return "";
+function isRedirectedArticleIdMismatch(originalUrl: string, finalUrl: string) {
+  const originalId = extractArticleIdFromLink(originalUrl);
+  if (!originalId || !isSameHostname(originalUrl, finalUrl)) {
+    return false;
+  }
+
+  const finalId = extractArticleIdFromLink(finalUrl);
+  return !finalId || finalId !== originalId;
+}
+
+async function readResponseSnippet(response: Response) {
+  const text = await response.text();
+  return text.slice(0, HTML_SNIFF_LIMIT_BYTES);
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit) {
+  return fetch(url, {
+    ...init,
+    cache: "no-store",
+    redirect: "follow",
+    signal: AbortSignal.timeout(LINK_CHECK_TIMEOUT_MS),
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "User-Agent": "Workdocker Link Health Bot/1.0",
+      ...(init.headers || {}),
+    },
+  });
+}
+
+async function checkLinkStatus(url: string): Promise<CheckedLinkStatus> {
+  try {
+    const headResponse = await fetchWithTimeout(url, { method: "HEAD" }).catch(() => null);
+    const headFinalUrl = headResponse?.url || url;
+
+    if (headResponse && headResponse.status >= 400 && headResponse.status !== 403 && headResponse.status !== 405) {
+      return { url, finalUrl: headFinalUrl, status: "broken" };
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let receivedBytes = 0;
-    let sample = "";
+    if (isRedirectedArticleIdMismatch(url, headFinalUrl)) {
+      return { url, finalUrl: headFinalUrl, status: "broken" };
+    }
 
-    try {
-        while (receivedBytes < maxBytes) {
-            const { done, value } = await reader.read();
-            if (done || !value) break;
+    const headContentType = headResponse?.headers.get("content-type") || "";
+    if (headResponse?.ok && headContentType && !/text\/html|application\/xhtml\+xml/i.test(headContentType)) {
+      return { url, finalUrl: headFinalUrl, status: "ok" };
+    }
 
-            receivedBytes += value.byteLength;
-            sample += decoder.decode(value, { stream: true });
+    const getResponse = await fetchWithTimeout(url, { method: "GET" });
+    const finalUrl = getResponse.url || headFinalUrl || url;
+    if (!getResponse.ok || isRedirectedArticleIdMismatch(url, finalUrl)) {
+      return { url, finalUrl, status: "broken" };
+    }
+
+    const contentType = getResponse.headers.get("content-type") || "";
+    if (/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+      const snippet = await readResponseSnippet(getResponse);
+      const hostname = (() => {
+        try {
+          return new URL(finalUrl).hostname;
+        } catch {
+          return "";
         }
-
-        sample += decoder.decode();
-        return sample;
-    } catch {
-        return sample;
-    } finally {
-        await reader.cancel().catch(() => undefined);
+      })();
+      if (isSoft404Html(hostname, snippet)) {
+        return { url, finalUrl, status: "broken" };
+      }
     }
+
+    return { url, finalUrl, status: "ok" };
+  } catch {
+    return { url, finalUrl: url, status: "unknown" };
+  }
 }
 
-function matchesSoft404Pattern(text: string, patterns: readonly (readonly string[])[]) {
-    return patterns.some((parts) => parts.every((part) => text.includes(part)));
+async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length || 1)) }, async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex]);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
 }
 
-function isSoft404Response(url: URL, bodySample: string) {
-    const normalizedBody = normalizeText(bodySample);
-    if (!normalizedBody) return false;
-
-    if (matchesSoft404Pattern(normalizedBody, GENERIC_SOFT_404_PATTERNS)) {
-        return true;
-    }
-
-    return HOST_SOFT_404_PATTERNS.some((entry) => (
-        entry.hostnamePattern.test(url.hostname) && matchesSoft404Pattern(normalizedBody, entry.patterns)
-    ));
+function foldStatus(value: unknown) {
+  return foldForPattern(value).replace(/đ/g, "d");
 }
 
-async function classifyGetResponse(url: URL, response: Response): Promise<LinkCheckStatus> {
-    const responseStatus = classifyResponseStatus(response.status);
-    if (responseStatus !== "ok") {
-        return responseStatus;
-    }
+function canAccessArticleForManualCheck(
+  row: ArticleLinkRow,
+  context: Awaited<ReturnType<typeof getCurrentUserContext>>,
+) {
+  if (!context) return false;
 
-    if (!isHtmlResponse(response)) {
-        return "ok";
-    }
+  if (hasArticleManagerAccess(context)) {
+    return isLeader(context) || canAccessTeam(context, row.teamId);
+  }
 
-    const sample = await readResponseSample(response);
-    if (isSoft404Response(url, sample)) {
-        return "broken";
-    }
+  if (hasArticleReviewAccess(context)) {
+    const identityCandidates = getContextIdentityCandidates(context);
+    const reviewStatus = foldStatus(row.status);
+    const canClaimByStatus = reviewStatus.includes("cho duyet")
+      || reviewStatus.includes("dang duyet")
+      || reviewStatus.includes("submitted");
+    return canAccessTeam(context, row.teamId)
+      && (matchesIdentityCandidate(identityCandidates, row.reviewerName) || canClaimByStatus);
+  }
 
-    return "ok";
+  const ownerCandidates = getContextArticleOwnerCandidates(context);
+  return row.createdByUserId === context.user.id || matchesIdentityCandidate(ownerCandidates, row.penName);
 }
 
-async function requestUrl(url: URL, method: "HEAD" | "GET", signal: AbortSignal) {
-    return fetch(url, {
-        method,
-        signal,
-        redirect: "follow",
-        headers: {
-            "User-Agent": "Mozilla/5.0 (compatible; Workdocker-LinkChecker/1.0; +https://www.workdocker.com)",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "vi,en;q=0.8",
-        },
-        cache: "no-store",
+async function persistLinkHealth(rows: ArticleLinkRow[], statusMap: Map<number, CheckedLinkStatus>, slotKey: string | null) {
+  const checkedAt = new Date().toISOString();
+  const results: LinkCheckResultItem[] = [];
+
+  for (const row of rows) {
+    const checkedStatus = statusMap.get(row.id);
+    if (!checkedStatus) continue;
+
+    await db
+      .update(articles)
+      .set({
+        linkHealthStatus: checkedStatus.status,
+        linkHealthCheckedAt: checkedAt,
+        linkHealthCheckSlot: slotKey,
+      })
+      .where(eq(articles.id, row.id))
+      .run();
+
+    results.push({
+      articleId: row.id,
+      url: row.link || checkedStatus.url,
+      status: checkedStatus.status,
+      checkedAt,
+      slotKey,
     });
+  }
+
+  return results;
+}
+
+async function runPersistedChecks(rows: ArticleLinkRow[], slotKey: string | null) {
+  const checkedStatuses = await mapWithConcurrency(rows, LINK_CHECK_CONCURRENCY, async (row) => ({
+    articleId: row.id,
+    checked: await checkLinkStatus(row.link || ""),
+  }));
+
+  const statusMap = new Map<number, CheckedLinkStatus>();
+  for (const entry of checkedStatuses) {
+    statusMap.set(entry.articleId, entry.checked);
+  }
+
+  const items = await persistLinkHealth(rows, statusMap, slotKey);
+  const results = Object.fromEntries(items.map((item) => [item.url, item.status]));
+  return { items, results };
+}
+
+async function selectArticleRowsByIds(articleIds: number[]) {
+  if (articleIds.length === 0) return [];
+
+  return db
+    .select({
+      id: articles.id,
+      teamId: articles.teamId,
+      penName: articles.penName,
+      reviewerName: articles.reviewerName,
+      status: articles.status,
+      link: articles.link,
+      createdByUserId: articles.createdByUserId,
+      date: articles.date,
+      updatedAt: articles.updatedAt,
+      linkHealthCheckedAt: articles.linkHealthCheckedAt,
+    })
+    .from(articles)
+    .where(inArray(articles.id, articleIds))
+    .all();
+}
+
+async function loadManualScopeRows(requestItems: LinkCheckRequestItem[], context: NonNullable<Awaited<ReturnType<typeof getCurrentUserContext>>>) {
+  const articleIds = Array.from(new Set(requestItems.map((item) => item.articleId)));
+  const rows = await selectArticleRowsByIds(articleIds);
+  return rows
+    .filter((row) => normalizeLinkCandidate(row.link))
+    .filter((row) => canAccessArticleForManualCheck(row, context));
+}
+
+async function loadScheduledRows(limit: number) {
+  const lookbackDate = new Date();
+  lookbackDate.setDate(lookbackDate.getDate() - LINK_CHECK_SCHEDULED_LOOKBACK_DAYS);
+  const lookbackDateKey = lookbackDate.toISOString().slice(0, 10);
+  const lookbackIso = lookbackDate.toISOString();
+
+  return db
+    .select({
+      id: articles.id,
+      teamId: articles.teamId,
+      penName: articles.penName,
+      reviewerName: articles.reviewerName,
+      status: articles.status,
+      link: articles.link,
+      createdByUserId: articles.createdByUserId,
+      date: articles.date,
+      updatedAt: articles.updatedAt,
+      linkHealthCheckedAt: articles.linkHealthCheckedAt,
+    })
+    .from(articles)
+    .where(and(
+      or(like(articles.link, "http://%"), like(articles.link, "https://%")),
+      sql`(${articles.date} >= ${lookbackDateKey} OR ${articles.updatedAt} >= ${lookbackIso})`,
+    ))
+    .orderBy(
+      sql`CASE WHEN ${articles.linkHealthCheckedAt} IS NULL THEN 0 ELSE 1 END`,
+      asc(articles.linkHealthCheckedAt),
+      desc(articles.date),
+      desc(articles.updatedAt),
+      desc(articles.id),
+    )
+    .limit(limit)
+    .all();
+}
+
+function countStatuses(items: LinkCheckResultItem[]) {
+  return {
+    ok: items.filter((item) => item.status === "ok").length,
+    broken: items.filter((item) => item.status === "broken").length,
+    unknown: items.filter((item) => item.status === "unknown").length,
+  };
+}
+
+function getAutomationToken(request: NextRequest) {
+  const authHeader = request.headers.get("authorization") || "";
+  if (authHeader.toLowerCase().startsWith("bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  return normalizeString(request.headers.get("x-link-check-token"));
 }
 
 export async function POST(request: NextRequest) {
-    try {
-        const context = await getCurrentUserContext();
-        if (!context) {
-            return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
-        }
+  await ensureDatabaseInitialized();
 
-        const { urls } = await request.json();
+  const body = await request.json().catch(() => ({} as LinkCheckBody));
+  const trigger = normalizeString(body.trigger) === "scheduled" ? "scheduled" : "manual";
+  const requestItems = parseRequestItems(body.items);
+  const legacyUrls = parseLegacyUrls(body.urls);
+  const requestedLimit = Number(body.limit);
 
-        if (!urls || !Array.isArray(urls) || urls.length === 0) {
-            return NextResponse.json({ success: false, error: "urls array required" }, { status: 400 });
-        }
-
-        const maxCheck = Math.min(urls.length, 50);
-        const results: Record<string, LinkCheckStatus> = {};
-
-        await Promise.allSettled(
-            urls.slice(0, maxCheck).map(async (url: string) => {
-                try {
-                    if (!url) {
-                        results[url] = "broken";
-                        return;
-                    }
-
-                    const parsedUrl = new URL(url);
-                    if (!["http:", "https:"].includes(parsedUrl.protocol) || isPrivateHostname(parsedUrl.hostname)) {
-                        results[url] = "broken";
-                        return;
-                    }
-
-                    const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 10000);
-
-                    let status: LinkCheckStatus = "unknown";
-                    try {
-                        const headResponse = await requestUrl(parsedUrl, "HEAD", controller.signal);
-                        const headStatus = classifyResponseStatus(headResponse.status);
-                        const getResponse = await requestUrl(parsedUrl, "GET", controller.signal);
-                        const getStatus = await classifyGetResponse(parsedUrl, getResponse);
-
-                        status = getStatus === "unknown" ? headStatus : getStatus;
-                    } finally {
-                        clearTimeout(timeout);
-                    }
-
-                    results[url] = status;
-                } catch {
-                    results[url] = "unknown";
-                }
-            })
-        );
-
-        return NextResponse.json({ success: true, results });
-    } catch (error) {
-        return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+  if (trigger === "scheduled") {
+    const expectedToken = normalizeString(process.env.LINK_CHECK_AUTOMATION_TOKEN);
+    const providedToken = getAutomationToken(request);
+    if (!expectedToken || providedToken !== expectedToken) {
+      return NextResponse.json({ success: false, error: "Unauthorized scheduled link check." }, { status: 401 });
     }
+
+    const dueSlot = getLatestDueLinkCheckSlot(new Date());
+    const slotKey = normalizeString(body.slotKey) || dueSlot?.key || null;
+    if (!slotKey) {
+      return NextResponse.json({ success: true, skipped: true, reason: "No due slot yet." });
+    }
+
+    const existingRun = await db
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(and(
+        eq(auditLogs.action, "article_link_check_scheduled"),
+        eq(auditLogs.entity, "system"),
+        eq(auditLogs.entityId, slotKey),
+      ))
+      .get();
+
+    if (existingRun) {
+      return NextResponse.json({ success: true, skipped: true, slotKey, reason: "Slot already processed." });
+    }
+
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(Math.floor(requestedLimit), LINK_CHECK_SCHEDULED_MAX_ITEMS)
+      : LINK_CHECK_SCHEDULED_MAX_ITEMS;
+    const rows = requestItems.length > 0
+      ? await selectArticleRowsByIds(Array.from(new Set(requestItems.map((item) => item.articleId))))
+      : await loadScheduledRows(limit);
+    const scopedRows = rows.filter((row) => normalizeLinkCandidate(row.link)).slice(0, limit);
+
+    const { items, results } = await runPersistedChecks(scopedRows, slotKey);
+    const counts = countStatuses(items);
+
+    await writeAuditLog({
+      action: "article_link_check_scheduled",
+      entity: "system",
+      entityId: slotKey,
+      payload: {
+        slotKey,
+        limit,
+        processed: items.length,
+        ...counts,
+      },
+    });
+
+    if (items.length > 0) {
+      await publishRealtimeEvent(["articles"]);
+    }
+
+    return NextResponse.json({ success: true, trigger, slotKey, items, results, counts });
+  }
+
+  const context = await getCurrentUserContext();
+  if (!context) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (requestItems.length > 0) {
+    const rows = await loadManualScopeRows(requestItems, context);
+    if (rows.length === 0) {
+      return NextResponse.json({ success: false, error: "Không có link hợp lệ trong phạm vi được phép kiểm tra." }, { status: 400 });
+    }
+
+    const limitedRows = rows.slice(0, LINK_CHECK_MANUAL_MAX_ITEMS);
+    const { items, results } = await runPersistedChecks(limitedRows, null);
+    const counts = countStatuses(items);
+
+    await writeAuditLog({
+      userId: context.user.id,
+      action: "article_link_check_manual",
+      entity: "articles",
+      entityId: limitedRows.length === 1 ? limitedRows[0].id : `${limitedRows.length}-items`,
+      payload: {
+        processed: items.length,
+        teamId: getContextTeamId(context),
+        ...counts,
+      },
+    });
+
+    if (items.length > 0) {
+      await publishRealtimeEvent(["articles"]);
+    }
+
+    return NextResponse.json({ success: true, trigger, items, results, counts });
+  }
+
+  if (legacyUrls.length === 0) {
+    return NextResponse.json({ success: false, error: "Thiếu link để kiểm tra." }, { status: 400 });
+  }
+
+  const limitedUrls = legacyUrls.slice(0, LINK_CHECK_MANUAL_MAX_ITEMS);
+  const checked = await mapWithConcurrency(limitedUrls, LINK_CHECK_CONCURRENCY, checkLinkStatus);
+  const results = Object.fromEntries(checked.map((item) => [item.url, item.status]));
+
+  return NextResponse.json({ success: true, trigger: "manual", results });
 }

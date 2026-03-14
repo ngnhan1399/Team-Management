@@ -19,7 +19,6 @@ import {
   EDITORIAL_ONLY_CATEGORY_OPTIONS,
   EMPTY_DELETE_CRITERIA,
   IMPORT_FIELD_OPTIONS,
-  LINK_RECHECK_INTERVAL_MS,
   MANAGER_DEFAULT_PEN_NAME,
   MONTH_OPTIONS,
   REQUIRED_IMPORT_FIELDS,
@@ -41,6 +40,7 @@ import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { extractArticleIdFromLink, isLinkIdRequiredForArticleType } from "@/lib/article-link-id";
 import { resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
+import { LINK_CHECK_MANUAL_MAX_ITEMS, type LinkHealthStatus } from "@/lib/link-health";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
 import { getPreferredArticleNavigationLink } from "@/lib/review-link";
 import type {
@@ -67,8 +67,6 @@ const EMPTY_ARTICLE_FILTERS: ArticleFilters = {
 };
 
 export default function ArticlesPage() {
-  type LinkHealthStatus = "ok" | "broken" | "unknown";
-  type LinkHealthEntry = { status: LinkHealthStatus; checkedAt: number };
   type ArticleListQuery = { page: number; search: string; filters: ArticleFilters };
   const { user, loading: authLoading } = useAuth();
   const isMobile = useIsMobile();
@@ -77,7 +75,6 @@ export default function ArticlesPage() {
   const collaboratorsRequestRef = React.useRef<Promise<void> | null>(null);
   const hasFetchedInitialArticlesRef = React.useRef(false);
   const articlesRealtimeRefreshTimerRef = React.useRef<number | null>(null);
-  const linkHealthRef = React.useRef<Record<string, LinkHealthEntry>>({});
   const articleListQueryRef = React.useRef<ArticleListQuery>({
     page: 1,
     search: "",
@@ -127,7 +124,6 @@ export default function ArticlesPage() {
   const [deleteError, setDeleteError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<ArticleFilters>({ ...EMPTY_ARTICLE_FILTERS });
-  const [linkHealth, setLinkHealth] = useState<Record<string, LinkHealthEntry>>({});
   const [linkCheckLoading, setLinkCheckLoading] = useState(false);
   const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [commentArticle, setCommentArticle] = useState<Article | null>(null);
@@ -324,10 +320,6 @@ export default function ArticlesPage() {
   }, []);
 
   useEffect(() => {
-    linkHealthRef.current = linkHealth;
-  }, [linkHealth]);
-
-  useEffect(() => {
     setSelectedArticleIds((prev) => prev.filter((id) => articles.some((article) => article.id === id)));
   }, [articles]);
 
@@ -342,51 +334,50 @@ export default function ArticlesPage() {
     });
   }, []);
 
-  useEffect(() => {
-    const published = deferredArticles.filter(a => isApprovedArticleStatus(a.status) && a.link && a.link.startsWith("http"));
-    if (published.length === 0) {
-      setLinkHealth((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+  const applyLinkHealthUpdates = useCallback((items: Array<{
+    articleId: number;
+    status: LinkHealthStatus;
+    checkedAt: string;
+    slotKey: string | null;
+  }>) => {
+    if (items.length === 0) {
       return;
     }
-    const urls = Array.from(new Set(published.map(a => a.link).filter(Boolean)));
-    setLinkHealth((prev) => {
-      const next = Object.fromEntries(
-        Object.entries(prev).filter(([url]) => urls.includes(url))
-      );
-      const prevEntries = Object.entries(prev);
-      const nextEntries = Object.entries(next);
-      const hasSameEntries = prevEntries.length === nextEntries.length
-        && prevEntries.every(([url, entry]) => {
-          const nextEntry = next[url];
-          return nextEntry?.status === entry.status && nextEntry?.checkedAt === entry.checkedAt;
-        });
-      return hasSameEntries ? prev : next;
-    });
-  }, [deferredArticles]);
 
-  const checkVisibleLinks = useCallback(async (force = false, manual = false) => {
-    const published = deferredArticles.filter((article) => (
-      isApprovedArticleStatus(article.status) && article.link && article.link.startsWith("http")
-    ));
-    const urls = Array.from(new Set(published.map((article) => article.link).filter(Boolean)));
-    const now = Date.now();
-    const pendingUrls = urls.filter((url) => {
-      if (force) return true;
-      const existingEntry = linkHealthRef.current[url];
-      if (!existingEntry) return true;
-      return now - existingEntry.checkedAt >= LINK_RECHECK_INTERVAL_MS;
-    }).slice(0, 10);
-
-    if (pendingUrls.length === 0) {
-      if (manual) {
-        showUiToast(
-          "Khong co link can kiem tra",
-          urls.length === 0
-            ? "Không có bài đã duyệt nào có link hợp lệ để kiểm tra."
-            : "Các link đang hiển thị đều đã được kiểm tra gần đây.",
-          "info"
-        );
+    const updates = new Map(items.map((item) => [item.articleId, item]));
+    setArticles((prev) => prev.map((article) => {
+      const update = updates.get(article.id);
+      if (!update) {
+        return article;
       }
+
+      return {
+        ...article,
+        linkHealthStatus: update.status,
+        linkHealthCheckedAt: update.checkedAt,
+        linkHealthCheckSlot: update.slotKey,
+      };
+    }));
+  }, []);
+
+  const checkVisibleLinks = useCallback(async (force = false) => {
+    const visibleItems = deferredArticles
+      .filter((article) => article.link && article.link.startsWith("http"))
+      .filter((article) => force || !article.linkHealthCheckedAt)
+      .slice(0, LINK_CHECK_MANUAL_MAX_ITEMS)
+      .map((article) => ({
+        articleId: article.id,
+        url: article.link as string,
+      }));
+
+    if (visibleItems.length === 0) {
+      showUiToast(
+        "Khong co link can kiem tra",
+        deferredArticles.some((article) => article.link && article.link.startsWith("http"))
+          ? "Các link đang hiển thị đã có trạng thái kiểm tra. Bạn có thể bấm lại để recheck."
+          : "Không có bài nào trong danh sách hiện tại có link hợp lệ để kiểm tra.",
+        "info",
+      );
       return;
     }
 
@@ -395,86 +386,43 @@ export default function ArticlesPage() {
       const response = await fetch("/api/check-links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ urls: pendingUrls }),
+        body: JSON.stringify({ trigger: "manual", items: visibleItems }),
         cache: "no-store",
       });
       const data = await response.json();
-      if (!response.ok || !data.success || !data.results) {
+      if (!response.ok || !data.success || !Array.isArray(data.items)) {
         throw new Error(data.error || "Không thể kiểm tra trạng thái link.");
       }
 
-      const checkedAt = Date.now();
-      const nextEntries = Object.fromEntries(
-        Object.entries(data.results as Record<string, LinkHealthStatus>).map(([url, status]) => [
-          url,
-          { status, checkedAt },
-        ])
+      const checkedItems = data.items as Array<{
+        articleId: number;
+        status: LinkHealthStatus;
+        checkedAt: string;
+        slotKey: string | null;
+      }>;
+      applyLinkHealthUpdates(checkedItems);
+
+      const brokenCount = checkedItems.filter((item) => item.status === "broken").length;
+      const unknownCount = checkedItems.filter((item) => item.status === "unknown").length;
+      const okCount = checkedItems.filter((item) => item.status === "ok").length;
+
+      showUiToast(
+        "Da kiem tra link",
+        brokenCount > 0
+          ? `Đã kiểm tra ${checkedItems.length} link: ${brokenCount} lỗi, ${okCount} hoạt động, ${unknownCount} chưa xác minh.`
+          : `Đã kiểm tra ${checkedItems.length} link. ${okCount} link hoạt động${unknownCount > 0 ? `, ${unknownCount} link chưa xác minh.` : "."}`,
+        brokenCount > 0 ? "warning" : "success"
       );
-      setLinkHealth((prev) => ({ ...prev, ...nextEntries }));
-
-      if (manual) {
-        const statuses = Object.values(data.results as Record<string, LinkHealthStatus>);
-        const brokenCount = statuses.filter((status) => status === "broken").length;
-        const unknownCount = statuses.filter((status) => status === "unknown").length;
-        const okCount = statuses.filter((status) => status === "ok").length;
-
-        showUiToast(
-          "Da kiem tra link",
-          brokenCount > 0
-            ? `Đã kiểm tra ${statuses.length} link: ${brokenCount} lỗi, ${okCount} hoạt động, ${unknownCount} chưa xác minh.`
-            : `Đã kiểm tra ${statuses.length} link. ${okCount} link hoạt động${unknownCount > 0 ? `, ${unknownCount} link chưa xác minh.` : "."}`,
-          brokenCount > 0 ? "warning" : "success"
-        );
-      }
     } catch (error) {
-      if (manual) {
-        showUiToast(
-          "Kiem tra link that bai",
-          error instanceof Error ? error.message : "Không thể kiểm tra link lúc này.",
-          "error"
-        );
-      }
+      showUiToast(
+        "Kiem tra link that bai",
+        error instanceof Error ? error.message : "Không thể kiểm tra link lúc này.",
+        "error"
+      );
     } finally {
       setLinkCheckLoading(false);
     }
-  }, [deferredArticles, showUiToast]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    if (document.visibilityState !== "visible") {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      void checkVisibleLinks();
-    }, 400);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [checkVisibleLinks]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-
-      void checkVisibleLinks();
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [checkVisibleLinks]);
+  }, [applyLinkHealthUpdates, deferredArticles, showUiToast]);
 
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -1521,9 +1469,7 @@ export default function ArticlesPage() {
       return <span style={{ color: "rgba(0,0,0,0.2)" }}>—</span>;
     }
 
-    const health = article.link ? linkHealth[article.link] : undefined;
-
-    if (isApprovedArticleStatus(article.status) && health?.status === "broken") {
+    if (article.linkHealthStatus === "broken") {
       return (
         <span title="Link lỗi" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link_off</span>
@@ -1531,7 +1477,7 @@ export default function ArticlesPage() {
       );
     }
 
-    if (isApprovedArticleStatus(article.status) && health?.status === "ok") {
+    if (article.linkHealthStatus === "ok") {
       return (
         <span title="Link hoạt động" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--success)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link</span>
@@ -1539,7 +1485,7 @@ export default function ArticlesPage() {
       );
     }
 
-    if (isApprovedArticleStatus(article.status) && health?.status === "unknown") {
+    if (article.linkHealthStatus === "unknown") {
       return (
         <span title="Chưa xác minh được link. Bạn có thể bấm 'Kiểm tra link' khi cần." style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-orange)" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>help_center</span>
@@ -1547,17 +1493,9 @@ export default function ArticlesPage() {
       );
     }
 
-    if (isApprovedArticleStatus(article.status)) {
-      return (
-        <span title="Đang chờ kiểm tra trạng thái link" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-orange)" }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>pending</span>
-        </span>
-      );
-    }
-
     return (
-      <span title="Có link" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-blue)" }}>
-        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>link</span>
+      <span title="Đang chờ kiểm tra trạng thái link" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--accent-orange)" }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>pending</span>
       </span>
     );
   };
@@ -2027,12 +1965,12 @@ export default function ArticlesPage() {
             </button>
           )}
           {!isMobile && (
-            <button
-              className="btn-ios-pill"
-              data-testid="articles-check-links"
-              onClick={() => { void checkVisibleLinks(true, true); }}
-              disabled={linkCheckLoading}
-              title="Kiểm tra lại trạng thái các link bài viết đang hiển thị"
+              <button
+                className="btn-ios-pill"
+                data-testid="articles-check-links"
+                onClick={() => { void checkVisibleLinks(true); }}
+                disabled={linkCheckLoading}
+                title="Kiểm tra lại trạng thái các link bài viết đang hiển thị"
               style={{
                 height: 44,
                 padding: "0 16px 0 12px",

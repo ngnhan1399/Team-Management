@@ -80,6 +80,9 @@ type ArticleResponseRow = {
   wordCountRange: string | null;
   status: string;
   link: string | null;
+  linkHealthStatus: "ok" | "broken" | "unknown" | null;
+  linkHealthCheckedAt: string | null;
+  linkHealthCheckSlot: string | null;
   reviewLink: string | null;
   reviewerName: string | null;
   notes: string | null;
@@ -202,6 +205,9 @@ const articleResponseSelection = {
   wordCountRange: articles.wordCountRange,
   status: articles.status,
   link: articles.link,
+  linkHealthStatus: articles.linkHealthStatus,
+  linkHealthCheckedAt: articles.linkHealthCheckedAt,
+  linkHealthCheckSlot: articles.linkHealthCheckSlot,
   reviewLink: articles.reviewLink,
   reviewerName: articles.reviewerName,
   notes: articles.notes,
@@ -1414,6 +1420,11 @@ export async function PUT(request: NextRequest) {
 
     if (typeof updateData.title === "string") updateData.title = updateData.title.trim();
     if (typeof updateData.link === "string") updateData.link = updateData.link.trim() || undefined;
+    if (Object.prototype.hasOwnProperty.call(body, "link")) {
+      updateData.linkHealthStatus = null;
+      updateData.linkHealthCheckedAt = null;
+      updateData.linkHealthCheckSlot = null;
+    }
     const providedUpdateLink = typeof body.link === "string"
       ? normalizeString(body.link) || undefined
       : undefined;
