@@ -1,5 +1,53 @@
 # Codex Handoff
 
+## Update 2026-03-14 (ổn định link-check FPT Shop + tránh ghi đè `unknown`)
+
+- Đã ghi postmortem chi tiết ở `docs/link-check-fpt-regression-2026-03-14.md`.
+- Kết luận chính:
+  - FPT Shop bot-block một phần request từ Vercel nên manual check không luôn xác minh được link
+  - normalize soft-404 trước đó thiếu bước `đ -> d`, làm một số trang lỗi tiếng Việt bị lọt
+  - manual check từng có thể ghi đè trạng thái đúng thành `unknown`
+- Đã sửa theo 3 lớp:
+  - GitHub Actions + Playwright Chromium là nhánh quét chính xác cho FPT Shop
+  - backend/browser runner normalize đủ tiếng Việt và đọc HTML đầy đủ hơn
+  - manual check không còn persist `unknown` để ghi đè trạng thái đã biết
+- UI `Kiểm tra link` giờ:
+  - vẫn cho recheck ngay
+  - nếu chưa xác minh chắc chắn thì chỉ báo `đang chờ xác minh nền`
+  - không làm badge đúng bị chuyển sang sai
+
+### Dữ liệu đã sửa trên DB hiện tại
+
+- repair `35` dòng `unknown`
+- kết quả:
+  - `30` dòng `broken`
+  - `5` dòng `ok`
+- sau repair: `unknown = 0`
+
+### File đã động vào
+
+- `src/app/api/check-links/route.ts`
+- `src/lib/link-health-browser.ts`
+- `scripts/link-check-browser-runner.mjs`
+- `.github/workflows/link-check-schedule.yml`
+- `src/app/components/ArticlesPage.tsx`
+- `docs/link-check-fpt-regression-2026-03-14.md`
+- `docs/codex-handoff.md`
+
+### Commit quan trọng
+
+- `699cf42` Run scheduled FPT link checks in GitHub browser runner
+- `74a7b82` Fix FPT soft-404 normalization in link checks
+- `d7c8484` Avoid persisting manual unknown link states
+
+### Kiểm tra đã chạy
+
+- `npm run verify:safe` ✅
+- browser thật xác minh:
+  - `203074` = `broken`
+  - `203076` = `ok`
+- GitHub Actions manual run `Scheduled Link Check` ✅
+
 ## Update 2026-03-13 (ẩn tab Lịch biên tập của CTV khi chưa có task)
 
 - `MainApp.tsx` giờ không còn render tab `Lịch biên tập` cố định cho mọi `CTV`.
