@@ -8,7 +8,7 @@
   - thao tác này chèn hẳn một dòng mới vào giữa sheet
   - vì sheet gốc có block KPI/nhuận ở bên phải, việc chèn dòng làm lệch toàn bộ dữ liệu ở các cột phải
 - Logic mới:
-  - tìm **hàng trống kế tiếp** trong vùng bảng bài viết
+  - tìm **hàng trống đầu tiên còn sẵn** trong toàn bộ vùng bảng bài viết
   - dùng lại hàng trống đó để ghi dữ liệu
   - chỉ copy format/data validation trong vùng cột bài viết
   - không đụng vào phần KPI/nhuận bên phải

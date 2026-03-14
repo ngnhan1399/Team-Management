@@ -81,7 +81,7 @@ Nếu bạn tạo bài mới bằng form trong công cụ:
 
 - hệ thống sẽ xác định tab tháng theo `Ngày viết`
 - thử tìm bài tương ứng trong tab đó để tránh trùng
-- nếu chưa có thì ưu tiên dùng lại **hàng trống kế tiếp ngay dưới bảng bài viết**
+- nếu chưa có thì ưu tiên dùng lại **hàng trống đầu tiên còn sẵn trong toàn bộ vùng bảng bài viết**
 - không còn `insert row` chen giữa sheet như trước, nên sẽ không đẩy lệch các block KPI/nhuận ở bên phải
 - nếu không còn hàng trống sẵn trong vùng bài viết thì script sẽ **dừng và báo lỗi**, không tự thêm hàng mới
 - đồng thời tạo liên kết `article_sync_links` để các lần sync sau tiếp tục đi đúng cùng một dòng
