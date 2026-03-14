@@ -9,7 +9,7 @@ import {
   type GoogleSheetSyncLinkSnapshot,
 } from "@/lib/google-sheet-mutation";
 import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
-import { extractArticleIdFromLink } from "@/lib/article-link-id";
+import { extractArticleIdFromLink, isLinkIdRequiredForArticleType } from "@/lib/article-link-id";
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { CONTENT_WORK_REGISTRATION_TITLE } from "@/lib/content-work-registration";
 import { createNotification } from "@/lib/notifications";
@@ -1015,6 +1015,7 @@ export async function POST(request: NextRequest) {
       contentType: normalizeString(body.contentType) || "Viết mới",
       wordCountRange: normalizeString(body.wordCountRange) || undefined,
     });
+    const requiresLinkId = isLinkIdRequiredForArticleType(normalizedArticleFields.articleType);
     const requestedTeamId = normalizeTeamId(body.teamId);
     const linkedCollaborator = finalPenName
       ? await db
@@ -1041,7 +1042,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    if ((!canManageArticles || normalizedLink) && !derivedArticleId && !normalizeString(body.articleId)) {
+    if (requiresLinkId && ((!canManageArticles || normalizedLink) && !derivedArticleId && !normalizeString(body.articleId))) {
       return NextResponse.json(
         { success: false, error: "Link bài viết phải có đủ 6 chữ số ID ở cuối đường dẫn" },
         { status: 400 }
@@ -1417,7 +1418,8 @@ export async function PUT(request: NextRequest) {
       ? normalizeString(body.link) || undefined
       : undefined;
     const derivedUpdateArticleId = extractArticleIdFromLink(providedUpdateLink);
-    if (providedUpdateLink && !derivedUpdateArticleId && !normalizeString(updateData.articleId)) {
+    const requiresUpdateLinkId = isLinkIdRequiredForArticleType(updateData.articleType ?? existing.articleType);
+    if (requiresUpdateLinkId && providedUpdateLink && !derivedUpdateArticleId && !normalizeString(updateData.articleId)) {
       return NextResponse.json({ success: false, error: "Link bài viết phải có đủ 6 chữ số ID ở cuối đường dẫn" }, { status: 400 });
     }
     if (derivedUpdateArticleId) {

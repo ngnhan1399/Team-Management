@@ -39,7 +39,7 @@ const ArticleDeleteModal = dynamic(() => import("./ArticleDeleteModal"), { ssr: 
 const ArticleImportWizard = dynamic(() => import("./ArticleImportWizard"), { ssr: false });
 import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
-import { extractArticleIdFromLink } from "@/lib/article-link-id";
+import { extractArticleIdFromLink, isLinkIdRequiredForArticleType } from "@/lib/article-link-id";
 import { resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
 import { getPreferredArticleNavigationLink } from "@/lib/review-link";
@@ -710,7 +710,10 @@ export default function ArticlesPage() {
       void ensureCollaboratorsLoaded();
     }
     const nextLink = String(nextFormData.link || "").trim();
-    const nextArticleId = extractArticleIdFromLink(nextLink) || String(nextFormData.articleId || "").trim();
+    const requiresLinkId = isLinkIdRequiredForArticleType(nextFormData.articleType);
+    const nextArticleId = requiresLinkId
+      ? (extractArticleIdFromLink(nextLink) || String(nextFormData.articleId || "").trim())
+      : String(nextFormData.articleId || "").trim();
     setFormData({
       ...nextFormData,
       link: nextLink,
@@ -1011,12 +1014,13 @@ export default function ArticlesPage() {
     const normalizedLink = String(formData.link || "").trim();
     const derivedArticleId = extractArticleIdFromLink(normalizedLink);
     const currentArticleId = String(formData.articleId || "").trim();
+    const requiresLinkId = isLinkIdRequiredForArticleType(formData.articleType);
     const isEditing = Boolean(formData.id);
     if (!canManageArticles && !isEditing && !normalizedLink) {
       alert("❌ CTV phải dán link bài viết trước khi lưu bài mới.");
       return;
     }
-    if ((!canManageArticles && !isEditing) || (normalizedLink && !currentArticleId)) {
+    if (requiresLinkId && (((!canManageArticles && !isEditing) || (normalizedLink && !currentArticleId)))) {
       if (!derivedArticleId) {
         alert("❌ Link bài viết phải có đúng 6 chữ số ID ở cuối đường dẫn để hệ thống nhận diện.");
         return;
@@ -1030,7 +1034,7 @@ export default function ArticlesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          articleId: derivedArticleId || currentArticleId,
+          articleId: requiresLinkId ? (derivedArticleId || currentArticleId) : (derivedArticleId || currentArticleId || undefined),
           link: normalizedLink,
           wordCountRange: normalizeWordCountRangeValue(formData.wordCountRange),
         }),
@@ -2405,7 +2409,7 @@ export default function ArticlesPage() {
                   value={formData.articleId || ""}
                   readOnly={!canManageArticles}
                   onChange={e => setFormData({ ...formData, articleId: e.target.value })}
-                  placeholder="Tự động nhận từ link bài viết"
+                  placeholder="Tự động nhận từ link bài viết (trừ bài mô tả)"
                   style={{
                     opacity: !canManageArticles ? 0.7 : 1,
                     background: !canManageArticles ? "rgba(148, 163, 184, 0.08)" : undefined,
@@ -2413,7 +2417,7 @@ export default function ArticlesPage() {
                   }}
                 />
                 <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Mã ID tự tạo khi có link bài viết.
+                  Mã ID tự tạo khi có link bài viết. Không áp dụng cho bài mô tả.
                 </div>
               </div>
               {canManageArticles && (
@@ -2436,16 +2440,19 @@ export default function ArticlesPage() {
                   onChange={e => {
                     const nextLink = e.target.value;
                     const derivedArticleId = extractArticleIdFromLink(nextLink);
+                    const requiresLinkId = isLinkIdRequiredForArticleType(formData.articleType);
                     setFormData({
                       ...formData,
                       link: nextLink,
-                      articleId: derivedArticleId || (canManageArticles ? formData.articleId || "" : ""),
+                      articleId: requiresLinkId
+                        ? (derivedArticleId || (canManageArticles ? formData.articleId || "" : ""))
+                        : (derivedArticleId || (canManageArticles ? formData.articleId || "" : "")),
                     });
                   }}
                   placeholder="https://domain.com/bai-viet-203046"
                 />
                 <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Link bài viết phải có đủ 6 chữ số ID ở cuối đường dẫn. Khi dán link hợp lệ, hệ thống sẽ tự điền Mã ID.
+                  Link bài viết phải có đủ 6 chữ số ID ở cuối đường dẫn để tự điền Mã ID. Riêng bài mô tả không bắt buộc quy tắc này.
                 </div>
               </div>
               <div className="form-group">
