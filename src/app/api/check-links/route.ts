@@ -36,6 +36,8 @@ type LinkCheckResultItem = {
   status: LinkHealthStatus;
   checkedAt: string;
   slotKey: string | null;
+  reason?: string;
+  finalUrl?: string;
 };
 
 type LinkCheckBody = {
@@ -63,6 +65,7 @@ type CheckedLinkStatus = {
   url: string;
   finalUrl: string;
   status: LinkHealthStatus;
+  reason?: string;
 };
 
 const HTML_SNIFF_LIMIT_BYTES = 32 * 1024;
@@ -122,16 +125,18 @@ function parseLegacyUrls(value: unknown) {
   return Array.from(new Set(value.map((entry) => normalizeLinkCandidate(entry)).filter(Boolean)));
 }
 
-function isSoft404Html(hostname: string, html: string) {
+function detectSoft404Reason(hostname: string, html: string) {
   const foldedHtml = foldForPattern(html);
-  if (!foldedHtml) return false;
+  if (!foldedHtml) return null;
 
-  if (GENERIC_SOFT_404_PATTERNS.some((pattern) => pattern.every((token) => foldedHtml.includes(token)))) {
-    return true;
+  const genericPattern = GENERIC_SOFT_404_PATTERNS.find((pattern) => pattern.every((token) => foldedHtml.includes(token)));
+  if (genericPattern) {
+    return `soft404:generic:${genericPattern.join("+")}`;
   }
 
   const hostPatterns = HOST_SOFT_404_PATTERNS.find((entry) => entry.hostnamePattern.test(hostname));
-  return Boolean(hostPatterns?.patterns.some((pattern) => pattern.every((token) => foldedHtml.includes(token))));
+  const hostPattern = hostPatterns?.patterns.find((pattern) => pattern.every((token) => foldedHtml.includes(token)));
+  return hostPattern ? `soft404:host:${hostPattern.join("+")}` : null;
 }
 
 function isSameHostname(originalUrl: string, finalUrl: string) {
@@ -177,11 +182,11 @@ async function checkLinkStatus(url: string): Promise<CheckedLinkStatus> {
     const headFinalUrl = headResponse?.url || url;
 
     if (headResponse && headResponse.status >= 400 && headResponse.status !== 403 && headResponse.status !== 405) {
-      return { url, finalUrl: headFinalUrl, status: "broken" };
+      return { url, finalUrl: headFinalUrl, status: "broken", reason: `head:${headResponse.status}` };
     }
 
     if (isRedirectedArticleIdMismatch(url, headFinalUrl)) {
-      return { url, finalUrl: headFinalUrl, status: "broken" };
+      return { url, finalUrl: headFinalUrl, status: "broken", reason: "redirect-id-mismatch:head" };
     }
 
     const headContentType = headResponse?.headers.get("content-type") || "";
@@ -192,7 +197,12 @@ async function checkLinkStatus(url: string): Promise<CheckedLinkStatus> {
     const getResponse = await fetchWithTimeout(url, { method: "GET" });
     const finalUrl = getResponse.url || headFinalUrl || url;
     if (!getResponse.ok || isRedirectedArticleIdMismatch(url, finalUrl)) {
-      return { url, finalUrl, status: "broken" };
+      return {
+        url,
+        finalUrl,
+        status: "broken",
+        reason: !getResponse.ok ? `get:${getResponse.status}` : "redirect-id-mismatch:get",
+      };
     }
 
     const contentType = getResponse.headers.get("content-type") || "";
@@ -205,14 +215,15 @@ async function checkLinkStatus(url: string): Promise<CheckedLinkStatus> {
           return "";
         }
       })();
-      if (isSoft404Html(hostname, snippet)) {
-        return { url, finalUrl, status: "broken" };
+      const soft404Reason = detectSoft404Reason(hostname, snippet);
+      if (soft404Reason) {
+        return { url, finalUrl, status: "broken", reason: soft404Reason };
       }
     }
 
-    return { url, finalUrl, status: "ok" };
+    return { url, finalUrl, status: "ok", reason: "ok" };
   } catch {
-    return { url, finalUrl: url, status: "unknown" };
+    return { url, finalUrl: url, status: "unknown", reason: "exception" };
   }
 }
 
@@ -284,6 +295,8 @@ async function persistLinkHealth(rows: ArticleLinkRow[], statusMap: Map<number, 
       status: checkedStatus.status,
       checkedAt,
       slotKey,
+      reason: checkedStatus.reason,
+      finalUrl: checkedStatus.finalUrl,
     });
   }
 
