@@ -106,6 +106,7 @@ function foldForPattern(value: unknown) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
     .toLowerCase();
 }
 
@@ -198,7 +199,7 @@ function isBotBlockedStatus(status: number) {
 
 async function readResponseSnippet(response: Response) {
   const text = await response.text();
-  return text.slice(0, HTML_SNIFF_LIMIT_BYTES);
+  return text.slice(0, Math.max(HTML_SNIFF_LIMIT_BYTES, text.length));
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit) {
