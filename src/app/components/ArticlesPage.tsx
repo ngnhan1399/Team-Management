@@ -405,12 +405,18 @@ export default function ArticlesPage() {
       const brokenCount = checkedItems.filter((item) => item.status === "broken").length;
       const unknownCount = checkedItems.filter((item) => item.status === "unknown").length;
       const okCount = checkedItems.filter((item) => item.status === "ok").length;
+      const pendingVerificationCount = Math.max(0, visibleItems.length - checkedItems.length);
+
+      const toastDetails = [
+        brokenCount > 0 ? `${brokenCount} lỗi` : "",
+        okCount > 0 ? `${okCount} hoạt động` : "",
+        unknownCount > 0 ? `${unknownCount} chưa xác minh` : "",
+        pendingVerificationCount > 0 ? `${pendingVerificationCount} đang chờ xác minh nền` : "",
+      ].filter(Boolean).join(", ");
 
       showUiToast(
         "Da kiem tra link",
-        brokenCount > 0
-          ? `Đã kiểm tra ${checkedItems.length} link: ${brokenCount} lỗi, ${okCount} hoạt động, ${unknownCount} chưa xác minh.`
-          : `Đã kiểm tra ${checkedItems.length} link. ${okCount} link hoạt động${unknownCount > 0 ? `, ${unknownCount} link chưa xác minh.` : "."}`,
+        toastDetails ? `Đã xử lý ${visibleItems.length} link: ${toastDetails}.` : "Không có thay đổi mới về trạng thái link.",
         brokenCount > 0 ? "warning" : "success"
       );
     } catch (error) {

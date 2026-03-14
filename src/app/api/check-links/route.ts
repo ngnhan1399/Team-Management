@@ -69,7 +69,9 @@ type ArticleLinkRow = {
   createdByUserId: number | null;
   date: string;
   updatedAt: string;
+  linkHealthStatus: LinkHealthStatus | null;
   linkHealthCheckedAt: string | null;
+  linkHealthCheckSlot: string | null;
 };
 
 type CheckedLinkStatus = {
@@ -340,6 +342,31 @@ async function persistLinkHealth(rows: ArticleLinkRow[], statusMap: Map<number, 
     const checkedStatus = statusMap.get(row.id);
     if (!checkedStatus) continue;
 
+    const preservedKnownStatus = slotKey === null
+      && checkedStatus.status === "unknown"
+      && row.linkHealthCheckedAt
+      && row.linkHealthStatus
+      && row.linkHealthStatus !== "unknown"
+        ? row.linkHealthStatus
+        : null;
+
+    if (preservedKnownStatus) {
+      results.push({
+        articleId: row.id,
+        url: row.link || checkedStatus.url,
+        status: preservedKnownStatus,
+        checkedAt: row.linkHealthCheckedAt || checkedAt,
+        slotKey: row.linkHealthCheckSlot || null,
+        reason: checkedStatus.reason,
+        finalUrl: checkedStatus.finalUrl,
+      });
+      continue;
+    }
+
+    if (slotKey === null && checkedStatus.status === "unknown") {
+      continue;
+    }
+
     await db
       .update(articles)
       .set({
@@ -410,7 +437,9 @@ async function selectArticleRowsByIds(articleIds: number[]) {
       createdByUserId: articles.createdByUserId,
       date: articles.date,
       updatedAt: articles.updatedAt,
+      linkHealthStatus: articles.linkHealthStatus,
       linkHealthCheckedAt: articles.linkHealthCheckedAt,
+      linkHealthCheckSlot: articles.linkHealthCheckSlot,
     })
     .from(articles)
     .where(inArray(articles.id, articleIds))
@@ -442,7 +471,9 @@ async function loadScheduledRows(limit: number) {
       createdByUserId: articles.createdByUserId,
       date: articles.date,
       updatedAt: articles.updatedAt,
+      linkHealthStatus: articles.linkHealthStatus,
       linkHealthCheckedAt: articles.linkHealthCheckedAt,
+      linkHealthCheckSlot: articles.linkHealthCheckSlot,
     })
     .from(articles)
     .where(and(
