@@ -1,5 +1,33 @@
 # Codex Handoff
 
+## Update 2026-03-14 (Google Sheet mirror không chèn dòng giữa sheet nữa)
+
+- Đã sửa Apps Script mẫu ở `output/google-sheets-webhook.workdocker.gs`.
+- Root cause:
+  - hàm `appendArticleRow_()` trước đó dùng `sheet.insertRowAfter(insertAfterRow)`
+  - thao tác này chèn hẳn một dòng mới vào giữa sheet
+  - vì sheet gốc có block KPI/nhuận ở bên phải, việc chèn dòng làm lệch toàn bộ dữ liệu ở các cột phải
+- Logic mới:
+  - tìm **hàng trống kế tiếp** trong vùng bảng bài viết
+  - dùng lại hàng trống đó để ghi dữ liệu
+  - chỉ copy format/data validation trong vùng cột bài viết
+  - không đụng vào phần KPI/nhuận bên phải
+  - chỉ khi hết hẳn hàng trống thì mới thêm hàng ở **cuối** sheet, không chèn giữa bảng
+
+### File đã động vào
+
+- `output/google-sheets-webhook.workdocker.gs`
+- `docs/google-sheets-webhook.md`
+- `docs/codex-handoff.md`
+
+### Ghi chú vận hành
+
+- Sau khi sửa file Apps Script mẫu trong repo, bắt buộc:
+  - dán lại script vào Google Apps Script
+  - lưu
+  - redeploy web app
+- Nếu không redeploy, Google Sheet vẫn chạy logic cũ có `insertRowAfter(...)`
+
 ## Update 2026-03-14 (ổn định link-check FPT Shop + tránh ghi đè `unknown`)
 
 - Đã ghi postmortem chi tiết ở `docs/link-check-fpt-regression-2026-03-14.md`.

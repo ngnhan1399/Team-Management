@@ -318,23 +318,74 @@ function findLastArticleRowNumber_(sheet, headerInfo) {
   return headerInfo.rowNumber;
 }
 
-function copyTemplateRow_(sheet, templateRowNumber, targetRowNumber) {
-  const lastColumn = sheet.getLastColumn();
-  if (!lastColumn) return;
+function getTrackedArticleColumns_(headerInfo) {
+  const mapping = headerInfo.mapping || {};
+  return [
+    mapping.articleId,
+    mapping.date,
+    mapping.title,
+    mapping.articleType,
+    mapping.wordCountRange,
+    mapping.penName,
+    mapping.status,
+    mapping.notes,
+    mapping.reviewerName,
+    mapping.link,
+  ].filter(function (value) {
+    return Number.isInteger(value) && value > 0;
+  });
+}
 
-  const sourceRange = sheet.getRange(templateRowNumber, 1, 1, lastColumn);
-  const targetRange = sheet.getRange(targetRowNumber, 1, 1, lastColumn);
+function getArticleTableLastColumn_(headerInfo) {
+  const trackedColumns = getTrackedArticleColumns_(headerInfo);
+  return trackedColumns.length ? Math.max.apply(null, trackedColumns) : 0;
+}
+
+function isArticleAreaBlank_(rowValues, trackedColumns) {
+  return trackedColumns.every(function (columnIndex) {
+    return String(rowValues[columnIndex - 1] || '').trim() === '';
+  });
+}
+
+function findNextAvailableArticleRowNumber_(sheet, headerInfo, startRowNumber) {
+  const trackedColumns = getTrackedArticleColumns_(headerInfo);
+  const articleLastColumn = getArticleTableLastColumn_(headerInfo);
+  if (!trackedColumns.length || !articleLastColumn) {
+    return Math.max(headerInfo.rowNumber + 1, startRowNumber);
+  }
+
+  const searchStartRow = Math.max(headerInfo.rowNumber + 1, startRowNumber);
+  const maxRows = sheet.getMaxRows();
+  if (searchStartRow <= maxRows) {
+    const values = sheet.getRange(searchStartRow, 1, maxRows - searchStartRow + 1, articleLastColumn).getDisplayValues();
+    for (let index = 0; index < values.length; index += 1) {
+      if (isArticleAreaBlank_(values[index], trackedColumns)) {
+        return searchStartRow + index;
+      }
+    }
+  }
+
+  const rowsToAdd = Math.max(1, searchStartRow - maxRows);
+  sheet.insertRowsAfter(maxRows, rowsToAdd);
+  return searchStartRow;
+}
+
+function copyTemplateRow_(sheet, headerInfo, templateRowNumber, targetRowNumber) {
+  const articleLastColumn = getArticleTableLastColumn_(headerInfo);
+  if (!articleLastColumn) return;
+
+  const sourceRange = sheet.getRange(templateRowNumber, 1, 1, articleLastColumn);
+  const targetRange = sheet.getRange(targetRowNumber, 1, 1, articleLastColumn);
   sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
   sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
   targetRange.clearContent();
 }
 
 function appendArticleRow_(sheet, headerInfo, article) {
-  const insertAfterRow = findLastArticleRowNumber_(sheet, headerInfo);
-  sheet.insertRowAfter(insertAfterRow);
-  const targetRowNumber = insertAfterRow + 1;
-  const templateRowNumber = Math.max(headerInfo.rowNumber + 1, insertAfterRow);
-  copyTemplateRow_(sheet, templateRowNumber, targetRowNumber);
+  const lastArticleRow = findLastArticleRowNumber_(sheet, headerInfo);
+  const targetRowNumber = findNextAvailableArticleRowNumber_(sheet, headerInfo, lastArticleRow + 1);
+  const templateRowNumber = Math.max(headerInfo.rowNumber + 1, lastArticleRow || headerInfo.rowNumber + 1);
+  copyTemplateRow_(sheet, headerInfo, templateRowNumber, targetRowNumber);
 
   const mapping = headerInfo.mapping;
   setFieldValue_(sheet, targetRowNumber, mapping.articleId, article.articleId || '');

@@ -81,7 +81,9 @@ Nếu bạn tạo bài mới bằng form trong công cụ:
 
 - hệ thống sẽ xác định tab tháng theo `Ngày viết`
 - thử tìm bài tương ứng trong tab đó để tránh trùng
-- nếu chưa có thì thêm một dòng mới vào cuối bảng
+- nếu chưa có thì ưu tiên dùng lại **hàng trống kế tiếp ngay dưới bảng bài viết**
+- không còn `insert row` chen giữa sheet như trước, nên sẽ không đẩy lệch các block KPI/nhuận ở bên phải
+- chỉ khi vùng bài viết đã dùng hết hàng có sẵn thì script mới nới thêm hàng ở **cuối sheet**
 - đồng thời tạo liên kết `article_sync_links` để các lần sync sau tiếp tục đi đúng cùng một dòng
 
 Các trường sẽ được ghi sang sheet theo mapping:
@@ -111,3 +113,21 @@ Các trường sẽ được ghi sang sheet theo mapping:
 - Hệ thống dùng `article_sync_links` để biết bài nào thuộc dòng nào trong sheet.
 - Nếu khóa nhận diện dòng thay đổi sau khi app cập nhật dữ liệu, lần sync sau vẫn sẽ tự bắt lại đúng dòng thay vì xóa nhầm bài.
 - Các tab mới thêm vào vẫn được nhận diện nếu tên tab có dạng tháng/năm, ví dụ `Tháng 032026`, `Tháng 03/2026`, `Tháng 3 2026`, hoặc `Bản sao của Tháng ...`.
+- Script Apps Script mới chỉ copy format/data validation trong vùng cột của bảng bài viết, không chạm vào các cột KPI/nhuận ở bên phải.
+
+## Khi cập nhật Apps Script
+
+Sau mỗi lần sửa file:
+
+```text
+output/google-sheets-webhook.workdocker.gs
+```
+
+cần làm lại các bước sau trên Google Apps Script:
+
+1. Dán lại toàn bộ nội dung script mới.
+2. Lưu file.
+3. `Triển khai` lại web app.
+4. Dùng URL web app mới nhất nếu Google tạo deployment URL khác.
+
+Nếu không redeploy lại Apps Script, web app cũ vẫn sẽ chạy logic cũ và tiếp tục `insert row` giữa sheet.
