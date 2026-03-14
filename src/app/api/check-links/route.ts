@@ -17,6 +17,7 @@ import {
   type LinkHealthStatus,
   getLatestDueLinkCheckSlot,
 } from "@/lib/link-health";
+import { checkLinkStatusWithBrowser } from "@/lib/link-health-browser";
 import { normalizeString } from "@/lib/normalize";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { canAccessTeam, getContextTeamId, isLeader } from "@/lib/teams";
@@ -203,10 +204,20 @@ async function checkLinkStatus(url: string): Promise<CheckedLinkStatus> {
     const getResponse = await fetchWithTimeout(url, { method: "GET" });
     const finalUrl = getResponse.url || headFinalUrl || url;
     if (!getResponse.ok && isBotBlockedStatus(getResponse.status) && (headLooksHealthy || headLooksBotBlocked)) {
+      const browserChecked = await checkLinkStatusWithBrowser(url);
+      if (browserChecked) {
+        return {
+          url,
+          finalUrl: browserChecked.finalUrl,
+          status: browserChecked.status,
+          reason: browserChecked.reason,
+        };
+      }
+
       return {
         url,
         finalUrl,
-        status: "ok",
+        status: "unknown",
         reason: `bot-blocked:head-${headResponse?.status ?? "none"}:get-${getResponse.status}`,
       };
     }
