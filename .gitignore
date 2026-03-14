@@ -69,3 +69,5 @@ next-env.d.ts
 .vercel
 rune.config.json
 rune.config.local.json
+
+.vercel

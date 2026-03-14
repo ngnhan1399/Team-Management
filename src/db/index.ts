@@ -486,7 +486,14 @@ export async function initializeDatabase() {
     await pool.query(statement);
   }
 
-  await pool.query(`ALTER TABLE articles ALTER COLUMN status SET DEFAULT 'Submitted'`);
+  try {
+    await pool.query(`ALTER TABLE articles ALTER COLUMN status SET DEFAULT 'Submitted'`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    if (!/ALTER TABLE/i.test(message) && !/not supported/i.test(message)) {
+      throw error;
+    }
+  }
   await pool.query(`UPDATE collaborators SET role = 'reviewer' WHERE role = 'editor'`);
   await pool.query(`UPDATE users SET is_leader = true WHERE role = 'admin' AND is_leader = false`);
 
