@@ -83,8 +83,10 @@ export default function RoyaltyPage() {
     { value: "paid", label: "Đã thanh toán" },
   ];
 
-  const fetchDashboard = useCallback(() => {
-    setLoading(true);
+  const fetchDashboard = useCallback((showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     const params = new URLSearchParams({
       action: "dashboard",
       month: String(overviewMonth),
@@ -95,9 +97,15 @@ export default function RoyaltyPage() {
       .then(d => {
         setDashboard(d.data);
         setBudgetInput(d.data?.budget?.hasBudget ? String(d.data.budget.budgetAmount) : "");
-        setLoading(false);
+        if (showLoading) {
+          setLoading(false);
+        }
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        if (showLoading) {
+          setLoading(false);
+        }
+      });
   }, [overviewMonth, overviewYear]);
 
   const fetchRates = useCallback((preferCache = true) => {
@@ -173,7 +181,7 @@ export default function RoyaltyPage() {
   }, [isAdmin, isLeader, user?.id, user?.teamId]);
 
   useEffect(() => {
-    fetchDashboard();
+    fetchDashboard(true);
   }, [fetchDashboard]);
 
   useEffect(() => {
@@ -194,7 +202,9 @@ export default function RoyaltyPage() {
   }, [fetchPayments, tab]);
 
   const refreshRoyaltyView = useCallback(() => {
-    if (tab === "overview") fetchDashboard();
+    if (tab === "overview") {
+      fetchDashboard(false);
+    }
     if (tab === "rates") void fetchRates(false);
     if (tab === "calculate") fetchCalculation();
     if (tab === "workflow") fetchPayments();
@@ -222,7 +232,7 @@ export default function RoyaltyPage() {
     }
   }, []);
 
-  useRealtimeRefresh(["royalty", "articles"], scheduleRoyaltyRefresh);
+  useRealtimeRefresh(["royalty"], scheduleRoyaltyRefresh);
 
   const handleSetBudget = async () => {
     const amount = parseInt(budgetInput);
@@ -234,7 +244,7 @@ export default function RoyaltyPage() {
       body: JSON.stringify({ action: "set-budget", month: overviewMonth, year: overviewYear, budgetAmount: amount }),
     });
     setBudgetSaving(false);
-    fetchDashboard();
+    fetchDashboard(true);
   };
 
   const generatePayments = async () => {
