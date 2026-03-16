@@ -9,7 +9,7 @@ import BrandLogo from "./BrandLogo";
 import { APP_NAVIGATION_START_EVENT } from "./navigation-events";
 import { useAuth } from "./auth-context";
 import { emitRealtimePayload } from "./realtime";
-import type { NotifItem, Page } from "./types";
+import type { KpiViewerSnapshot, NotifItem, Page } from "./types";
 import { useIsMobile } from "./useMediaQuery";
 import BottomTabBar from "./BottomTabBar";
 import { CONTENT_WORK_REGISTRATION_TITLE, CONTENT_WORK_REGISTRATION_URL, isContentWorkRegistrationReminderTitle } from "@/lib/content-work-registration";
@@ -19,6 +19,7 @@ const loadAuditLogsPage = () => import("./AuditLogsPage");
 const loadContentWorkPage = () => import("./ContentWorkPage");
 const loadEditorialTasksPage = () => import("./EditorialTasksPage");
 const loadFeedbackPage = () => import("./FeedbackPage");
+const loadKpiPage = () => import("./KpiPage");
 const loadNotificationsPage = () => import("./NotificationsPage");
 const loadProfilePage = () => import("./ProfilePage");
 const loadRoyaltyPage = () => import("./RoyaltyPage");
@@ -49,6 +50,7 @@ const AuditLogsPage = dynamic(loadAuditLogsPage, { loading: () => <PageLoadingSt
 const ContentWorkPage = dynamic(loadContentWorkPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const EditorialTasksPage = dynamic(loadEditorialTasksPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const FeedbackPage = dynamic(loadFeedbackPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const KpiPage = dynamic(loadKpiPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const NotificationsPage = dynamic(loadNotificationsPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const ProfilePage = dynamic(loadProfilePage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const RoyaltyPage = dynamic(loadRoyaltyPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
@@ -59,6 +61,7 @@ const pageLoaders: Partial<Record<Page, () => Promise<unknown>>> = {
   audit: loadAuditLogsPage,
   contentWork: loadContentWorkPage,
   feedback: loadFeedbackPage,
+  kpi: loadKpiPage,
   notifications: loadNotificationsPage,
   profile: loadProfilePage,
   royalty: loadRoyaltyPage,
@@ -72,11 +75,18 @@ const pageLabels: Record<Page, string> = {
   contentWork: "Content Work",
   tasks: "Lịch biên tập",
   team: "Đội ngũ",
+  kpi: "KPI",
   royalty: "Nhuận bút",
   notifications: "Thông báo",
   feedback: "Feedback",
   audit: "Audit Logs",
   profile: "Hồ sơ",
+};
+
+type DailyKpiPopupState = {
+  month: number;
+  year: number;
+  summary: KpiViewerSnapshot;
 };
 
 type NavItem = {
@@ -99,6 +109,7 @@ export default function MainApp() {
   const [hasVisibleTasks, setHasVisibleTasks] = useState(false);
   const [pendingRegistrationReminder, setPendingRegistrationReminder] = useState<NotifItem | null>(null);
   const [markingRegistrationReminderRead, setMarkingRegistrationReminderRead] = useState(false);
+  const [dailyKpiPopup, setDailyKpiPopup] = useState<DailyKpiPopupState | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isPageTransitionPending, startPageTransition] = useTransition();
   const seenRealtimeIdsRef = useRef<number[]>([]);
@@ -129,6 +140,7 @@ export default function MainApp() {
   const shouldShowTasksNav = isAdmin || hasVisibleTasks;
   const shouldKeepRealtimeLive = page === "articles"
     || page === "contentWork"
+    || page === "kpi"
     || page === "tasks"
     || page === "notifications"
     || page === "team";
@@ -329,6 +341,44 @@ export default function MainApp() {
     }
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user?.id || user.role !== "ctv" || typeof window === "undefined") {
+      setDailyKpiPopup(null);
+      return;
+    }
+
+    const now = new Date();
+    const dateKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const currentMonth = Number(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Ho_Chi_Minh", month: "numeric" }).format(now));
+    const currentYear = Number(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric" }).format(now));
+    const storageKey = `daily-kpi-popup:${user.id}:${dateKey}`;
+
+    if (window.localStorage.getItem(storageKey)) {
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`/api/kpi?month=${currentMonth}&year=${currentYear}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => {
+        const viewerSummary = payload?.data?.viewerSummary;
+        if (!viewerSummary || cancelled) {
+          return;
+        }
+        setDailyKpiPopup({ month: currentMonth, year: currentYear, summary: viewerSummary });
+        window.localStorage.setItem(storageKey, "shown");
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role]);
   const handleOpenContentWorkRegistration = useCallback(() => {
     if (typeof window !== "undefined") {
       window.open(CONTENT_WORK_REGISTRATION_URL, "_blank", "noopener,noreferrer");
@@ -432,6 +482,7 @@ export default function MainApp() {
     { id: "contentWork", label: "Content Work", icon: "task_alt", section: "Quản lý" },
     { id: "tasks", label: "Lịch biên tập", icon: "calendar_month", section: "Quản lý", hidden: !shouldShowTasksNav },
     { id: "team", label: "Đội ngũ", icon: "group", section: "Quản lý", adminOnly: true },
+    { id: "kpi", label: "KPI", icon: "flag", section: "Quản lý" },
     { id: "royalty", label: "Nhuận bút", icon: "payments", section: "Quản lý" },
     { id: "audit", label: "Audit Logs", icon: "history", section: "Quản lý", adminOnly: true, leaderOnly: true },
   ];
@@ -553,6 +604,7 @@ export default function MainApp() {
           {page === "contentWork" && <ContentWorkPage />}
           {page === "tasks" && shouldShowTasksNav && <EditorialTasksPage />}
           {page === "team" && isAdmin && <TeamPage />}
+          {page === "kpi" && <KpiPage />}
           {page === "royalty" && <RoyaltyPage />}
           {page === "audit" && isLeader && <AuditLogsPage />}
           {page === "notifications" && <NotificationsPage />}
@@ -571,6 +623,51 @@ export default function MainApp() {
           showContentWorkTab
           showTasksTab={shouldShowTasksNav}
         />
+      )}
+      {user?.role === "ctv" && dailyKpiPopup && !pendingRegistrationReminder && (
+        <div className="modal-overlay" style={{ zIndex: 1190 }}>
+          <div className="modal" style={{ width: "min(92vw, 560px)", maxWidth: 560, overflow: "hidden" }}>
+            <div style={{ position: "relative", padding: 24, background: "linear-gradient(135deg, rgba(37,99,235,0.16), rgba(16,185,129,0.12), rgba(255,255,255,0.98))" }}>
+              <div style={{ position: "absolute", top: -24, right: -24, width: 120, height: 120, borderRadius: "50%", background: "rgba(37,99,235,0.12)" }} />
+              <div style={{ position: "absolute", bottom: -32, left: -20, width: 140, height: 140, borderRadius: "50%", background: "rgba(16,185,129,0.12)" }} />
+              <div style={{ position: "relative", display: "flex", gap: 16, alignItems: "center" }}>
+                <div style={{ width: 64, height: 64, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.78)", boxShadow: "0 16px 36px rgba(37,99,235,0.16)" }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 34, color: "var(--accent-blue)" }}>rocket_launch</span>
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--accent-blue)" }}>Check-in KPI hôm nay</p>
+                  <h3 style={{ margin: "8px 0 0", fontSize: 28, fontWeight: 900, color: "var(--text-main)" }}>Cố lên nhé, {dailyKpiPopup.summary.name}!</h3>
+                  <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                    Số bài của bạn trong tháng {dailyKpiPopup.month}/{dailyKpiPopup.year} là <strong>{dailyKpiPopup.summary.actualKpi}</strong>.
+                    {dailyKpiPopup.summary.remainingKpi > 0
+                      ? <> Bạn còn <strong>{dailyKpiPopup.summary.remainingKpi}</strong> bài để hoàn thành KPI. Cố lên nhé!</>
+                      : <> Bạn đã hoàn thành KPI tháng này rồi, tiếp tục giữ phong độ thật tốt nhé!</>}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="modal-body" style={{ display: "grid", gap: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+                <div style={{ padding: 14, borderRadius: 18, background: "rgba(37,99,235,0.08)" }}><p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>KPI tháng</p><p style={{ margin: "8px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-main)" }}>{dailyKpiPopup.summary.targetKpi}</p></div>
+                <div style={{ padding: 14, borderRadius: 18, background: "rgba(16,185,129,0.08)" }}><p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Đã làm</p><p style={{ margin: "8px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-main)" }}>{dailyKpiPopup.summary.actualKpi}</p></div>
+                <div style={{ padding: 14, borderRadius: 18, background: "rgba(249,115,22,0.08)" }}><p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Còn lại</p><p style={{ margin: "8px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-main)" }}>{dailyKpiPopup.summary.remainingKpi}</p></div>
+              </div>
+              <div>
+                <div style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-muted)" }}>
+                  <span>Tiến độ hôm nay</span>
+                  <strong style={{ color: "var(--text-main)" }}>{dailyKpiPopup.summary.completionPercentage}%</strong>
+                </div>
+                <div style={{ height: 12, borderRadius: 999, background: "rgba(148, 163, 184, 0.16)", overflow: "hidden" }}>
+                  <div style={{ width: `${Math.max(8, Math.min(dailyKpiPopup.summary.completionPercentage, 100))}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #2563eb, #10b981)" }} />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "flex-end" }}>
+              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setDailyKpiPopup(null)}>Mình sẽ cố gắng</button>
+              <button className="btn-ios-pill btn-ios-primary" onClick={() => { setDailyKpiPopup(null); navigateToPage("kpi"); }}>Xem KPI ngay</button>
+            </div>
+          </div>
+        </div>
       )}
       {user?.role === "ctv" && pendingRegistrationReminder && (
         <div className="modal-overlay" style={{ zIndex: 1200 }}>

@@ -1,4 +1,4 @@
-export type Page = "dashboard" | "articles" | "contentWork" | "tasks" | "team" | "royalty" | "notifications" | "feedback" | "audit" | "profile";
+export type Page = "dashboard" | "articles" | "contentWork" | "tasks" | "team" | "kpi" | "royalty" | "notifications" | "feedback" | "audit" | "profile";
 
 export interface Collaborator {
   id: number;
@@ -178,6 +178,53 @@ export interface ContentWorkRegistrationItem {
   articleStatus: string;
   formUrl: string;
   sheetUrl: string;
+}
+
+export interface KpiMemberRow {
+  collaboratorId: number;
+  teamId: number | null;
+  name: string;
+  penName: string;
+  role: "writer" | "reviewer";
+  status: string;
+  linkedUserRole?: "admin" | "ctv" | null;
+  targetKpi: number;
+  actualKpi: number;
+  totalKpi: number;
+  remainingKpi: number;
+  overKpi: number;
+  completionPercentage: number;
+  evaluation: string | null;
+}
+
+export interface KpiSummary {
+  totalMembers: number;
+  totalAssignedKpi: number;
+  totalActualKpi: number;
+  totalRemainingKpi: number;
+  totalOverKpi: number;
+  completionPercentage: number;
+}
+
+export interface KpiViewerSnapshot {
+  penName: string;
+  name: string;
+  role: "writer" | "reviewer";
+  targetKpi: number;
+  actualKpi: number;
+  remainingKpi: number;
+  overKpi: number;
+  completionPercentage: number;
+}
+
+export interface KpiResponseData {
+  month: number;
+  year: number;
+  teamId: number | null;
+  canManage: boolean;
+  rows: KpiMemberRow[];
+  summary: KpiSummary;
+  viewerSummary: KpiViewerSnapshot | null;
 }
 
 export interface DashboardStatusRow {
