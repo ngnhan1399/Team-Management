@@ -42,8 +42,17 @@ function buildArticleOwnerWhere(ownerCandidates: string[]): SQL | undefined {
     return inArray(articles.penName, normalizedCandidates as never[]);
 }
 
-async function selectRoyaltyArticles(options?: { ownerCandidates?: string[]; exactPenName?: string; teamId?: number | null }) {
-    const conditions: SQL[] = [inArray(articles.status, [...ROYALTY_ELIGIBLE_STATUS_VALUES])];
+async function selectRoyaltyArticles(options?: {
+    ownerCandidates?: string[];
+    exactPenName?: string;
+    teamId?: number | null;
+    includeAllStatuses?: boolean;
+}) {
+    const conditions: SQL[] = [];
+
+    if (!options?.includeAllStatuses) {
+        conditions.push(inArray(articles.status, [...ROYALTY_ELIGIBLE_STATUS_VALUES]));
+    }
 
     if (options?.exactPenName) {
         conditions.push(eq(articles.penName, options.exactPenName));
@@ -227,6 +236,7 @@ export async function GET(request: NextRequest) {
                 selectRoyaltyArticles({
                     ownerCandidates: scopedTeamId ? undefined : (context.user.role === "admin" ? undefined : ownerCandidates),
                     teamId: scopedTeamId,
+                    includeAllStatuses: true,
                 }),
                 loadRoyaltyContributorProfiles(profileScopeTeamId),
             ]);

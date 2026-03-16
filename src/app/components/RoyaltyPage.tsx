@@ -519,7 +519,7 @@ export default function RoyaltyPage() {
                       <div style={{ position: "relative", width: isMobile ? 180 : 220, height: isMobile ? 180 : 220, borderRadius: "50%", background: contentBalancePie, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.05)" }}>
                         <div style={{ position: "absolute", inset: isMobile ? 24 : 28, borderRadius: "50%", background: "var(--bg-card)", border: "1px solid var(--glass-border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                           <div style={{ fontSize: isMobile ? 32 : 36, fontWeight: 900, color: "var(--text-main)", lineHeight: 1 }}>{contentBalance.totalArticles}</div>
-                          <div style={{ marginTop: 6, fontSize: isMobile ? 10 : 12, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", maxWidth: isMobile ? 100 : "none" }}>Bài đủ điều kiện</div>
+                          <div style={{ marginTop: 6, fontSize: isMobile ? 10 : 12, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", maxWidth: isMobile ? 100 : "none" }}>Bài trong tháng</div>
                         </div>
                       </div>
 
@@ -543,7 +543,7 @@ export default function RoyaltyPage() {
                     </>
                   ) : (
                     <div style={{ width: "100%", minHeight: 220, borderRadius: 20, border: "1px dashed var(--glass-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 14 }}>
-                      Chưa có bài đủ điều kiện trong kỳ này để tính tỉ lệ nội dung.
+                      Chưa có bài CTV nào trong kỳ này để tính tỉ lệ nội dung.
                     </div>
                   )}
                 </div>
