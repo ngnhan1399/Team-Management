@@ -412,7 +412,7 @@ export default function KpiPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <h1 style={{ margin: 0, fontSize: isMobile ? 30 : 38, fontWeight: 950, letterSpacing: "-0.04em", color: "var(--text-main)" }}>KPI tháng</h1>
-            <p style={{ margin: "10px 0 0", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6 }}>KPI thực tế được tính tự động theo toàn bộ bài của CTV trong tháng đang chọn. Bảng KPI đã được tách riêng cho nhóm viết và nhóm duyệt.</p>
+            <p style={{ margin: "10px 0 0", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6 }}>{data.canManage ? "KPI thực tế được tính tự động theo toàn bộ bài của CTV trong tháng đang chọn. Bảng KPI đã được tách riêng cho nhóm viết và nhóm duyệt." : "Theo dõi KPI cá nhân của bạn trong tháng đang chọn. Trang này chỉ hiển thị tiến độ và kết quả của riêng bạn."}</p>
             {user?.team?.name ? <p style={{ margin: "10px 0 0", color: "var(--accent-blue)", fontSize: 13, fontWeight: 700 }}>Team hiện tại: {user.team.name}</p> : null}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
@@ -423,12 +423,14 @@ export default function KpiPage() {
         </div>
       </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))", gap: 16 }}>
-        <StatCard label="Tổng KPI tháng" value={compactNumber.format(data.summary.totalMonthlyTarget)} tone="blue" helper="Tổng KPI đã đặt cho cả nhóm viết và duyệt." />
-        <StatCard label="Đã phân cho thành viên" value={compactNumber.format(data.summary.totalAssignedKpi)} tone="purple" helper="Tổng KPI đang phân xuống từng CTV trong tháng." />
-        <StatCard label="Đã hoàn thành" value={compactNumber.format(data.summary.totalActualKpi)} tone="green" helper="Số bài thực tế hiện có trong tháng." />
-        <StatCard label="Còn thiếu" value={compactNumber.format(data.summary.totalRemainingKpi)} tone="orange" helper="Phần KPI còn thiếu để đạt chỉ tiêu cá nhân đã giao." />
-      </section>
+      {data.canManage ? (
+        <section style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))", gap: 16 }}>
+          <StatCard label="Tổng KPI tháng" value={compactNumber.format(data.summary.totalMonthlyTarget)} tone="blue" helper="Tổng KPI đã đặt cho cả nhóm viết và duyệt." />
+          <StatCard label="Đã phân cho thành viên" value={compactNumber.format(data.summary.totalAssignedKpi)} tone="purple" helper="Tổng KPI đang phân xuống từng CTV trong tháng." />
+          <StatCard label="Đã hoàn thành" value={compactNumber.format(data.summary.totalActualKpi)} tone="green" helper="Số bài thực tế hiện có trong tháng." />
+          <StatCard label="Còn thiếu" value={compactNumber.format(data.summary.totalRemainingKpi)} tone="orange" helper="Phần KPI còn thiếu để đạt chỉ tiêu cá nhân đã giao." />
+        </section>
+      ) : null}
 
       {viewer ? (
         <section className="card" style={{ padding: isMobile ? 20 : 24, borderRadius: 28, background: "linear-gradient(135deg, rgba(37,99,235,0.11), rgba(16,185,129,0.08), rgba(255,255,255,0.95))" }}>
@@ -436,6 +438,13 @@ export default function KpiPage() {
           <h3 style={{ margin: "10px 0 0", fontSize: 28, fontWeight: 900, color: "var(--text-main)" }}>{viewer.name}</h3>
           <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>Bạn đang ở nhóm <strong>{viewer.role === "reviewer" ? "CTV duyệt bài" : "CTV viết bài"}</strong>, đã có <strong>{compactNumber.format(viewer.actualKpi)}</strong> bài trong tháng này và còn <strong>{compactNumber.format(viewer.remainingKpi)}</strong> bài để chạm KPI.</p>
           <div style={{ marginTop: 16, height: 12, borderRadius: 999, background: "rgba(148, 163, 184, 0.16)", overflow: "hidden" }}><div style={{ width: `${Math.max(8, Math.min(viewer.completionPercentage, 100))}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #2563eb, #10b981)" }} /></div>
+          {!data.canManage ? (
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 14, marginTop: 18 }}>
+              <div style={{ padding: 14, borderRadius: 18, background: "rgba(37,99,235,0.08)" }}><p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>KPI tháng</p><p style={{ margin: "8px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-main)" }}>{compactNumber.format(viewer.targetKpi)}</p></div>
+              <div style={{ padding: 14, borderRadius: 18, background: "rgba(16,185,129,0.08)" }}><p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Đã hoàn thành</p><p style={{ margin: "8px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-main)" }}>{compactNumber.format(viewer.actualKpi)}</p></div>
+              <div style={{ padding: 14, borderRadius: 18, background: "rgba(249,115,22,0.08)" }}><p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Còn lại</p><p style={{ margin: "8px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-main)" }}>{compactNumber.format(viewer.remainingKpi)}</p></div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -453,35 +462,39 @@ export default function KpiPage() {
         </div>
       ) : null}
 
-      <KpiRoleSection
-        title="CTV viết bài"
-        role="writer"
-        rows={data.writerRows}
-        canManage={data.canManage}
-        isMobile={isMobile}
-        draftTargets={draftTargets}
-        draftEvaluations={draftEvaluations}
-        onTargetChange={(penName, nextValue) => setDraftTargets((current) => ({ ...current, [penName]: Math.max(0, nextValue) }))}
-        onEvaluationChange={(penName, nextValue) => setDraftEvaluations((current) => ({ ...current, [penName]: nextValue }))}
-        onWarn={handleWarn}
-        pendingWarnings={pendingWarnings}
-        summary={data.writerSummary}
-      />
+      {data.canManage ? (
+        <>
+          <KpiRoleSection
+            title="CTV viết bài"
+            role="writer"
+            rows={data.writerRows}
+            canManage={data.canManage}
+            isMobile={isMobile}
+            draftTargets={draftTargets}
+            draftEvaluations={draftEvaluations}
+            onTargetChange={(penName, nextValue) => setDraftTargets((current) => ({ ...current, [penName]: Math.max(0, nextValue) }))}
+            onEvaluationChange={(penName, nextValue) => setDraftEvaluations((current) => ({ ...current, [penName]: nextValue }))}
+            onWarn={handleWarn}
+            pendingWarnings={pendingWarnings}
+            summary={data.writerSummary}
+          />
 
-      <KpiRoleSection
-        title="CTV duyệt bài"
-        role="reviewer"
-        rows={data.reviewerRows}
-        canManage={data.canManage}
-        isMobile={isMobile}
-        draftTargets={draftTargets}
-        draftEvaluations={draftEvaluations}
-        onTargetChange={(penName, nextValue) => setDraftTargets((current) => ({ ...current, [penName]: Math.max(0, nextValue) }))}
-        onEvaluationChange={(penName, nextValue) => setDraftEvaluations((current) => ({ ...current, [penName]: nextValue }))}
-        onWarn={handleWarn}
-        pendingWarnings={pendingWarnings}
-        summary={data.reviewerSummary}
-      />
+          <KpiRoleSection
+            title="CTV duyệt bài"
+            role="reviewer"
+            rows={data.reviewerRows}
+            canManage={data.canManage}
+            isMobile={isMobile}
+            draftTargets={draftTargets}
+            draftEvaluations={draftEvaluations}
+            onTargetChange={(penName, nextValue) => setDraftTargets((current) => ({ ...current, [penName]: Math.max(0, nextValue) }))}
+            onEvaluationChange={(penName, nextValue) => setDraftEvaluations((current) => ({ ...current, [penName]: nextValue }))}
+            onWarn={handleWarn}
+            pendingWarnings={pendingWarnings}
+            summary={data.reviewerSummary}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
