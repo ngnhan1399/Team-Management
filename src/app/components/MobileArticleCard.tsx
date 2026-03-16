@@ -9,10 +9,13 @@ interface MobileArticleCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onComments?: () => void;
+  onRegisterContentWork?: () => void;
   canEdit?: boolean;
+  canRegisterContentWork?: boolean;
   canDelete?: boolean;
   showAuthor?: boolean;
   isDeleting?: boolean;
+  isRegisteringContentWork?: boolean;
   unreadComments?: number;
 }
 
@@ -21,10 +24,13 @@ export default function MobileArticleCard({
   onEdit,
   onDelete,
   onComments,
+  onRegisterContentWork,
   canEdit = true,
+  canRegisterContentWork = false,
   canDelete = true,
   showAuthor = true,
   isDeleting = false,
+  isRegisteringContentWork = false,
   unreadComments = 0,
 }: MobileArticleCardProps) {
   const penName = getDisplayedPenName(article.penName) || "N/A";
@@ -110,6 +116,15 @@ export default function MobileArticleCard({
         </div>
         
         <div className="flex gap-2">
+          {canRegisterContentWork && onRegisterContentWork && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRegisterContentWork(); }}
+              disabled={isRegisteringContentWork}
+              className="px-3 h-10 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/10 text-blue-600 text-[11px] font-bold uppercase tracking-wider active:scale-95 transition-transform disabled:opacity-60"
+            >
+              {isRegisteringContentWork ? "Đang gửi..." : "Content Work"}
+            </button>
+          )}
           {canDelete && onDelete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(); }}

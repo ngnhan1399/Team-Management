@@ -96,7 +96,9 @@ export default function ArticlesPage() {
   const [savingArticle, setSavingArticle] = useState(false);
   const [movingArticleToNextMonth, setMovingArticleToNextMonth] = useState(false);
   const [contentWorkPromptArticle, setContentWorkPromptArticle] = useState<Article | null>(null);
+  const [contentWorkBannerArticle, setContentWorkBannerArticle] = useState<Article | null>(null);
   const [registeringContentWork, setRegisteringContentWork] = useState(false);
+  const [registeringContentWorkArticleId, setRegisteringContentWorkArticleId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [importStep, setImportStep] = useState(1);
@@ -242,6 +244,12 @@ export default function ArticlesPage() {
     if (!isWriter) return false;
     return article.penName === user?.collaborator?.penName || article.createdByUserId === user?.id;
   }, [canManageArticles, isWriter, user]);
+
+  const canRegisterContentWork = useCallback((article: Article) => {
+    if (!isWriter) return false;
+    if (!canEditArticle(article)) return false;
+    return Boolean(String(article.link || "").trim());
+  }, [canEditArticle, isWriter]);
 
   const fetchArticles = useCallback((
     p = 1,
@@ -1001,14 +1009,15 @@ export default function ArticlesPage() {
       }
 
       setShowModal(false);
-      setFormData({});
-      if (data.article) {
-        const savedArticle = data.article as Article;
-        mergeSavedArticleIntoList(savedArticle, isEditing);
-        if (!isEditing && user?.role === "ctv") {
-          setContentWorkPromptArticle(savedArticle);
-        }
-      } else {
+        setFormData({});
+        if (data.article) {
+          const savedArticle = data.article as Article;
+          mergeSavedArticleIntoList(savedArticle, isEditing);
+          if (!isEditing && isWriter) {
+            setContentWorkPromptArticle(savedArticle);
+            setContentWorkBannerArticle(savedArticle);
+          }
+        } else {
         const currentQuery = articleListQueryRef.current;
         fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
       }
@@ -1093,6 +1102,7 @@ export default function ArticlesPage() {
 
     try {
       setRegisteringContentWork(true);
+      setRegisteringContentWorkArticleId(article.id);
       const res = await fetch("/api/content-work", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1109,15 +1119,17 @@ export default function ArticlesPage() {
         showUiToast("Đang xử lý Content Work", `"${article.title}" đang được hệ thống xử lý ở nền.`, "info");
       } else {
         showUiToast("Đã xếp hàng Content Work", `"${article.title}" đang được gửi form và điền link ở nền.`, "success");
-      }
+        }
 
-      setContentWorkPromptArticle(null);
-    } catch (error) {
-      showUiToast("Đăng ký Content Work thất bại", error instanceof Error ? error.message : String(error), "error");
-    } finally {
-      setRegisteringContentWork(false);
-    }
-  };
+        setContentWorkPromptArticle(null);
+        setContentWorkBannerArticle(null);
+      } catch (error) {
+        showUiToast("Đăng ký Content Work thất bại", error instanceof Error ? error.message : String(error), "error");
+      } finally {
+        setRegisteringContentWork(false);
+        setRegisteringContentWorkArticleId(null);
+      }
+    };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -1802,14 +1814,41 @@ export default function ArticlesPage() {
                         />
                       )}
                     </div>
-                    {canEditArticle(a) && (
-                      <button onClick={() => openArticleModal({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) })} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
-                        <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
-                      </button>
-                    )}
-                    {(canManageArticles || a.canDelete) && (
-                      <button
-                        data-testid={`article-delete-${a.id}`}
+                      {canEditArticle(a) && (
+                        <button onClick={() => openArticleModal({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) })} className="btn-ios-pill btn-ios-secondary" style={{ padding: "5px 9px", minWidth: 34, height: 34 }} title="Sửa">
+                          <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
+                        </button>
+                      )}
+                      {canRegisterContentWork(a) && (
+                        <button
+                          onClick={() => { void handleRegisterContentWork(a); }}
+                          disabled={registeringContentWork}
+                          className="btn-ios-pill"
+                          style={{
+                            padding: "5px 9px",
+                            minWidth: 34,
+                            height: 34,
+                            background: "rgba(37, 99, 235, 0.08)",
+                            color: "var(--accent-blue)",
+                            border: "1px solid rgba(37, 99, 235, 0.16)",
+                            opacity: registeringContentWork ? 0.72 : 1,
+                          }}
+                          title={registeringContentWork && registeringContentWorkArticleId === a.id ? "Đang đăng ký Content Work" : "Đăng ký Content Work"}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: 17,
+                              animation: registeringContentWork && registeringContentWorkArticleId === a.id ? "spin 1s linear infinite" : undefined,
+                            }}
+                          >
+                            {registeringContentWork && registeringContentWorkArticleId === a.id ? "progress_activity" : "task_alt"}
+                          </span>
+                        </button>
+                      )}
+                      {(canManageArticles || a.canDelete) && (
+                        <button
+                          data-testid={`article-delete-${a.id}`}
                         onClick={() => deleteSingleArticle(a)}
                         disabled={deletingArticleIds.includes(a.id)}
                         className="btn-ios-pill"
@@ -1845,18 +1884,21 @@ export default function ArticlesPage() {
     return (
       <div className="mobile-only" style={{ display: "flex", flexDirection: "column", gap: 12, padding: "0 1px" }}>
         {rows.map((a) => (
-          <MobileArticleCard
-            key={a.id}
-            article={a}
-            onEdit={() => openArticleModal({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) })}
-            onComments={() => openComments(a)}
-            onDelete={() => deleteSingleArticle(a)}
-            canEdit={canEditArticle(a)}
-            canDelete={canManageArticles || a.canDelete}
-            showAuthor={canManageArticles}
-            isDeleting={deletingArticleIds.includes(a.id)}
-            unreadComments={Number(a.unreadCommentCount || 0)}
-          />
+            <MobileArticleCard
+              key={a.id}
+              article={a}
+              onEdit={() => openArticleModal({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) })}
+              onComments={() => openComments(a)}
+              onRegisterContentWork={() => { void handleRegisterContentWork(a); }}
+              onDelete={() => deleteSingleArticle(a)}
+              canEdit={canEditArticle(a)}
+              canRegisterContentWork={canRegisterContentWork(a)}
+              canDelete={canManageArticles || a.canDelete}
+              showAuthor={canManageArticles}
+              isDeleting={deletingArticleIds.includes(a.id)}
+              isRegisteringContentWork={registeringContentWork && registeringContentWorkArticleId === a.id}
+              unreadComments={Number(a.unreadCommentCount || 0)}
+            />
         ))}
       </div>
     );
@@ -1977,14 +2019,75 @@ export default function ArticlesPage() {
         </div>
       </header>
 
-      <div style={{ marginBottom: 18, padding: "12px 16px", borderRadius: 16, background: "rgba(13,148,136,0.06)", border: "1px solid rgba(13,148,136,0.14)", display: "flex", alignItems: "center", gap: 10 }}>
-        <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#0d9488" }}>payments</span>
-        <span style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600 }}>
-          Chỉ bài có trạng thái đã duyệt mới được cộng vào nhuận bút cá nhân.
-        </span>
-      </div>
+        <div style={{ marginBottom: 18, padding: "12px 16px", borderRadius: 16, background: "rgba(13,148,136,0.06)", border: "1px solid rgba(13,148,136,0.14)", display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#0d9488" }}>payments</span>
+          <span style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600 }}>
+            Chỉ bài có trạng thái đã duyệt mới được cộng vào nhuận bút cá nhân.
+          </span>
+        </div>
 
-      <div className="glass-card" style={{ padding: 20, marginBottom: 32, overflow: "hidden" }}>
+        {contentWorkBannerArticle && canRegisterContentWork(contentWorkBannerArticle) && (
+          <div
+            className="glass-card"
+            style={{
+              marginBottom: 18,
+              padding: isMobile ? 16 : 18,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              border: "1px solid rgba(37, 99, 235, 0.16)",
+              background: "linear-gradient(135deg, rgba(37, 99, 235, 0.09), rgba(59, 130, 246, 0.04))",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(37, 99, 235, 0.14)",
+                  color: "var(--accent-blue)",
+                  flexShrink: 0,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 20 }}>task_alt</span>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-main)", marginBottom: 4 }}>
+                  Bài vừa lưu sẵn sàng đăng ký Content Work
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-muted)" }}>
+                  <strong style={{ color: "var(--text-main)" }}>{contentWorkBannerArticle.title}</strong> đã lưu thành công.
+                  Bạn có thể bấm ngay để hệ thống tự gửi form và điền link vào sheet Content Work ở nền.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                className="btn-ios-pill btn-ios-secondary"
+                onClick={() => setContentWorkBannerArticle(null)}
+                disabled={registeringContentWork}
+              >
+                Để sau
+              </button>
+              <button
+                className="btn-ios-pill btn-ios-primary"
+                onClick={() => { void handleRegisterContentWork(contentWorkBannerArticle); }}
+                disabled={registeringContentWork}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                  {registeringContentWork && registeringContentWorkArticleId === contentWorkBannerArticle.id ? "progress_activity" : "task_alt"}
+                </span>
+                {registeringContentWork && registeringContentWorkArticleId === contentWorkBannerArticle.id ? "Đang xử lý..." : "Đăng ký Content Work"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="glass-card" style={{ padding: 20, marginBottom: 32, overflow: "hidden" }}>
         <div style={{ display: "flex", gap: 12, rowGap: 10, alignItems: "center", flexWrap: "wrap", width: "100%", minWidth: 0 }}>
           <div style={{ flex: "1 1 420px", minWidth: 0, position: "relative" }}>
             <span className="material-symbols-outlined" style={{ position: "absolute", left: isMobile ? 12 : 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 18 }}>search</span>
