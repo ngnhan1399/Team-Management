@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CustomSelect from "./CustomSelect";
-import { useAuth } from "./auth-context";
 import { useRealtimeRefresh } from "./realtime";
 import { useIsMobile } from "./useMediaQuery";
 import type { KpiMemberRow, KpiResponseData } from "./types";
@@ -223,7 +222,6 @@ function KpiRoleSection({
 }
 
 export default function KpiPage() {
-  const { user } = useAuth();
   const isMobile = useIsMobile();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -412,8 +410,7 @@ export default function KpiPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <h1 style={{ margin: 0, fontSize: isMobile ? 30 : 38, fontWeight: 950, letterSpacing: "-0.04em", color: "var(--text-main)" }}>KPI tháng</h1>
-            <p style={{ margin: "10px 0 0", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6 }}>{data.canManage ? "KPI thực tế được tính tự động theo toàn bộ bài của CTV trong tháng đang chọn. Bảng KPI đã được tách riêng cho nhóm viết và nhóm duyệt." : "Theo dõi KPI cá nhân của bạn trong tháng đang chọn. Trang này chỉ hiển thị tiến độ và kết quả của riêng bạn."}</p>
-            {user?.team?.name ? <p style={{ margin: "10px 0 0", color: "var(--accent-blue)", fontSize: 13, fontWeight: 700 }}>Team hiện tại: {user.team.name}</p> : null}
+            <p style={{ margin: "10px 0 0", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6 }}>{data.canManage ? "KPI thực tế được tính tự động theo toàn bộ bài của CTV trong tháng đang chọn. Bảng KPI đã được tách riêng cho nhóm viết và nhóm duyệt." : "Theo dõi KPI cá nhân trong tháng đang chọn."}</p>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
             <div style={{ minWidth: 150 }}><CustomSelect value={String(month)} onChange={(value) => setMonth(Number(value))} options={monthOptions} /></div>
@@ -436,7 +433,6 @@ export default function KpiPage() {
         <section className="card" style={{ padding: isMobile ? 20 : 24, borderRadius: 28, background: "linear-gradient(135deg, rgba(37,99,235,0.11), rgba(16,185,129,0.08), rgba(255,255,255,0.95))" }}>
           <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "var(--accent-blue)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Tiến độ của bạn</p>
           <h3 style={{ margin: "10px 0 0", fontSize: 28, fontWeight: 900, color: "var(--text-main)" }}>{viewer.name}</h3>
-          <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>Bạn đang ở nhóm <strong>{viewer.role === "reviewer" ? "CTV duyệt bài" : "CTV viết bài"}</strong>, đã có <strong>{compactNumber.format(viewer.actualKpi)}</strong> bài trong tháng này và còn <strong>{compactNumber.format(viewer.remainingKpi)}</strong> bài để chạm KPI.</p>
           <div style={{ marginTop: 16, height: 12, borderRadius: 999, background: "rgba(148, 163, 184, 0.16)", overflow: "hidden" }}><div style={{ width: `${Math.max(8, Math.min(viewer.completionPercentage, 100))}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #2563eb, #10b981)" }} /></div>
           {!data.canManage ? (
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 14, marginTop: 18 }}>
