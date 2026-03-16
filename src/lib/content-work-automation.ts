@@ -153,7 +153,7 @@ async function callContentWorkScript(input: {
       date: input.article.date,
       articleLink: normalizeText(input.article.link),
       contentWorkCategory: input.categoryLabel,
-      source: normalizeText(input.article.link),
+      source: "",
     },
     requestedBy: {
       userId: input.requestedByUserId,

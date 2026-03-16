@@ -76,7 +76,7 @@ function registerContentWork_(payload) {
   const formResult = submitContentWorkForm_({
     title: title,
     productName: normalizeText_(article.productName),
-    source: normalizeText_(article.source) || articleLink,
+    source: normalizeText_(article.source),
     penName: penName,
     category: contentWorkCategory,
   });

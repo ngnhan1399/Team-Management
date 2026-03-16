@@ -8,6 +8,7 @@
   - submit form `Content Work 2024 ver 2`
   - dò đúng dòng vừa phát sinh trong spreadsheet Content Work
   - điền `link bài viết` vào cột link
+  - không tự điền cột `Nguồn` nếu app không truyền nguồn riêng
 
 ## Kiến trúc
 
@@ -64,6 +65,7 @@ CONTENT_WORK_SCRIPT_SECRET=
 
 - Thiết kế hiện tại dùng **một tài khoản Google automation chung**, không lưu đăng nhập Google riêng của từng CTV.
 - Bản script mới không cần quyền `edit form` để gửi Google Form nữa, nhưng vẫn cần quyền chỉnh sửa sheet Content Work để điền link bài viết.
+- Hệ thống mặc định để trống cột `Nguồn`; không còn fallback lấy `link bài viết` để điền vào cột này.
 - Bản script phải lấy `fbzx` và `partialResponse` từ `viewform` trước khi submit. Nếu bỏ bước này, Google Form sẽ trả `HTTP 400`.
 - Nếu Apps Script báo thiếu quyền `UrlFetchApp.fetch`, mở editor và chạy `authorizeContentWorkScopes` một lần để cấp quyền cho tài khoản automation.
 - Nếu Apps Script không tìm thấy đúng dòng để điền link, job sẽ dừng ở `form_submitted` hoặc `failed`; CTV có thể retry từ tab `Content Work`.
