@@ -13,6 +13,29 @@ import { requiredString, requiredInt, optionalString, optionalEnum, ValidationEr
 
 const TASK_STATUS = ["todo", "in_progress", "done", "overdue"] as const;
 const TASK_PRIORITY = ["low", "medium", "high"] as const;
+const EDITORIAL_TASKS_CACHE_TTL_MS = 20_000;
+const editorialTasksResponseCache = new Map<string, { expiresAt: number; data: unknown[] }>();
+
+function getCachedEditorialTasksResponse(cacheKey: string) {
+  const cached = editorialTasksResponseCache.get(cacheKey);
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    editorialTasksResponseCache.delete(cacheKey);
+    return null;
+  }
+
+  return cached.data;
+}
+
+function setCachedEditorialTasksResponse(cacheKey: string, data: unknown[]) {
+  editorialTasksResponseCache.set(cacheKey, {
+    expiresAt: Date.now() + EDITORIAL_TASKS_CACHE_TTL_MS,
+    data,
+  });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,6 +50,11 @@ export async function GET(request: NextRequest) {
     const assignee = optionalString(searchParams.get("assigneePenName"));
     const identityCandidates = getContextIdentityCandidates(context);
     const adminTeamId = context.user.role === "admin" && !isLeader(context) ? getContextTeamId(context) : null;
+    const cacheKey = `${context.user.id}:${context.user.role}:${adminTeamId || 0}:${status || "all"}:${assignee || "all"}:${identityCandidates.join("|")}`;
+    const cachedData = getCachedEditorialTasksResponse(cacheKey);
+    if (cachedData) {
+      return NextResponse.json({ success: true, data: cachedData });
+    }
 
     const conditions: SQL[] = [];
     if (status) conditions.push(eq(editorialTasks.status, status));
@@ -66,6 +94,7 @@ export async function GET(request: NextRequest) {
       data = data.filter((task) => matchesIdentityCandidate(identityCandidates, task.assigneePenName));
     }
 
+    setCachedEditorialTasksResponse(cacheKey, data);
     return NextResponse.json({ success: true, data });
   } catch (error) {
     if (error instanceof ValidationError) {
@@ -158,6 +187,7 @@ export async function POST(request: NextRequest) {
       payload: { assigneePenName, dueDate, priority },
     });
 
+    editorialTasksResponseCache.clear();
     await publishRealtimeEvent(["tasks"]);
 
     return NextResponse.json({ success: true, id: Number(createdTask?.id) });
@@ -234,6 +264,7 @@ export async function PUT(request: NextRequest) {
       payload: updateData,
     });
 
+    editorialTasksResponseCache.clear();
     await publishRealtimeEvent(["tasks"]);
 
     return NextResponse.json({ success: true });

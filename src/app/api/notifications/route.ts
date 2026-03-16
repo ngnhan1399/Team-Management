@@ -10,6 +10,30 @@ import { canAccessTeam, getContextTeamId, isLeader } from "@/lib/teams";
 import { eq, and, desc, sql, type SQL } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
+const NOTIFICATIONS_CACHE_TTL_MS = 15_000;
+const notificationsResponseCache = new Map<string, { expiresAt: number; data: { data: unknown; unreadCount: number } }>();
+
+function getCachedNotificationsResponse(cacheKey: string) {
+    const cached = notificationsResponseCache.get(cacheKey);
+    if (!cached) {
+        return null;
+    }
+
+    if (cached.expiresAt <= Date.now()) {
+        notificationsResponseCache.delete(cacheKey);
+        return null;
+    }
+
+    return cached.data;
+}
+
+function setCachedNotificationsResponse(cacheKey: string, data: { data: unknown; unreadCount: number }) {
+    notificationsResponseCache.set(cacheKey, {
+        expiresAt: Date.now() + NOTIFICATIONS_CACHE_TTL_MS,
+        data,
+    });
+}
+
 export async function GET(request: NextRequest) {
     try {
         await ensureDatabaseInitialized();
@@ -20,6 +44,15 @@ export async function GET(request: NextRequest) {
 
         const { searchParams } = new URL(request.url);
         const unreadOnly = searchParams.get("unread") === "true";
+        const cacheKey = `${context.user.id}:${unreadOnly ? "unread" : "all"}`;
+        const cachedData = getCachedNotificationsResponse(cacheKey);
+        if (cachedData) {
+            return NextResponse.json({
+                success: true,
+                data: cachedData.data,
+                unreadCount: cachedData.unreadCount,
+            });
+        }
 
         const conditions: SQL[] = [eq(notifications.toUserId, context.user.id)];
         if (unreadOnly) {
@@ -49,6 +82,11 @@ export async function GET(request: NextRequest) {
                 .where(and(eq(notifications.toUserId, context.user.id), eq(notifications.isRead, false)))
                 .get(),
         ]);
+
+        setCachedNotificationsResponse(cacheKey, {
+            data,
+            unreadCount: unreadCount?.count || 0,
+        });
 
         return NextResponse.json({
             success: true,
@@ -153,6 +191,7 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        notificationsResponseCache.clear();
         return NextResponse.json({ success: true, recipientCount: recipients.length });
     } catch (error) {
         return handleServerError("notifications.post", error);
@@ -184,6 +223,7 @@ export async function PUT(request: NextRequest) {
                 .run();
         }
 
+        notificationsResponseCache.clear();
         await publishRealtimeEvent({ channels: ["notifications"], userIds: [context.user.id] });
 
         return NextResponse.json({ success: true });
