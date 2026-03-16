@@ -17,12 +17,16 @@ import type {
 const ROYALTY_RATES_CACHE_TTL_MS = 10 * 60 * 1000;
 const REVIEWER_ROYALTY_PRICE = 15000;
 const ROYALTY_COLLABORATORS_CACHE_TTL_MS = 10 * 60 * 1000;
+const ROYALTY_DASHBOARD_CACHE_TTL_MS = 30 * 1000;
 
 let royaltyRatesCache: RoyaltyRateItem[] | null = null;
 let royaltyRatesCacheAt = 0;
 let royaltyCollaboratorsCache: Collaborator[] | null = null;
 let royaltyCollaboratorsCacheAt = 0;
 let royaltyCollaboratorsCacheKey = "";
+let royaltyDashboardCache: RoyaltyDashboardData | null = null;
+let royaltyDashboardCacheAt = 0;
+let royaltyDashboardCacheKey = "";
 
 export default function RoyaltyPage() {
   const { user } = useAuth();
@@ -83,7 +87,22 @@ export default function RoyaltyPage() {
     { value: "paid", label: "Đã thanh toán" },
   ];
 
-  const fetchDashboard = useCallback((showLoading = true) => {
+  const fetchDashboard = useCallback((showLoading = true, preferCache = true) => {
+    const cacheKey = `${user?.id || 0}:${user?.teamId || 0}:${user?.role || "guest"}:${overviewYear}-${overviewMonth}`;
+    if (
+      preferCache
+      && royaltyDashboardCache
+      && royaltyDashboardCacheKey === cacheKey
+      && Date.now() - royaltyDashboardCacheAt < ROYALTY_DASHBOARD_CACHE_TTL_MS
+    ) {
+      setDashboard(royaltyDashboardCache);
+      setBudgetInput(royaltyDashboardCache?.budget?.hasBudget ? String(royaltyDashboardCache.budget.budgetAmount) : "");
+      if (showLoading) {
+        setLoading(false);
+      }
+      return Promise.resolve();
+    }
+
     if (showLoading) {
       setLoading(true);
     }
@@ -92,11 +111,15 @@ export default function RoyaltyPage() {
       month: String(overviewMonth),
       year: String(overviewYear),
     });
-    fetch(`/api/royalty?${params}`, { cache: "no-store" })
+    return fetch(`/api/royalty?${params}`, { cache: "no-store" })
       .then(r => r.json())
       .then(d => {
-        setDashboard(d.data);
-        setBudgetInput(d.data?.budget?.hasBudget ? String(d.data.budget.budgetAmount) : "");
+        const nextDashboard = d.data || null;
+        royaltyDashboardCache = nextDashboard;
+        royaltyDashboardCacheAt = Date.now();
+        royaltyDashboardCacheKey = cacheKey;
+        setDashboard(nextDashboard);
+        setBudgetInput(nextDashboard?.budget?.hasBudget ? String(nextDashboard.budget.budgetAmount) : "");
         if (showLoading) {
           setLoading(false);
         }
@@ -106,7 +129,7 @@ export default function RoyaltyPage() {
           setLoading(false);
         }
       });
-  }, [overviewMonth, overviewYear]);
+  }, [overviewMonth, overviewYear, user?.id, user?.role, user?.teamId]);
 
   const fetchRates = useCallback((preferCache = true) => {
     if (preferCache && royaltyRatesCache && Date.now() - royaltyRatesCacheAt < ROYALTY_RATES_CACHE_TTL_MS) {
@@ -181,7 +204,7 @@ export default function RoyaltyPage() {
   }, [isAdmin, isLeader, user?.id, user?.teamId]);
 
   useEffect(() => {
-    fetchDashboard(true);
+    void fetchDashboard(true, true);
   }, [fetchDashboard]);
 
   useEffect(() => {
@@ -203,7 +226,7 @@ export default function RoyaltyPage() {
 
   const refreshRoyaltyView = useCallback(() => {
     if (tab === "overview") {
-      fetchDashboard(false);
+      void fetchDashboard(false, true);
     }
     if (tab === "rates") void fetchRates(false);
     if (tab === "calculate") fetchCalculation();
@@ -244,7 +267,7 @@ export default function RoyaltyPage() {
       body: JSON.stringify({ action: "set-budget", month: overviewMonth, year: overviewYear, budgetAmount: amount }),
     });
     setBudgetSaving(false);
-    fetchDashboard(true);
+    void fetchDashboard(true, false);
   };
 
   const generatePayments = async () => {
