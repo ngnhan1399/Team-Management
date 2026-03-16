@@ -16,7 +16,8 @@
 - `Web app -> Apps Script`
   - gọi `POST /doPost` với `action = registerContentWork`
 - `Apps Script -> Google Form`
-  - dùng `FormApp.openById(...).createResponse().submit()`
+  - tải `viewform` để lấy `fbzx` + `partialResponse`
+  - rồi gửi trực tiếp vào `formResponse` của Google Form công khai
 - `Apps Script -> Google Sheet`
   - dùng `SpreadsheetApp.openById(...)`
   - tìm tab theo `gid`
@@ -41,14 +42,15 @@ CONTENT_WORK_SCRIPT_SECRET=
 
 ## Cách cài Apps Script
 
-1. Mở Google Apps Script bằng tài khoản automation chung có quyền với form và sheet.
+1. Mở Google Apps Script bằng tài khoản automation chung có quyền chỉnh sửa với sheet Content Work.
 2. Tạo project script mới.
 3. Dán nội dung từ [E:/Data Management Project/ctv-management/output/content-work-automation.workdocker.gs](E:/Data%20Management%20Project/ctv-management/output/content-work-automation.workdocker.gs).
 4. Sửa `CONTENT_WORK_SECRET` cho khớp với `CONTENT_WORK_SCRIPT_SECRET`.
 5. `Deploy > New deployment > Web app`.
 6. Chọn chạy bằng tài khoản automation chung.
 7. Cấp quyền truy cập cho web app theo nhu cầu nội bộ.
-8. Lấy URL web app và điền vào `CONTENT_WORK_SCRIPT_WEB_APP_URL`.
+8. Chạy hàm `authorizeContentWorkScopes` một lần trong Apps Script và bấm cấp quyền đầy đủ.
+9. Lấy URL web app và điền vào `CONTENT_WORK_SCRIPT_WEB_APP_URL`.
 
 ## Trạng thái job
 
@@ -61,5 +63,8 @@ CONTENT_WORK_SCRIPT_SECRET=
 ## Lưu ý
 
 - Thiết kế hiện tại dùng **một tài khoản Google automation chung**, không lưu đăng nhập Google riêng của từng CTV.
+- Bản script mới không cần quyền `edit form` để gửi Google Form nữa, nhưng vẫn cần quyền chỉnh sửa sheet Content Work để điền link bài viết.
+- Bản script phải lấy `fbzx` và `partialResponse` từ `viewform` trước khi submit. Nếu bỏ bước này, Google Form sẽ trả `HTTP 400`.
+- Nếu Apps Script báo thiếu quyền `UrlFetchApp.fetch`, mở editor và chạy `authorizeContentWorkScopes` một lần để cấp quyền cho tài khoản automation.
 - Nếu Apps Script không tìm thấy đúng dòng để điền link, job sẽ dừng ở `form_submitted` hoặc `failed`; CTV có thể retry từ tab `Content Work`.
 - Mapping danh mục Content Work hiện ưu tiên các loại bài đang có trong app. Nếu phát sinh loại mới, cập nhật ở [E:/Data Management Project/ctv-management/src/lib/content-work-registration.ts](E:/Data%20Management%20Project/ctv-management/src/lib/content-work-registration.ts).

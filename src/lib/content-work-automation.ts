@@ -54,6 +54,32 @@ function parseJsonSafely(value: string) {
   }
 }
 
+function normalizeContentWorkScriptMessage(message: string) {
+  const normalized = normalizeText(message);
+  if (!normalized) {
+    return normalized;
+  }
+
+  const folded = normalized
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "d");
+
+  if (/no item with the given id could be found/i.test(normalized) || /khong the tim thay muc co ma da cung cap/i.test(folded)) {
+    return "Apps Script Content Work đang thiếu quyền với file Google hoặc đang chạy bản cũ. Hãy cập nhật lại Apps Script bản mới nhất rồi thử lại.";
+  }
+
+  if (/urlfetchapp\.fetch/i.test(normalized) || /script\.external_request/i.test(normalized)) {
+    return "Apps Script Content Work chưa được cấp quyền gọi dịch vụ ngoài. Hãy mở script và chạy authorizeContentWorkScopes một lần để cấp quyền.";
+  }
+
+  if (/gui form content work that bai \(http 400\)\.?/i.test(folded) || /http 400/.test(normalized)) {
+    return "Apps Script Content Work đang gửi sai hoặc thiếu trường bắt buộc của Google Form. Hãy cập nhật lại cấu trúc form trong script rồi thử lại.";
+  }
+
+  return normalized;
+}
+
 async function updateRegistration(registrationId: number, values: Partial<typeof contentWorkRegistrations.$inferInsert>) {
   await db
     .update(contentWorkRegistrations)
@@ -154,7 +180,7 @@ async function callContentWorkScript(input: {
       return {
         skipped: false,
         success: false,
-        message: normalizeText(parsed?.error) || normalizeText(parsed?.message) || `Content Work script trả về lỗi ${response.status}.`,
+        message: normalizeContentWorkScriptMessage(normalizeText(parsed?.error) || normalizeText(parsed?.message) || `Content Work script trả về lỗi ${response.status}.`),
         response: parsed,
       } as const;
     }
@@ -172,7 +198,7 @@ async function callContentWorkScript(input: {
       success: false,
       message: /aborted|timeout/i.test(message)
         ? "Content Work script phản hồi quá chậm."
-        : (normalizeText(message) || "Không gọi được Content Work Apps Script."),
+        : (normalizeContentWorkScriptMessage(message) || "Không gọi được Content Work Apps Script."),
       response: null,
     } as const;
   }

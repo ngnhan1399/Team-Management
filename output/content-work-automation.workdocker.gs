@@ -1,16 +1,18 @@
 const CONTENT_WORK_SECRET = 'replace-with-the-same-secret-as-CONTENT_WORK_SCRIPT_SECRET';
-const CONTENT_WORK_FORM_ID = '1CRpmylyRwSo1tpc5Xa_ryVy2m_c2xTjXb9t_ESihGdY';
+const CONTENT_WORK_FORM_PUBLIC_ID = '1FAIpQLScoByE6SGbpYCJ8H0yPtXr-1pQp3QUhtb9RpFd-Q3VmvztKUQ';
+const CONTENT_WORK_FORM_VIEW_URL = 'https://docs.google.com/forms/d/e/' + CONTENT_WORK_FORM_PUBLIC_ID + '/viewform';
+const CONTENT_WORK_FORM_RESPONSE_URL = 'https://docs.google.com/forms/d/e/' + CONTENT_WORK_FORM_PUBLIC_ID + '/formResponse';
 const CONTENT_WORK_SPREADSHEET_ID = '10xgj6260aKTU5tn4WONRF5AccUPRhnoMcWJXyNn023I';
 const CONTENT_WORK_TARGET_SHEET_GID = 1639483225;
 const CONTENT_WORK_ROW_LOOKUP_ATTEMPTS = 5;
 const CONTENT_WORK_ROW_LOOKUP_SLEEP_MS = 1200;
 
-const FORM_FIELD_TITLES = {
-  title: 'Tên bài viết - nội dung',
-  product: 'Tên sản phẩm',
-  source: 'Nguồn',
-  assignee: 'Người thực hiện',
-  category: 'Tên danh mục',
+const CONTENT_WORK_FORM_ENTRY_IDS = {
+  title: 'entry.767085369',
+  product: 'entry.1545925642',
+  source: 'entry.2011085220',
+  assignee: 'entry.105616812',
+  category: 'entry.487953478',
 };
 
 function doPost(e) {
@@ -104,18 +106,72 @@ function registerContentWork_(payload) {
   };
 }
 
+function fetchContentWorkFormState_() {
+  const response = UrlFetchApp.fetch(CONTENT_WORK_FORM_VIEW_URL, {
+    method: 'get',
+    muteHttpExceptions: true,
+  });
+  const statusCode = response.getResponseCode();
+  const html = response.getContentText();
+
+  if (statusCode >= 400 || !html) {
+    throw new Error('Không tải được Google Form Content Work để lấy token submit.');
+  }
+
+  const fbzxMatch = html.match(/name="fbzx"\s+value="([^"]+)"/i);
+  const partialResponseMatch = html.match(/name="partialResponse"\s+value="([^"]*)"/i);
+
+  if (!fbzxMatch || !fbzxMatch[1]) {
+    throw new Error('Không lấy được token fbzx của Google Form Content Work.');
+  }
+
+  return {
+    fbzx: fbzxMatch[1],
+    partialResponse: partialResponseMatch && partialResponseMatch[1] ? partialResponseMatch[1] : '',
+  };
+}
+
 function submitContentWorkForm_(input) {
-  const form = FormApp.openById(CONTENT_WORK_FORM_ID);
-  const response = form.createResponse();
-  const items = form.getItems();
+  const formState = fetchContentWorkFormState_();
+  const payload = {};
 
-  addTextResponseByTitle_(items, response, FORM_FIELD_TITLES.title, input.title, true);
-  addTextResponseByTitle_(items, response, FORM_FIELD_TITLES.product, input.productName, false);
-  addTextResponseByTitle_(items, response, FORM_FIELD_TITLES.source, input.source, false);
-  addTextResponseByTitle_(items, response, FORM_FIELD_TITLES.assignee, input.penName, true);
-  addChoiceResponseByTitle_(items, response, FORM_FIELD_TITLES.category, input.category, true);
+  payload[CONTENT_WORK_FORM_ENTRY_IDS.title] = input.title;
+  payload[CONTENT_WORK_FORM_ENTRY_IDS.assignee] = input.penName;
+  payload[CONTENT_WORK_FORM_ENTRY_IDS.category] = input.category;
+  payload[CONTENT_WORK_FORM_ENTRY_IDS.category + '_sentinel'] = '';
 
-  response.submit();
+  if (normalizeText_(input.productName)) {
+    payload[CONTENT_WORK_FORM_ENTRY_IDS.product] = input.productName;
+  }
+
+  if (normalizeText_(input.source)) {
+    payload[CONTENT_WORK_FORM_ENTRY_IDS.source] = input.source;
+  }
+
+  payload.fvv = '1';
+  payload.pageHistory = '0';
+  payload.fbzx = formState.fbzx;
+
+  if (formState.partialResponse) {
+    payload.partialResponse = formState.partialResponse;
+  }
+
+  const response = UrlFetchApp.fetch(CONTENT_WORK_FORM_RESPONSE_URL, {
+    method: 'post',
+    payload: payload,
+    followRedirects: true,
+    muteHttpExceptions: true,
+  });
+  const statusCode = response.getResponseCode();
+  const body = response.getContentText() || '';
+
+  if (
+    statusCode >= 400 ||
+    /Đã xảy ra lỗi\./i.test(body) ||
+    /Vui lòng thử lại\./i.test(body)
+  ) {
+    throw new Error('Gửi form Content Work thất bại (HTTP ' + statusCode + ').');
+  }
 
   return {
     submitted: true,
@@ -123,56 +179,13 @@ function submitContentWorkForm_(input) {
   };
 }
 
-function addTextResponseByTitle_(items, response, targetTitle, value, required) {
-  const normalizedValue = normalizeText_(value);
-  if (!normalizedValue && !required) {
-    return;
-  }
-
-  const item = items.find(function (candidate) {
-    return foldText_(candidate.getTitle()) === foldText_(targetTitle);
-  });
-
-  if (!item) {
-    if (required) {
-      throw new Error('Không tìm thấy field bắt buộc trên form: ' + targetTitle);
-    }
-    return;
-  }
-
-  if (item.getType() !== FormApp.ItemType.TEXT) {
-    throw new Error('Field text không đúng kiểu trên form: ' + targetTitle);
-  }
-
-  response.withItemResponse(item.asTextItem().createResponse(normalizedValue));
-}
-
-function addChoiceResponseByTitle_(items, response, targetTitle, value, required) {
-  const normalizedValue = normalizeText_(value);
-  if (!normalizedValue && !required) {
-    return;
-  }
-
-  const item = items.find(function (candidate) {
-    return foldText_(candidate.getTitle()) === foldText_(targetTitle);
-  });
-
-  if (!item) {
-    if (required) {
-      throw new Error('Không tìm thấy field chọn bắt buộc trên form: ' + targetTitle);
-    }
-    return;
-  }
-
-  if (item.getType() !== FormApp.ItemType.MULTIPLE_CHOICE) {
-    throw new Error('Field danh mục không phải multiple choice: ' + targetTitle);
-  }
-
-  response.withItemResponse(item.asMultipleChoiceItem().createResponse(normalizedValue));
-}
-
 function writeArticleLinkToSheet_(input) {
-  const spreadsheet = SpreadsheetApp.openById(CONTENT_WORK_SPREADSHEET_ID);
+  let spreadsheet;
+  try {
+    spreadsheet = SpreadsheetApp.openById(CONTENT_WORK_SPREADSHEET_ID);
+  } catch (error) {
+    throw new Error('Tài khoản đang chạy Apps Script chưa có quyền chỉnh sửa Google Sheet Content Work.');
+  }
   const sheet = findSheetByGid_(spreadsheet, CONTENT_WORK_TARGET_SHEET_GID);
   if (!sheet) {
     throw new Error('Không tìm thấy tab sheet Content Work theo gid đã cấu hình.');
@@ -302,4 +315,15 @@ function findLatestRegistrationRow_(sheet, headerInfo, input) {
   }
 
   return null;
+}
+
+function authorizeContentWorkScopes() {
+  UrlFetchApp.fetch('https://www.google.com/generate_204', {
+    method: 'get',
+    muteHttpExceptions: true,
+  });
+
+  SpreadsheetApp.openById(CONTENT_WORK_SPREADSHEET_ID).getId();
+
+  return 'authorized';
 }
