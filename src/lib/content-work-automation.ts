@@ -1,4 +1,4 @@
-import { db, ensureDatabaseInitialized } from "@/db";
+import { db, ensureContentWorkSchemaInitialized, ensureDatabaseInitialized } from "@/db";
 import { contentWorkRegistrations } from "@/db/schema";
 import { writeAuditLog } from "@/lib/audit";
 import {
@@ -185,6 +185,7 @@ export async function processContentWorkRegistrationJob(input: {
   requestedByDisplayName: string;
 }) {
   await ensureDatabaseInitialized();
+  await ensureContentWorkSchemaInitialized();
 
   const categoryLabel = resolveContentWorkCategoryLabel({
     articleType: input.article.articleType,

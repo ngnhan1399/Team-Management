@@ -150,6 +150,7 @@ function wrapCompat<T>(value: T): T {
 export const db = wrapCompat(rawDb) as typeof rawDb;
 
 let initializationPromise: Promise<void> | null = null;
+let contentWorkSchemaInitializationPromise: Promise<void> | null = null;
 
 async function ensureColumnExists(table: string, column: string, typeSql: string) {
   const result = await pool.query(
@@ -167,6 +168,65 @@ async function ensureColumnExists(table: string, column: string, typeSql: string
   if (result.rowCount === 0) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeSql}`);
   }
+}
+
+const CONTENT_WORK_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS content_work_registrations (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    team_id INTEGER,
+    requested_by_user_id INTEGER NOT NULL,
+    pen_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    article_link TEXT,
+    content_work_category TEXT,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    external_sheet_name TEXT,
+    external_row_number INTEGER,
+    automation_message TEXT,
+    last_error TEXT,
+    form_submitted_at TEXT,
+    link_written_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_content_work_registrations_article ON content_work_registrations(article_id)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_requested_by ON content_work_registrations(requested_by_user_id)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_status ON content_work_registrations(status)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_updated_at ON content_work_registrations(updated_at)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_team_id ON content_work_registrations(team_id)",
+];
+
+export function ensureContentWorkSchemaInitialized() {
+  if (!contentWorkSchemaInitializationPromise) {
+    contentWorkSchemaInitializationPromise = (async () => {
+      for (const statement of CONTENT_WORK_SCHEMA_STATEMENTS) {
+        await pool.query(statement);
+      }
+
+      await ensureColumnExists("content_work_registrations", "team_id", "INTEGER");
+      await ensureColumnExists("content_work_registrations", "article_link", "TEXT");
+      await ensureColumnExists("content_work_registrations", "content_work_category", "TEXT");
+      await ensureColumnExists("content_work_registrations", "status", "TEXT NOT NULL DEFAULT 'queued'");
+      await ensureColumnExists("content_work_registrations", "attempt_count", "INTEGER NOT NULL DEFAULT 0");
+      await ensureColumnExists("content_work_registrations", "external_sheet_name", "TEXT");
+      await ensureColumnExists("content_work_registrations", "external_row_number", "INTEGER");
+      await ensureColumnExists("content_work_registrations", "automation_message", "TEXT");
+      await ensureColumnExists("content_work_registrations", "last_error", "TEXT");
+      await ensureColumnExists("content_work_registrations", "form_submitted_at", "TEXT");
+      await ensureColumnExists("content_work_registrations", "link_written_at", "TEXT");
+      await ensureColumnExists("content_work_registrations", "completed_at", "TEXT");
+      await ensureColumnExists("content_work_registrations", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+      await ensureColumnExists("content_work_registrations", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+    })().catch((error) => {
+      contentWorkSchemaInitializationPromise = null;
+      throw error;
+    });
+  }
+
+  return contentWorkSchemaInitializationPromise;
 }
 
 const bootstrapStatements = [

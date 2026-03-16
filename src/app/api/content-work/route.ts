@@ -1,4 +1,4 @@
-import { db, ensureDatabaseInitialized } from "@/db";
+import { db, ensureContentWorkSchemaInitialized, ensureDatabaseInitialized } from "@/db";
 import { articles, contentWorkRegistrations } from "@/db/schema";
 import { getContextDisplayName, getContextIdentityCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
 import { processContentWorkRegistrationJob } from "@/lib/content-work-automation";
@@ -86,6 +86,7 @@ function mapRegistrationRow(row: ContentWorkListRow) {
 export async function GET() {
   try {
     await ensureDatabaseInitialized();
+    await ensureContentWorkSchemaInitialized();
     const context = await getCurrentUserContext();
     if (!context) {
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
@@ -147,6 +148,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     await ensureDatabaseInitialized();
+    await ensureContentWorkSchemaInitialized();
     const originError = enforceTrustedOrigin(request);
     if (originError) return originError;
 

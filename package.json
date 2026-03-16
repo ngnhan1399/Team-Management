@@ -14,6 +14,7 @@
     "db:seed": "node scripts/seed-db.mjs",
     "db:migrate-sqlite": "node scripts/migrate-sqlite-to-postgres.mjs",
     "db:migrate-nile": "node scripts/migrate-neon-to-nile.mjs",
+    "db:repair-content-work-schema": "node scripts/repair-content-work-schema.mjs",
     "db:repair-seo-classification": "node scripts/repair-seo-classification.mjs",
     "db:repair-seo-classification:create-missing": "node scripts/repair-seo-classification.mjs --create-missing-pending",
     "test:smoke": "node scripts/smoke-test.mjs",
