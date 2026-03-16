@@ -204,7 +204,7 @@ export async function GET(request: NextRequest) {
                             writerArticles: 0,
                             reviewerArticles: 0,
                         },
-                        budget: { budgetAmount: 0, spent: 0, remaining: 0, percentage: 0, hasBudget: false },
+                        budget: { budgetAmount: 0, spent: 0, remaining: 0, percentage: 0, hasBudget: false, viewerContribution: null },
                         topWriters: [],
                         contentBalance: summarizeRoyaltyContentBalance([]),
                     },
@@ -404,6 +404,7 @@ export async function GET(request: NextRequest) {
             const budgetAmount = budget?.budgetAmount || 0;
             const budgetPercentage = budgetAmount > 0 ? Math.round((currentSpent / budgetAmount) * 100) : 0;
             const remainingBudget = Math.max(budgetAmount - currentSpent, 0);
+            const toSharePercentage = (amount: number, total: number) => total > 0 ? Math.round((amount / total) * 1000) / 10 : 0;
             const currentPeriodArticles = Array.from(visibleCurrentPeriodArticles.values()).filter((article) =>
                 matchesRoyaltyMonthYear(article.date, currentMonth, currentYear)
             );
@@ -419,6 +420,49 @@ export async function GET(request: NextRequest) {
             const topWriters = Object.values(currentPeriodContributorAmounts)
                 .sort((left, right) => right.amount - left.amount)
                 .slice(0, 10);
+
+            let viewerContribution: {
+                penName: string;
+                amount: number;
+                writerAmount: number;
+                reviewerAmount: number;
+                writerArticles: number;
+                reviewerArticles: number;
+                budgetPercentage: number;
+                spentSharePercentage: number;
+            } | null = null;
+
+            if (context.user.role !== "admin") {
+                for (const contributor of Object.values(currentPeriodContributorAmounts)) {
+                    if (!matchesIdentityCandidate(identityCandidates, contributor.penName)) {
+                        continue;
+                    }
+
+                    if (!viewerContribution) {
+                        viewerContribution = {
+                            penName: contributor.penName,
+                            amount: 0,
+                            writerAmount: 0,
+                            reviewerAmount: 0,
+                            writerArticles: 0,
+                            reviewerArticles: 0,
+                            budgetPercentage: 0,
+                            spentSharePercentage: 0,
+                        };
+                    }
+
+                    viewerContribution.amount += contributor.amount;
+                    viewerContribution.writerAmount += contributor.writerAmount;
+                    viewerContribution.reviewerAmount += contributor.reviewerAmount;
+                    viewerContribution.writerArticles += contributor.writerArticles;
+                    viewerContribution.reviewerArticles += contributor.reviewerArticles;
+                }
+
+                if (viewerContribution) {
+                    viewerContribution.budgetPercentage = toSharePercentage(viewerContribution.amount, budgetAmount);
+                    viewerContribution.spentSharePercentage = toSharePercentage(viewerContribution.amount, currentSpent);
+                }
+            }
 
             return NextResponse.json({
                 success: true,
@@ -440,8 +484,13 @@ export async function GET(request: NextRequest) {
                         remaining: remainingBudget,
                         percentage: budgetPercentage,
                         hasBudget: budgetAmount > 0,
+                        viewerContribution,
                     },
-                    topWriters,
+                    topWriters: topWriters.map((contributor) => ({
+                        ...contributor,
+                        budgetPercentage: toSharePercentage(contributor.amount, budgetAmount),
+                        spentSharePercentage: toSharePercentage(contributor.amount, currentSpent),
+                    })),
                     contentBalance,
                 },
             });

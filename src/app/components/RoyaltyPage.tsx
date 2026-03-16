@@ -68,6 +68,7 @@ export default function RoyaltyPage() {
   ];
 
   const fmt = (n: number) => n.toLocaleString("vi-VN") + "đ";
+  const fmtPct = (n: number) => `${n.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`;
   const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
@@ -351,6 +352,10 @@ export default function RoyaltyPage() {
   const contentBalancePie = contentBalance.totalArticles > 0
     ? `conic-gradient(var(--accent-blue) 0deg ${newAngle}deg, var(--accent-orange) ${newAngle}deg 360deg)`
     : "conic-gradient(rgba(148, 163, 184, 0.16) 0deg 360deg)";
+  const budgetFocusContributor = !isAdmin
+    ? dashboard?.budget?.viewerContribution || null
+    : dashboard?.topWriters?.[0] || null;
+  const budgetFocusLabel = !isAdmin ? "CTV của bạn trong ngân sách tháng" : "CTV đang chiếm nhiều nhất tháng";
 
   return (
     <>
@@ -530,6 +535,35 @@ export default function RoyaltyPage() {
                       <div className="mt-8 font-bold text-sm text-muted">
                         {fmt(dashboard.budget.spent)} / {fmt(dashboard.budget.budgetAmount)}
                       </div>
+                      {budgetFocusContributor && (
+                        <div style={{ width: "100%", maxWidth: 360, marginTop: 20, padding: isMobile ? "14px 16px" : "16px 18px", borderRadius: 18, border: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.03)", textAlign: "left" }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                            {budgetFocusLabel}
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                            <div>
+                              <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-main)" }}>{budgetFocusContributor.penName}</div>
+                              <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
+                                {fmt(budgetFocusContributor.amount)} • {budgetFocusContributor.writerArticles + budgetFocusContributor.reviewerArticles} lượt tính
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 22, fontWeight: 900, color: "var(--accent-blue)", lineHeight: 1 }}>
+                                {fmtPct(budgetFocusContributor.budgetPercentage)}
+                              </div>
+                              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+                                ngân sách tháng
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ marginTop: 12, height: 8, borderRadius: 999, background: "rgba(148,163,184,0.14)", overflow: "hidden" }}>
+                            <div style={{ width: `${Math.min(100, budgetFocusContributor.budgetPercentage)}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, var(--accent-blue), var(--accent-teal))" }} />
+                          </div>
+                          <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-muted)" }}>
+                            Chiếm {fmtPct(budgetFocusContributor.spentSharePercentage)} phần chi đã dùng trong tháng.
+                          </div>
+                        </div>
+                      )}
                     </>
                   ) : <div className="text-muted">Chưa đặt mục tiêu ngân sách.</div>}
                 </div>
@@ -605,6 +639,10 @@ export default function RoyaltyPage() {
                                 Duyệt: {w.reviewerArticles} bài • {fmt(w.reviewerAmount)}
                               </span>
                             )}
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 999, background: "rgba(59, 130, 246, 0.12)", color: "var(--accent-blue)", fontSize: 11, fontWeight: 800 }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>pie_chart</span>
+                              {hasBudget ? `${fmtPct(w.budgetPercentage)} ngân sách` : `${fmtPct(w.spentSharePercentage)} phần đã dùng`}
+                            </span>
                           </div>
                         </div>
                         <div className="inline-progress" style={{ width: 120 }}>

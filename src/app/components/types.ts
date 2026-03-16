@@ -400,6 +400,8 @@ export interface RoyaltyTopWriter {
   reviewerAmount: number;
   writerArticles: number;
   reviewerArticles: number;
+  budgetPercentage: number;
+  spentSharePercentage: number;
 }
 
 export interface RoyaltyContentBalance {
@@ -427,7 +429,23 @@ export interface RoyaltyDashboardData {
     writerArticles: number;
     reviewerArticles: number;
   };
-  budget: { budgetAmount: number; spent: number; remaining: number; percentage: number; hasBudget: boolean };
+  budget: {
+    budgetAmount: number;
+    spent: number;
+    remaining: number;
+    percentage: number;
+    hasBudget: boolean;
+    viewerContribution: {
+      penName: string;
+      amount: number;
+      writerAmount: number;
+      reviewerAmount: number;
+      writerArticles: number;
+      reviewerArticles: number;
+      budgetPercentage: number;
+      spentSharePercentage: number;
+    } | null;
+  };
   topWriters: RoyaltyTopWriter[];
   contentBalance: RoyaltyContentBalance;
 }
