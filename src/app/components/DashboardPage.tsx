@@ -8,6 +8,7 @@ import type { DashboardStats, Page } from "./types";
 import { useIsMobile } from "./useMediaQuery";
 
 const DASHBOARD_STATS_CACHE_TTL_MS = 30_000;
+const DASHBOARD_PASSIVE_REFRESH_INTERVAL_MS = 120_000;
 
 let dashboardStatsCache: DashboardStats | null = null;
 let dashboardStatsCacheAt = 0;
@@ -110,7 +111,23 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: Page)
     }
   }, []);
 
-  useRealtimeRefresh(["dashboard", "articles", "team"], scheduleStatsRefresh);
+  useRealtimeRefresh(["dashboard", "team"], scheduleStatsRefresh);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      refreshStats(false);
+    }, DASHBOARD_PASSIVE_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [refreshStats]);
 
   if (loading) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16 }}>

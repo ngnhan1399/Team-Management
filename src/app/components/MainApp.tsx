@@ -123,6 +123,11 @@ export default function MainApp() {
   const teamName = user?.team?.name?.trim() || "";
   const roleSubtitleWithTeam = teamName && isAdmin ? `${roleSubtitle} • ${teamName}` : roleSubtitle;
   const shouldShowTasksNav = isAdmin || hasVisibleTasks;
+  const shouldKeepRealtimeLive = page === "articles"
+    || page === "contentWork"
+    || page === "tasks"
+    || page === "notifications"
+    || page === "team";
 
   const refreshTaskVisibility = useCallback(() => {
     if (!user?.id) {
@@ -195,7 +200,9 @@ export default function MainApp() {
   useEffect(() => {
     refreshUnreadCount(false);
     refreshTaskVisibility();
+  }, [refreshTaskVisibility, refreshUnreadCount, user?.id]);
 
+  useEffect(() => {
     if (!user?.id) return;
 
     if (typeof window === "undefined") return;
@@ -206,7 +213,7 @@ export default function MainApp() {
     };
 
     const openRealtimeSource = () => {
-      if (document.visibilityState !== "visible" || realtimeSourceRef.current) {
+      if (!shouldKeepRealtimeLive || document.visibilityState !== "visible" || realtimeSourceRef.current) {
         return;
       }
 
@@ -239,7 +246,6 @@ export default function MainApp() {
               seenNotificationToastIdsRef.current = [...seenNotificationToastIdsRef.current.slice(-49), payloadId];
             }
             refreshUnreadCount(false);
-            refreshTaskVisibility();
           }
           if (Array.isArray(payload.channels) && payload.channels.includes("tasks")) {
             refreshTaskVisibility();
@@ -274,7 +280,7 @@ export default function MainApp() {
       window.removeEventListener("focus", handleVisibilityChange);
       closeRealtimeSource();
     };
-  }, [refreshTaskVisibility, refreshUnreadCount, refreshUser, user?.id]);
+  }, [refreshTaskVisibility, refreshUnreadCount, refreshUser, shouldKeepRealtimeLive, user?.id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
