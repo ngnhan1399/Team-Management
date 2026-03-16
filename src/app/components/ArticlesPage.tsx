@@ -2110,61 +2110,58 @@ export default function ArticlesPage() {
             <button className="btn-ios-pill" onClick={clearFilters} style={{ height: 44, background: "rgba(239, 68, 68, 0.1)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.2)" }}>
               Xóa lọc
             </button>
-          )}
-          {!isMobile && (
-              <button
-                className="btn-ios-pill"
-                data-testid="articles-check-links"
-                onClick={() => { void checkVisibleLinks(true); }}
-                disabled={linkCheckLoading}
-                title="Kiểm tra lại trạng thái các link bài viết đang hiển thị"
+          )}          <button
+            className="btn-ios-pill"
+            data-testid="articles-check-links"
+            onClick={() => { void checkVisibleLinks(true); }}
+            disabled={linkCheckLoading}
+            title="Kiểm tra lại trạng thái các link bài viết đang hiển thị"
+            style={{
+              height: isMobile ? 40 : 44,
+              padding: isMobile ? "0 12px" : "0 16px 0 12px",
+              gap: 10,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              background: linkCheckLoading ? "rgba(14, 165, 233, 0.10)" : "rgba(37, 99, 235, 0.08)",
+              color: linkCheckLoading ? "#0369a1" : "var(--accent-blue)",
+              border: linkCheckLoading
+                ? "1px solid rgba(14, 165, 233, 0.20)"
+                : "1px solid rgba(37, 99, 235, 0.18)",
+              boxShadow: "0 10px 24px rgba(37, 99, 235, 0.08)",
+            }}
+          >
+            <span
               style={{
-                height: 44,
-                padding: "0 16px 0 12px",
-                gap: 10,
-                whiteSpace: "nowrap",
+                width: 26,
+                height: 26,
+                borderRadius: 999,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: linkCheckLoading ? "rgba(14, 165, 233, 0.16)" : "rgba(37, 99, 235, 0.14)",
+                color: "inherit",
                 flexShrink: 0,
-                background: linkCheckLoading ? "rgba(14, 165, 233, 0.10)" : "rgba(37, 99, 235, 0.08)",
-                color: linkCheckLoading ? "#0369a1" : "var(--accent-blue)",
-                border: linkCheckLoading
-                  ? "1px solid rgba(14, 165, 233, 0.20)"
-                  : "1px solid rgba(37, 99, 235, 0.18)",
-                boxShadow: "0 10px 24px rgba(37, 99, 235, 0.08)",
               }}
             >
               <span
+                className="material-symbols-outlined"
                 style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 999,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: linkCheckLoading ? "rgba(14, 165, 233, 0.16)" : "rgba(37, 99, 235, 0.14)",
-                  color: "inherit",
-                  flexShrink: 0,
+                  fontSize: 16,
+                  animation: linkCheckLoading ? "spin 1s linear infinite" : undefined,
                 }}
               >
-                <span
-                  className="material-symbols-outlined"
-                  style={{
-                    fontSize: 16,
-                    animation: linkCheckLoading ? "spin 1s linear infinite" : undefined,
-                  }}
-                >
-                  verified
+                verified
+              </span>
+            </span>
+            <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.1 }}>
+              <span style={{ fontSize: 13, fontWeight: 800 }}>{linkCheckLoading ? "Đang kiểm tra..." : "Kiểm tra link"}</span>
+              {!isMobile && !linkCheckLoading && (
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
+                  Recheck các bài đang hiển thị
                 </span>
-              </span>
-              <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.1 }}>
-                <span style={{ fontSize: 13, fontWeight: 800 }}>{linkCheckLoading ? "Đang kiểm tra..." : "Kiểm tra link"}</span>
-                {!linkCheckLoading && (
-                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
-                    Recheck các bài đang hiển thị
-                  </span>
-                )}
-              </span>
-            </button>
-          )}
+              )}
+            </span>
+          </button>
         </div>
 
         {canBulkAssignReviewer && selectionMode && (
@@ -3031,5 +3028,4 @@ export default function ArticlesPage() {
 }
 
 /* ══════════════════════════ TEAM ══════════════════════════ */
-
 
