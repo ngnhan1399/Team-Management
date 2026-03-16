@@ -17,6 +17,7 @@ export interface AuthUser {
   role: "admin" | "ctv";
   isLeader: boolean;
   mustChangePassword: boolean;
+  showDailyKpiPopup?: boolean;
   collaboratorId: number | null;
   teamId: number | null;
   team?: {

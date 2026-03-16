@@ -342,25 +342,14 @@ export default function MainApp() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id || user.role !== "ctv" || typeof window === "undefined") {
+    if (!user?.id || user.role !== "ctv" || !user.showDailyKpiPopup) {
       setDailyKpiPopup(null);
       return;
     }
 
     const now = new Date();
-    const dateKey = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(now);
     const currentMonth = Number(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Ho_Chi_Minh", month: "numeric" }).format(now));
     const currentYear = Number(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric" }).format(now));
-    const storageKey = `daily-kpi-popup:${user.id}:${dateKey}`;
-
-    if (window.localStorage.getItem(storageKey)) {
-      return;
-    }
 
     let cancelled = false;
     fetch(`/api/kpi?month=${currentMonth}&year=${currentYear}`, { cache: "no-store" })
@@ -371,14 +360,13 @@ export default function MainApp() {
           return;
         }
         setDailyKpiPopup({ month: currentMonth, year: currentYear, summary: viewerSummary });
-        window.localStorage.setItem(storageKey, "shown");
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
     };
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.role, user?.showDailyKpiPopup]);
   const handleOpenContentWorkRegistration = useCallback(() => {
     if (typeof window !== "undefined") {
       window.open(CONTENT_WORK_REGISTRATION_URL, "_blank", "noopener,noreferrer");

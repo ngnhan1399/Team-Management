@@ -6,7 +6,25 @@ import { checkRateLimit, clearRateLimit, recordFailedAttempt } from "@/lib/rate-
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { eq } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+
+const DAILY_KPI_POPUP_COOKIE = "ctv_daily_kpi_popup";
+
+function getLocalDateKey(value: Date | string) {
+    const date = value instanceof Date ? value : new Date(value);
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(date);
+
+    const year = parts.find((part) => part.type === "year")?.value || "0000";
+    const month = parts.find((part) => part.type === "month")?.value || "00";
+    const day = parts.find((part) => part.type === "day")?.value || "00";
+    return `${year}-${month}-${day}`;
+}
 
 function getClientIp(request: NextRequest): string {
     const forwarded = request.headers.get("x-forwarded-for");
@@ -75,8 +93,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const currentLoginAt = new Date();
+        const previousLastLogin = user.lastLogin;
+        const isFirstLoginToday = user.role === "ctv"
+            && (!previousLastLogin || getLocalDateKey(previousLastLogin) !== getLocalDateKey(currentLoginAt));
+
         await db.update(users)
-            .set({ lastLogin: new Date().toISOString() })
+            .set({ lastLogin: currentLoginAt.toISOString() })
             .where(eq(users.id, user.id))
             .run();
 
@@ -101,6 +124,16 @@ export async function POST(request: NextRequest) {
         });
 
         await setAuthCookie(token);
+        if (isFirstLoginToday) {
+            const cookieStore = await cookies();
+            cookieStore.set(DAILY_KPI_POPUP_COOKIE, "1", {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "strict",
+                maxAge: 60 * 15,
+                path: "/",
+            });
+        }
         clearRateLimit(rateKey);
 
         await writeAuditLog({
