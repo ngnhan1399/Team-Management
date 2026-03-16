@@ -775,3 +775,9 @@ npm run build
 - Bản vá hiện dùng `tableLayout: fixed` và thu cột `Ngày`, `Người duyệt`, `Link`; nếu sau này badge hoặc text trong các cột này bị nới lại, cụm thao tác có thể lại trôi ra mép phải.
 
 
+
+### Ghi chú thêm 2026-03-16
+
+- GitHub Actions runner hiện trả `403` cho cả canary sống `203076` và canary chết `203074`.
+- `scripts/link-check-browser-runner.mjs` đã thêm canary guard.
+- Nếu runner không phân biệt đúng 2 link mẫu này, workflow sẽ `skip` an toàn thay vì persist sai hàng loạt.

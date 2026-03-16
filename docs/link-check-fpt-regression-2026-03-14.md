@@ -224,3 +224,22 @@ Mỗi lần chạm vào `check-links`, `ArticlesPage`, hoặc workflow browser r
 3. Xác minh manual check không làm link `ok/broken` tụt về `unknown`.
 4. Xác minh workflow GitHub vẫn persist được kết quả về DB.
 5. Xác minh badge UI sau reload lấy đúng trạng thái DB mới nhất.
+
+## Guardrail 2026-03-16
+
+GitHub Actions runner hiện có thể nhận `403` cho cả:
+
+- link sống mẫu `203076`
+- link chết mẫu `203074`
+
+Nghĩa là riêng môi trường runner này không đủ tin cậy để persist kết quả FPT Shop.
+
+Đã thêm guardrail:
+
+- runner chạy 2 canary trước khi quét batch
+- nếu `203076` không ra `ok` hoặc `203074` không ra `broken`, workflow sẽ `skip` an toàn
+- mục tiêu là chặn việc ghi sai hàng loạt xuống DB
+
+File chính:
+
+- `scripts/link-check-browser-runner.mjs`
