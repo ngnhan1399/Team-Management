@@ -187,6 +187,7 @@ export interface KpiMemberRow {
   penName: string;
   role: "writer" | "reviewer";
   status: string;
+  linkedUserId?: number | null;
   linkedUserRole?: "admin" | "ctv" | null;
   targetKpi: number;
   actualKpi: number;
@@ -197,12 +198,21 @@ export interface KpiMemberRow {
   evaluation: string | null;
 }
 
+export interface KpiRoleMonthlyTargets {
+  writer: number;
+  reviewer: number;
+}
+
 export interface KpiSummary {
+  role: "writer" | "reviewer" | "all";
   totalMembers: number;
+  totalMonthlyTarget: number;
   totalAssignedKpi: number;
   totalActualKpi: number;
   totalRemainingKpi: number;
   totalOverKpi: number;
+  totalUnassignedKpi: number;
+  totalOverAssignedKpi: number;
   completionPercentage: number;
 }
 
@@ -222,7 +232,11 @@ export interface KpiResponseData {
   year: number;
   teamId: number | null;
   canManage: boolean;
-  rows: KpiMemberRow[];
+  monthlyTargets: KpiRoleMonthlyTargets;
+  writerRows: KpiMemberRow[];
+  reviewerRows: KpiMemberRow[];
+  writerSummary: KpiSummary;
+  reviewerSummary: KpiSummary;
   summary: KpiSummary;
   viewerSummary: KpiViewerSnapshot | null;
 }

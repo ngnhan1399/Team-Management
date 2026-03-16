@@ -161,6 +161,17 @@ export const kpiRecords = pgTable("kpi_records", {
   createdAt: text("created_at").notNull().default(timestampTextDefault),
 });
 
+export const kpiMonthlyTargets = pgTable("kpi_monthly_targets", {
+  id: serial("id").primaryKey(),
+  teamId: integer("team_id"),
+  month: integer("month").notNull(),
+  year: integer("year").notNull(),
+  role: text("role", { enum: ["writer", "reviewer"] }).notNull(),
+  targetKpi: integer("target_kpi").notNull().default(0),
+  createdAt: text("created_at").notNull().default(timestampTextDefault),
+  updatedAt: text("updated_at").notNull().default(timestampTextDefault),
+});
+
 export const royaltyRates = pgTable("royalty_rates", {
   id: serial("id").primaryKey(),
   articleType: text("article_type").notNull(),

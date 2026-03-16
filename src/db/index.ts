@@ -151,6 +151,7 @@ export const db = wrapCompat(rawDb) as typeof rawDb;
 
 let initializationPromise: Promise<void> | null = null;
 let contentWorkSchemaInitializationPromise: Promise<void> | null = null;
+let kpiSchemaInitializationPromise: Promise<void> | null = null;
 
 async function ensureColumnExists(table: string, column: string, typeSql: string) {
   const result = await pool.query(
@@ -199,6 +200,22 @@ const CONTENT_WORK_SCHEMA_STATEMENTS = [
   "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_team_id ON content_work_registrations(team_id)",
 ];
 
+const KPI_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS kpi_monthly_targets (
+    id SERIAL PRIMARY KEY,
+    team_id INTEGER,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    target_kpi INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_monthly_targets_scope ON kpi_monthly_targets(team_id, month, year, role)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_month_year ON kpi_monthly_targets(month, year)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_team_id ON kpi_monthly_targets(team_id)",
+];
+
 export function ensureContentWorkSchemaInitialized() {
   if (!contentWorkSchemaInitializationPromise) {
     contentWorkSchemaInitializationPromise = (async () => {
@@ -227,6 +244,29 @@ export function ensureContentWorkSchemaInitialized() {
   }
 
   return contentWorkSchemaInitializationPromise;
+}
+
+export function ensureKpiSchemaInitialized() {
+  if (!kpiSchemaInitializationPromise) {
+    kpiSchemaInitializationPromise = (async () => {
+      for (const statement of KPI_SCHEMA_STATEMENTS) {
+        await pool.query(statement);
+      }
+
+      await ensureColumnExists("kpi_monthly_targets", "team_id", "INTEGER");
+      await ensureColumnExists("kpi_monthly_targets", "month", "INTEGER NOT NULL DEFAULT 1");
+      await ensureColumnExists("kpi_monthly_targets", "year", "INTEGER NOT NULL DEFAULT 2000");
+      await ensureColumnExists("kpi_monthly_targets", "role", "TEXT NOT NULL DEFAULT 'writer'");
+      await ensureColumnExists("kpi_monthly_targets", "target_kpi", "INTEGER NOT NULL DEFAULT 0");
+      await ensureColumnExists("kpi_monthly_targets", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+      await ensureColumnExists("kpi_monthly_targets", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+    })().catch((error) => {
+      kpiSchemaInitializationPromise = null;
+      throw error;
+    });
+  }
+
+  return kpiSchemaInitializationPromise;
 }
 
 const bootstrapStatements = [
@@ -365,6 +405,16 @@ const bootstrapStatements = [
     evaluation TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
+  `CREATE TABLE IF NOT EXISTS kpi_monthly_targets (
+    id SERIAL PRIMARY KEY,
+    team_id INTEGER,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    target_kpi INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
   `CREATE TABLE IF NOT EXISTS royalty_rates (
     id SERIAL PRIMARY KEY,
     article_type TEXT NOT NULL,
@@ -470,6 +520,8 @@ const bootstrapStatements = [
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_assignee ON editorial_tasks(assignee_pen_name)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_due_date ON editorial_tasks(due_date)",
   "CREATE INDEX IF NOT EXISTS idx_kpi_month_year ON kpi_records(month, year)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_monthly_targets_scope ON kpi_monthly_targets(team_id, month, year, role)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_month_year ON kpi_monthly_targets(month, year)",
   "CREATE INDEX IF NOT EXISTS idx_payments_month_year ON payments(month, year)",
   "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
   "CREATE INDEX IF NOT EXISTS idx_notifications_to_user ON notifications(to_user_id)",
@@ -493,6 +545,7 @@ const teamScopedIndexStatements = [
   "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_team_id ON content_work_registrations(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_team_id ON editorial_tasks(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_kpi_team_id ON kpi_records(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_team_id ON kpi_monthly_targets(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_payments_team_id ON payments(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_feedback_entries_team_id ON feedback_entries(team_id)",
 ];
@@ -506,7 +559,7 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "8";
+const BOOTSTRAP_SCHEMA_VERSION = "9";
 
 async function getOrCreateDefaultTeamId() {
   const existingDefault = await pool.query(
@@ -565,6 +618,13 @@ export async function initializeDatabase() {
   await ensureColumnExists("articles", "team_id", "INTEGER");
   await ensureColumnExists("editorial_tasks", "team_id", "INTEGER");
   await ensureColumnExists("kpi_records", "team_id", "INTEGER");
+  await ensureColumnExists("kpi_monthly_targets", "team_id", "INTEGER");
+  await ensureColumnExists("kpi_monthly_targets", "month", "INTEGER NOT NULL DEFAULT 1");
+  await ensureColumnExists("kpi_monthly_targets", "year", "INTEGER NOT NULL DEFAULT 2000");
+  await ensureColumnExists("kpi_monthly_targets", "role", "TEXT NOT NULL DEFAULT 'writer'");
+  await ensureColumnExists("kpi_monthly_targets", "target_kpi", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumnExists("kpi_monthly_targets", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+  await ensureColumnExists("kpi_monthly_targets", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists("payments", "team_id", "INTEGER");
   await ensureColumnExists("feedback_entries", "team_id", "INTEGER");
 
@@ -611,6 +671,7 @@ export async function initializeDatabase() {
   await pool.query(`UPDATE articles SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE editorial_tasks SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE kpi_records SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`UPDATE kpi_monthly_targets SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE payments SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE feedback_entries SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
 
