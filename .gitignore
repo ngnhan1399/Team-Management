@@ -22,6 +22,7 @@
 .env.development.local
 .env.test.local
 .env.production.local
+.env.link-check-runner.local
 
 # Database files
 /data/*.db
@@ -31,6 +32,7 @@
 
 # Runtime output
 /logs/
+/logs/link-check-runner/
 /output/*
 !/output/
 !/output/google-sheets-webhook.workdocker.gs

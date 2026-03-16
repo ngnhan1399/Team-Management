@@ -781,3 +781,8 @@ npm run build
 - GitHub Actions runner hiện trả `403` cho cả canary sống `203076` và canary chết `203074`.
 - `scripts/link-check-browser-runner.mjs` đã thêm canary guard.
 - Nếu runner không phân biệt đúng 2 link mẫu này, workflow sẽ `skip` an toàn thay vì persist sai hàng loạt.
+- Cron GitHub cho `Scheduled Link Check` đã tắt.
+- Runner định kỳ chính đã chuyển sang local Windows task:
+  - `scripts/run-link-check-local.ps1`
+  - `scripts/register-link-check-scheduled-task.ps1`
+  - tài liệu: `docs/link-check-local-runner.md`
