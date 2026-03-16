@@ -23,6 +23,8 @@ const loadNotificationsPage = () => import("./NotificationsPage");
 const loadProfilePage = () => import("./ProfilePage");
 const loadRoyaltyPage = () => import("./RoyaltyPage");
 const loadTeamPage = () => import("./TeamPage");
+const UNREAD_REFRESH_TTL_MS = 20_000;
+const TASK_VISIBILITY_REFRESH_TTL_MS = 30_000;
 
 function PageLoadingState({ label }: { label: string }) {
   return (
@@ -106,6 +108,8 @@ export default function MainApp() {
   const unreadBaselineReadyRef = useRef(false);
   const navigationRequestIdRef = useRef(0);
   const realtimeSourceRef = useRef<EventSource | null>(null);
+  const lastUnreadRefreshAtRef = useRef(0);
+  const lastTaskVisibilityRefreshAtRef = useRef(0);
   const displayName = (typeof user?.collaborator?.name === "string" && user.collaborator.name.trim())
     || user?.collaborator?.penName
     || user?.email.split("@")[0]
@@ -129,7 +133,7 @@ export default function MainApp() {
     || page === "notifications"
     || page === "team";
 
-  const refreshTaskVisibility = useCallback(() => {
+  const refreshTaskVisibility = useCallback((force = false) => {
     if (!user?.id) {
       setHasVisibleTasks(false);
       return;
@@ -139,6 +143,12 @@ export default function MainApp() {
       setHasVisibleTasks(true);
       return;
     }
+
+    const now = Date.now();
+    if (!force && now - lastTaskVisibilityRefreshAtRef.current < TASK_VISIBILITY_REFRESH_TTL_MS) {
+      return;
+    }
+    lastTaskVisibilityRefreshAtRef.current = now;
 
     fetch("/api/editorial-tasks", { cache: "no-store" })
       .then((response) => response.json())
@@ -151,7 +161,13 @@ export default function MainApp() {
       });
   }, [user?.id, user?.role]);
 
-  const refreshUnreadCount = useCallback((announceNew = false) => {
+  const refreshUnreadCount = useCallback((announceNew = false, force = false) => {
+    const now = Date.now();
+    if (!force && now - lastUnreadRefreshAtRef.current < UNREAD_REFRESH_TTL_MS) {
+      return;
+    }
+    lastUnreadRefreshAtRef.current = now;
+
     fetch("/api/notifications?unread=true", { cache: "no-store" })
       .then(r => r.json())
       .then((d) => {
@@ -198,8 +214,8 @@ export default function MainApp() {
   }, [user?.role]);
 
   useEffect(() => {
-    refreshUnreadCount(false);
-    refreshTaskVisibility();
+    refreshUnreadCount(false, true);
+    refreshTaskVisibility(true);
   }, [refreshTaskVisibility, refreshUnreadCount, user?.id]);
 
   useEffect(() => {
@@ -245,14 +261,14 @@ export default function MainApp() {
             if (payloadId > 0 && payload.toastTitle) {
               seenNotificationToastIdsRef.current = [...seenNotificationToastIdsRef.current.slice(-49), payloadId];
             }
-            refreshUnreadCount(false);
+            refreshUnreadCount(false, true);
           }
           if (Array.isArray(payload.channels) && payload.channels.includes("tasks")) {
-            refreshTaskVisibility();
+            refreshTaskVisibility(true);
           }
           if (Array.isArray(payload.channels) && payload.channels.includes("team")) {
             refreshUser().catch(() => { });
-            refreshTaskVisibility();
+            refreshTaskVisibility(true);
           }
         } catch {
           // Ignore malformed realtime packets.
@@ -305,6 +321,8 @@ export default function MainApp() {
       seenNotificationToastIdsRef.current = [];
       lastUnreadCountRef.current = 0;
       unreadBaselineReadyRef.current = false;
+      lastUnreadRefreshAtRef.current = 0;
+      lastTaskVisibilityRefreshAtRef.current = 0;
       setHasVisibleTasks(false);
       setPendingRegistrationReminder(null);
       setMarkingRegistrationReminderRead(false);
@@ -335,7 +353,7 @@ export default function MainApp() {
       }
 
       setPendingRegistrationReminder(null);
-      refreshUnreadCount(false);
+      refreshUnreadCount(false, true);
     } catch (error) {
       window.alert(`❌ ${error instanceof Error ? error.message : String(error)}`);
     } finally {
