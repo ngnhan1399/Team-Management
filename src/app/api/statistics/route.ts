@@ -51,6 +51,8 @@ const ACTIVE_DASHBOARD_STATUSES = new Set([
   "NeedsFix",
   "Rejected",
 ]);
+const STATISTICS_CACHE_TTL_MS = 20_000;
+const statisticsResponseCache = new Map<string, { expiresAt: number; data: unknown }>();
 
 function resolveCollaborator(articlePenName: string, directory: CollaboratorDirectoryItem[]) {
     const exact = directory.find((item) => item.penName === articlePenName);
@@ -179,6 +181,40 @@ function mapLatestArticles(rows: StatisticsArticleRow[], collaboratorDirectory: 
       date: article.date,
       updatedAt: article.updatedAt || article.createdAt || article.date,
     };
+  });
+}
+
+function createEmptyStatisticsData() {
+  return {
+    totalArticles: 0,
+    totalCTVs: 0,
+    articlesByStatus: [],
+    articlesByCategory: [],
+    articlesByWriter: [],
+    articlesByType: [],
+    articlesByMonth: [],
+    latestArticles: [],
+  };
+}
+
+function getCachedStatisticsResponse(cacheKey: string) {
+  const cached = statisticsResponseCache.get(cacheKey);
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    statisticsResponseCache.delete(cacheKey);
+    return null;
+  }
+
+  return cached.data;
+}
+
+function setCachedStatisticsResponse(cacheKey: string, data: unknown) {
+  statisticsResponseCache.set(cacheKey, {
+    expiresAt: Date.now() + STATISTICS_CACHE_TTL_MS,
+    data,
   });
 }
 
@@ -328,6 +364,18 @@ export async function GET() {
         const adminTeamId = context.user.role === "admin" && !isLeader(context)
             ? getContextTeamId(context)
             : null;
+        const statisticsCacheKey = context.user.role === "admin"
+            ? `admin:${context.user.id}:${adminTeamId || 0}:${isLeader(context) ? "leader" : "team"}`
+            : `ctv:${context.user.id}:${context.user.teamId || 0}:${context.collaborator?.id || 0}`;
+        const respondWithData = (data: unknown) => {
+            setCachedStatisticsResponse(statisticsCacheKey, data);
+            return NextResponse.json({ success: true, data });
+        };
+        const cachedData = getCachedStatisticsResponse(statisticsCacheKey);
+        if (cachedData) {
+            return NextResponse.json({ success: true, data: cachedData });
+        }
+
         const allCollaborators = await db
             .select({
                 id: collaborators.id,
@@ -341,45 +389,18 @@ export async function GET() {
             .all();
         if (context.user.role === "admin") {
             if (!isLeader(context) && !adminTeamId) {
-                return NextResponse.json({
-                    success: true,
-                    data: {
-                        totalArticles: 0,
-                        totalCTVs: 0,
-                        articlesByStatus: [],
-                        articlesByCategory: [],
-                        articlesByWriter: [],
-                        articlesByType: [],
-                        articlesByMonth: [],
-                        latestArticles: [],
-                    },
-                });
+                return respondWithData(createEmptyStatisticsData());
             }
 
-            return NextResponse.json({
-                success: true,
-                data: await getAdminStatistics(
-                    allCollaborators,
-                    adminTeamId ? eq(articles.teamId, adminTeamId) : undefined,
-                    adminTeamId ? eq(collaborators.teamId, adminTeamId) : undefined
-                ),
-            });
+            return respondWithData(await getAdminStatistics(
+                allCollaborators,
+                adminTeamId ? eq(articles.teamId, adminTeamId) : undefined,
+                adminTeamId ? eq(collaborators.teamId, adminTeamId) : undefined
+            ));
         }
 
         if (articleOwnerCandidates.length === 0) {
-            return NextResponse.json({
-                success: true,
-                data: {
-                    totalArticles: 0,
-                    totalCTVs: 0,
-                    articlesByStatus: [],
-                    articlesByCategory: [],
-                    articlesByWriter: [],
-                    articlesByType: [],
-                    articlesByMonth: [],
-                    latestArticles: [],
-                },
-            });
+            return respondWithData(createEmptyStatisticsData());
         }
 
         const exactScopeValues = Array.from(new Set(
@@ -413,10 +434,7 @@ export async function GET() {
         if (scopeWhere) {
             const scopedStatistics = await getScopedStatistics(scopeWhere, totalCTVCount, collaboratorDirectory);
             if (scopedStatistics.totalArticles > 0) {
-                return NextResponse.json({
-                    success: true,
-                    data: scopedStatistics,
-                });
+                return respondWithData(scopedStatistics);
             }
         }
 
@@ -476,18 +494,15 @@ export async function GET() {
                 updatedAt: article.updatedAt || article.createdAt || article.date,
             }));
 
-        return NextResponse.json({
-            success: true,
-            data: {
-                totalArticles,
-                totalCTVs: totalCTVCount,
-                articlesByStatus,
-                articlesByCategory,
-                articlesByWriter,
-                articlesByType,
-                articlesByMonth,
-                latestArticles,
-            },
+        return respondWithData({
+            totalArticles,
+            totalCTVs: totalCTVCount,
+            articlesByStatus,
+            articlesByCategory,
+            articlesByWriter,
+            articlesByType,
+            articlesByMonth,
+            latestArticles,
         });
     } catch (error) {
         return handleServerError("statistics.get", error);
