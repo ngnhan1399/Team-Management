@@ -12,6 +12,10 @@ const CHALLENGE_PATTERNS = [
   "checking your browser before accessing",
   "captcha",
 ];
+const BODY_FALLBACK_TITLES = [
+  "tin tuc cong nghe cap nhat 24/7 - fptshop.com.vn",
+  "fptshop.com.vn",
+];
 const BROKEN_PATTERNS = [
   "404 - trang het han truy cap hoac khong ton tai",
   "duong dan da het han truy cap hoac khong ton tai",
@@ -84,7 +88,11 @@ async function readSignals(page) {
     page.locator("body").innerText().catch(() => ""),
   ]);
 
-  return fold([title, heading, bodyText].filter(Boolean).join("\n"));
+  return {
+    title: fold(title),
+    heading: fold(heading),
+    body: fold(bodyText),
+  };
 }
 
 async function checkItem(context, item) {
@@ -109,7 +117,7 @@ async function checkItem(context, item) {
 
     const statusCode = response?.status() ?? 0;
     const signals = await readSignals(page);
-    if (CHALLENGE_PATTERNS.some((pattern) => signals.includes(pattern))) {
+    if (CHALLENGE_PATTERNS.some((pattern) => signals.body.includes(pattern))) {
       return {
         articleId: item.articleId,
         url: item.url,
@@ -129,7 +137,12 @@ async function checkItem(context, item) {
       };
     }
 
-    if (BROKEN_PATTERNS.some((pattern) => signals.includes(pattern))) {
+    const strongSignals = [signals.title, signals.heading].filter(Boolean).join("\n");
+    const allowBodyBrokenFallback = !strongSignals
+      || (!signals.heading && BODY_FALLBACK_TITLES.some((title) => signals.title === title));
+    const brokenText = allowBodyBrokenFallback ? `${strongSignals}\n${signals.body}` : strongSignals;
+
+    if (BROKEN_PATTERNS.some((pattern) => brokenText.includes(pattern))) {
       return {
         articleId: item.articleId,
         url: item.url,

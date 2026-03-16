@@ -32,6 +32,10 @@ const BROWSER_CHALLENGE_PATTERNS = [
   "checking your browser before accessing",
   "captcha",
 ] as const;
+const BROWSER_BODY_FALLBACK_TITLES = [
+  "tin tuc cong nghe cap nhat 24/7 - fptshop.com.vn",
+  "fptshop.com.vn",
+] as const;
 
 let browserPromise: Promise<Browser | null> | null = null;
 
@@ -104,7 +108,11 @@ async function readPageSignals(page: Page) {
     page.locator("body").innerText().catch(() => ""),
   ]);
 
-  return foldForPattern([title, heading, bodyText].filter(Boolean).join("\n"));
+  return {
+    title: foldForPattern(title),
+    heading: foldForPattern(heading),
+    body: foldForPattern(bodyText),
+  };
 }
 
 export async function checkLinkStatusWithBrowser(url: string): Promise<BrowserLinkCheckResult | null> {
@@ -139,7 +147,7 @@ export async function checkLinkStatusWithBrowser(url: string): Promise<BrowserLi
 
     const responseStatus = response?.status() ?? 0;
     const foldedSignals = await readPageSignals(page);
-    if (BROWSER_CHALLENGE_PATTERNS.some((pattern) => foldedSignals.includes(pattern))) {
+    if (BROWSER_CHALLENGE_PATTERNS.some((pattern) => foldedSignals.body.includes(pattern))) {
       return {
         finalUrl,
         status: "unknown",
@@ -151,7 +159,12 @@ export async function checkLinkStatusWithBrowser(url: string): Promise<BrowserLi
       return { finalUrl, status: "broken", reason: `browser:${responseStatus}` };
     }
 
-    if (BROWSER_BROKEN_PATTERNS.some((pattern) => foldedSignals.includes(pattern))) {
+    const strongSignals = [foldedSignals.title, foldedSignals.heading].filter(Boolean).join("\n");
+    const allowBodyBrokenFallback = !strongSignals
+      || (!foldedSignals.heading && BROWSER_BODY_FALLBACK_TITLES.some((title) => foldedSignals.title === title));
+    const brokenText = allowBodyBrokenFallback ? `${strongSignals}\n${foldedSignals.body}` : strongSignals;
+
+    if (BROWSER_BROKEN_PATTERNS.some((pattern) => brokenText.includes(pattern))) {
       return { finalUrl, status: "broken", reason: "browser:soft404" };
     }
 

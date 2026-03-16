@@ -5,6 +5,7 @@
 - `LINKCHECK-FPT-BOTBLOCK-001`
 - `LINKCHECK-FPT-NORMALIZE-002`
 - `LINKCHECK-MANUAL-UNKNOWN-003`
+- `LINKCHECK-FPT-HIDDEN-ERROR-TEXT-004`
 
 ## Kết luận ngắn
 
@@ -15,6 +16,7 @@ Có 3 lớp vấn đề chồng lên nhau:
 1. Vercel runtime bị FPT Shop bot-block nên manual check từ app có thể không nhìn thấy bài thật.
 2. Logic phát hiện soft-404 chưa normalize đủ tiếng Việt, nên một số trang lỗi FPT Shop không bị bắt đúng.
 3. Manual check có thể ghi đè trạng thái link từ `ok/broken` thành `unknown`, làm badge UI nhìn sai dù trước đó dữ liệu đúng.
+4. FPT Shop nhúng chuỗi lỗi 404 trong HTML của cả trang bài thật, nên rule soft-404 quét toàn body có thể đánh `broken` oan hàng loạt.
 
 ## Điều đã xác minh
 
@@ -117,6 +119,33 @@ File chính:
 Commit chính:
 
 - `d7c8484` Avoid persisting manual unknown link states
+
+## Root Cause 4: `LINKCHECK-FPT-HIDDEN-ERROR-TEXT-004`
+
+FPT Shop hiện nhúng sẵn chuỗi như `Đường dẫn đã hết hạn truy cập hoặc không tồn tại` vào HTML của cả một số trang bài thật.
+
+Hệ quả:
+
+- rule soft-404 nếu quét toàn body/full HTML sẽ match nhầm trên link sống
+- browser runner nền có thể persist `broken` hàng loạt dù bài vẫn mở bình thường
+- hiện tượng điển hình là các slot scheduled gần nhau bị lệch mạnh sang `all broken`
+
+Đã sửa bằng:
+
+- chỉ dùng `title + h1` làm tín hiệu soft-404 chính
+- chỉ fallback xuống body khi trang không có tín hiệu bài viết rõ ràng
+- với FPT Shop, chỉ cho phép body fallback khi title đang là title generic của site và không có `h1` bài viết
+
+File chính:
+
+- `src/app/api/check-links/route.ts`
+- `src/lib/link-health-browser.ts`
+- `scripts/link-check-browser-runner.mjs`
+
+Checklist thêm:
+
+1. Test ít nhất một link sống FPT Shop có chứa chuỗi lỗi ẩn trong HTML.
+2. Xác minh browser runner không còn ra `all broken` bất thường trên slot scheduled.
 
 ## Dữ liệu đã sửa trên DB hiện tại
 

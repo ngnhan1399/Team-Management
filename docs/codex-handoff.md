@@ -69,10 +69,12 @@
   - FPT Shop bot-block một phần request từ Vercel nên manual check không luôn xác minh được link
   - normalize soft-404 trước đó thiếu bước `đ -> d`, làm một số trang lỗi tiếng Việt bị lọt
   - manual check từng có thể ghi đè trạng thái đúng thành `unknown`
+  - FPT Shop còn nhúng chuỗi lỗi 404 vào HTML của cả trang bài thật, nên rule quét toàn body có thể đánh `broken` oan hàng loạt
 - Đã sửa theo 3 lớp:
   - GitHub Actions + Playwright Chromium là nhánh quét chính xác cho FPT Shop
   - backend/browser runner normalize đủ tiếng Việt và đọc HTML đầy đủ hơn
   - manual check không còn persist `unknown` để ghi đè trạng thái đã biết
+  - soft-404 giờ ưu tiên `title + h1`, chỉ fallback xuống body khi trang không có tín hiệu bài viết rõ ràng
 - UI `Kiểm tra link` giờ:
   - vẫn cho recheck ngay
   - nếu chưa xác minh chắc chắn thì chỉ báo `đang chờ xác minh nền`
@@ -109,6 +111,9 @@
   - `203074` = `broken`
   - `203076` = `ok`
 - GitHub Actions manual run `Scheduled Link Check` ✅
+- Khi chạm lại `check-links`, phải test thêm:
+  - một link sống FPT Shop có chuỗi lỗi ẩn trong HTML
+  - xác minh scheduled/browser runner không ra pattern bất thường kiểu `all broken`
 
 ## Update 2026-03-13 (ẩn tab Lịch biên tập của CTV khi chưa có task)
 

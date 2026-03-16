@@ -101,6 +101,10 @@ const HOST_SOFT_404_PATTERNS = [
       ["duong dan da het han truy cap hoac khong ton tai"],
       ["trang het han truy cap hoac khong ton tai"],
     ] as const,
+    bodyFallbackTitles: [
+      "tin tuc cong nghe cap nhat 24/7 - fptshop.com.vn",
+      "fptshop.com.vn",
+    ] as const,
   },
 ] as const;
 
@@ -164,17 +168,55 @@ function parsePersistedItems(value: unknown): LinkCheckPersistItem[] {
 }
 
 function detectSoft404Reason(hostname: string, html: string) {
+  const extractTagText = (tagName: string) => {
+    const match = html.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)</${tagName}>`, "i"));
+    return match?.[1] || "";
+  };
+  const foldExtractedText = (value: string) => foldForPattern(
+    value
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&#160;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+
   const foldedHtml = foldForPattern(html);
   if (!foldedHtml) return null;
 
-  const genericPattern = GENERIC_SOFT_404_PATTERNS.find((pattern) => pattern.every((token) => foldedHtml.includes(token)));
+  const titleSignal = foldExtractedText(extractTagText("title"));
+  const headingSignal = foldExtractedText(extractTagText("h1"));
+  const strongSignals = [titleSignal, headingSignal].filter(Boolean).join("\n");
+
+  const genericPattern = GENERIC_SOFT_404_PATTERNS.find((pattern) => pattern.every((token) => strongSignals.includes(token)));
   if (genericPattern) {
     return `soft404:generic:${genericPattern.join("+")}`;
   }
 
   const hostPatterns = HOST_SOFT_404_PATTERNS.find((entry) => entry.hostnamePattern.test(hostname));
-  const hostPattern = hostPatterns?.patterns.find((pattern) => pattern.every((token) => foldedHtml.includes(token)));
-  return hostPattern ? `soft404:host:${hostPattern.join("+")}` : null;
+  const hostPattern = hostPatterns?.patterns.find((pattern) => pattern.every((token) => strongSignals.includes(token)));
+  if (hostPattern) {
+    return `soft404:host:${hostPattern.join("+")}`;
+  }
+
+  const allowBodyFallback = !strongSignals || Boolean(
+    hostPatterns
+    && !headingSignal
+    && hostPatterns.bodyFallbackTitles.some((title) => titleSignal === title),
+  );
+
+  if (!allowBodyFallback) {
+    return null;
+  }
+
+  const bodyGenericPattern = GENERIC_SOFT_404_PATTERNS.find((pattern) => pattern.every((token) => foldedHtml.includes(token)));
+  if (bodyGenericPattern) {
+    return `soft404:generic-body:${bodyGenericPattern.join("+")}`;
+  }
+
+  const bodyHostPattern = hostPatterns?.patterns.find((pattern) => pattern.every((token) => foldedHtml.includes(token)));
+  return bodyHostPattern ? `soft404:host-body:${bodyHostPattern.join("+")}` : null;
 }
 
 function isSameHostname(originalUrl: string, finalUrl: string) {
