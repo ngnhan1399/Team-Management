@@ -18,6 +18,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 type ContentWorkListRow = {
   id: number;
   articleId: number;
+  teamId: number | null;
   requestedByUserId: number;
   penName: string;
   title: string;
@@ -47,6 +48,7 @@ async function loadRegistrationRow(registrationId: number) {
     .select({
       id: contentWorkRegistrations.id,
       articleId: contentWorkRegistrations.articleId,
+      teamId: articles.teamId,
       requestedByUserId: contentWorkRegistrations.requestedByUserId,
       penName: contentWorkRegistrations.penName,
       title: contentWorkRegistrations.title,
@@ -88,14 +90,17 @@ export async function GET() {
     if (!context) {
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
     }
-    if (context.user.role !== "ctv") {
-      return NextResponse.json({ success: false, error: "CTV access required" }, { status: 403 });
+    if (context.user.role !== "ctv" && context.user.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Quyền truy cập không hợp lệ" }, { status: 403 });
     }
+
+    const identityCandidates = getContextIdentityCandidates(context);
 
     const rows = await db
       .select({
         id: contentWorkRegistrations.id,
         articleId: contentWorkRegistrations.articleId,
+        teamId: articles.teamId,
         requestedByUserId: contentWorkRegistrations.requestedByUserId,
         penName: contentWorkRegistrations.penName,
         title: contentWorkRegistrations.title,
@@ -117,13 +122,22 @@ export async function GET() {
       })
       .from(contentWorkRegistrations)
       .innerJoin(articles, eq(contentWorkRegistrations.articleId, articles.id))
-      .where(eq(contentWorkRegistrations.requestedByUserId, context.user.id))
       .orderBy(desc(contentWorkRegistrations.updatedAt), desc(contentWorkRegistrations.id))
       .all() as ContentWorkListRow[];
 
+    const visibleRows = rows.filter((row) => {
+      if (!canAccessTeam(context, row.teamId)) {
+        return false;
+      }
+      if (context.user.role === "admin") {
+        return true;
+      }
+      return matchesIdentityCandidate(identityCandidates, row.penName);
+    });
+
     return NextResponse.json({
       success: true,
-      data: rows.map(mapRegistrationRow),
+      data: visibleRows.map(mapRegistrationRow),
     });
   } catch (error) {
     return handleServerError("content-work.get", error);
@@ -140,8 +154,8 @@ export async function POST(request: NextRequest) {
     if (!context) {
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
     }
-    if (context.user.role !== "ctv") {
-      return NextResponse.json({ success: false, error: "CTV access required" }, { status: 403 });
+    if (context.user.role !== "ctv" && context.user.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Quyền truy cập không hợp lệ" }, { status: 403 });
     }
 
     const body = await request.json().catch(() => ({}));
@@ -175,7 +189,7 @@ export async function POST(request: NextRequest) {
     }
 
     const identityCandidates = getContextIdentityCandidates(context);
-    if (!matchesIdentityCandidate(identityCandidates, article.penName)) {
+    if (context.user.role !== "admin" && !matchesIdentityCandidate(identityCandidates, article.penName)) {
       return NextResponse.json({ success: false, error: "Bạn chỉ có thể đăng ký Content Work cho bài của chính mình" }, { status: 403 });
     }
 

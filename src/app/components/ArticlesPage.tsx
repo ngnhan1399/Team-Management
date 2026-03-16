@@ -246,10 +246,11 @@ export default function ArticlesPage() {
   }, [canManageArticles, isWriter, user]);
 
   const canRegisterContentWork = useCallback((article: Article) => {
-    if (!isWriter) return false;
-    if (!canEditArticle(article)) return false;
+    if (!canManageArticles && !isWriter) return false;
+    if (!canManageArticles && !canEditArticle(article)) return false;
+    if (resolveAuthorBucket(article) === "editorial") return false;
     return Boolean(String(article.link || "").trim());
-  }, [canEditArticle, isWriter]);
+  }, [canEditArticle, canManageArticles, isWriter, resolveAuthorBucket]);
 
   const fetchArticles = useCallback((
     p = 1,
@@ -1013,7 +1014,7 @@ export default function ArticlesPage() {
         if (data.article) {
           const savedArticle = data.article as Article;
           mergeSavedArticleIntoList(savedArticle, isEditing);
-          if (!isEditing && isWriter) {
+          if (!isEditing && canRegisterContentWork(savedArticle)) {
             setContentWorkPromptArticle(savedArticle);
             setContentWorkBannerArticle(savedArticle);
           }
@@ -2548,19 +2549,42 @@ export default function ArticlesPage() {
               </div>
             </div>
             <div className="modal-footer" style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-                {canManageArticles && Boolean(formData.id) && formData.authorBucket !== "editorial" && (
-                  <button
-                    className="btn-ios-pill btn-ios-secondary"
-                    onClick={handleMoveToNextMonth}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                  {canManageArticles && Boolean(formData.id) && formData.authorBucket !== "editorial" && (
+                    <button
+                      className="btn-ios-pill btn-ios-secondary"
+                      onClick={handleMoveToNextMonth}
                     disabled={savingArticle || movingArticleToNextMonth}
                     style={{ borderColor: "rgba(245, 158, 11, 0.28)", color: "#b45309", background: "rgba(245, 158, 11, 0.1)" }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>event_upcoming</span>
-                    {movingArticleToNextMonth ? "Đang chuyển..." : "Chuyển sang tháng sau"}
-                  </button>
-                )}
-              </div>
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>event_upcoming</span>
+                      {movingArticleToNextMonth ? "Đang chuyển..." : "Chuyển sang tháng sau"}
+                    </button>
+                  )}
+                  {Boolean(formData.id) && canRegisterContentWork(formData as Article) && (
+                    <button
+                      className="btn-ios-pill btn-ios-secondary"
+                      onClick={() => { void handleRegisterContentWork(formData as Article); }}
+                      disabled={registeringContentWork || savingArticle || movingArticleToNextMonth}
+                      style={{
+                        borderColor: "rgba(37, 99, 235, 0.22)",
+                        color: "var(--accent-blue)",
+                        background: "rgba(37, 99, 235, 0.08)",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          fontSize: 18,
+                          animation: registeringContentWork && registeringContentWorkArticleId === Number(formData.id) ? "spin 1s linear infinite" : undefined,
+                        }}
+                      >
+                        {registeringContentWork && registeringContentWorkArticleId === Number(formData.id) ? "progress_activity" : "task_alt"}
+                      </span>
+                      {registeringContentWork && registeringContentWorkArticleId === Number(formData.id) ? "Đang đăng ký..." : "Đăng ký Content Work"}
+                    </button>
+                  )}
+                </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginLeft: "auto" }}>
                 <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowModal(false)} disabled={savingArticle || movingArticleToNextMonth}>Hủy bỏ</button>
                 <button className="btn-ios-pill btn-ios-primary" onClick={handleSave} disabled={savingArticle || movingArticleToNextMonth}>

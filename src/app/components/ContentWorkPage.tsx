@@ -28,6 +28,7 @@ function getStatusTone(status: ContentWorkRegistrationItem["status"]) {
 
 export default function ContentWorkPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [items, setItems] = useState<ContentWorkRegistrationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -110,7 +111,9 @@ export default function ContentWorkPage() {
         <div>
           <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.1, letterSpacing: "-0.04em" }}>Content Work</h1>
           <p style={{ margin: "8px 0 0", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.7 }}>
-            Theo dõi trạng thái gửi form và điền link Content Work cho các bài viết của bạn.
+            {isAdmin
+              ? "Theo dõi và xử lý trạng thái gửi form, điền link Content Work cho các bài CTV trong phạm vi bạn quản lý."
+              : "Theo dõi trạng thái gửi form và điền link Content Work cho các bài viết của bạn."}
           </p>
         </div>
         <button type="button" className="btn-ios-pill btn-ios-secondary" onClick={() => fetchItems(true)} disabled={refreshing}>
@@ -138,7 +141,9 @@ export default function ContentWorkPage() {
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Đang tải danh sách Content Work...</div>
         ) : items.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
-            Chưa có bài nào được đăng ký Content Work. Sau khi thêm bài mới, bạn có thể bấm <strong>Đăng ký Content Work</strong>.
+            {isAdmin
+              ? "Chưa có bài CTV nào được đăng ký Content Work trong phạm vi hiện tại."
+              : <>Chưa có bài nào được đăng ký Content Work. Sau khi thêm bài mới, bạn có thể bấm <strong>Đăng ký Content Work</strong>.</>}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

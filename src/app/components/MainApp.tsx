@@ -77,6 +77,18 @@ const pageLabels: Record<Page, string> = {
   profile: "Hồ sơ",
 };
 
+type NavItem = {
+  id: Page;
+  label: string;
+  icon: string;
+  section: "Tổng quan" | "Quản lý";
+  count?: number;
+  hidden?: boolean;
+  adminOnly?: boolean;
+  ctvOnly?: boolean;
+  leaderOnly?: boolean;
+};
+
 export default function MainApp() {
   const { user, logout, refreshUser } = useAuth();
   const [page, setPage] = useState<Page>("dashboard");
@@ -388,12 +400,12 @@ export default function MainApp() {
     }
   }, [navigateToPage, page, shouldShowTasksNav]);
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { id: "dashboard", label: "Tổng quan", icon: "dashboard", section: "Tổng quan" },
     { id: "notifications", label: "Thông báo", icon: "notifications", section: "Tổng quan", count: unreadCount },
     { id: "feedback", label: "Feedback", icon: "feedback", section: "Tổng quan" },
     { id: "articles", label: "Bài viết", icon: "description", section: "Quản lý" },
-    { id: "contentWork", label: "Content Work", icon: "task_alt", section: "Quản lý", ctvOnly: true },
+    { id: "contentWork", label: "Content Work", icon: "task_alt", section: "Quản lý" },
     { id: "tasks", label: "Lịch biên tập", icon: "calendar_month", section: "Quản lý", hidden: !shouldShowTasksNav },
     { id: "team", label: "Đội ngũ", icon: "group", section: "Quản lý", adminOnly: true },
     { id: "royalty", label: "Nhuận bút", icon: "payments", section: "Quản lý" },
@@ -421,7 +433,7 @@ export default function MainApp() {
               item.section === section
               && !item.hidden
               && (!item.adminOnly || isAdmin)
-              && (!item.ctvOnly || !isAdmin)
+                && (!item.ctvOnly || !isAdmin)
               && (!item.leaderOnly || isLeader)
             );
             if (items.length === 0) return null;
@@ -514,7 +526,7 @@ export default function MainApp() {
           {page === "dashboard" && <DashboardPage onNavigate={navigateToPage} />}
           {page === "feedback" && <FeedbackPage />}
           {page === "articles" && <ArticlesPage />}
-          {page === "contentWork" && !isAdmin && <ContentWorkPage />}
+          {page === "contentWork" && <ContentWorkPage />}
           {page === "tasks" && shouldShowTasksNav && <EditorialTasksPage />}
           {page === "team" && isAdmin && <TeamPage />}
           {page === "royalty" && <RoyaltyPage />}
@@ -532,6 +544,7 @@ export default function MainApp() {
             setSidebarOpen(false);
           }} 
           unreadCount={unreadCount}
+          showContentWorkTab
           showTasksTab={shouldShowTasksNav}
         />
       )}
