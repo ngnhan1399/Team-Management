@@ -46,6 +46,8 @@ const HOST_SOFT_404_PATTERNS = [
     bodyFallbackTitles: BODY_FALLBACK_TITLES,
   },
 ];
+const CANARY_OK_URL = "https://fptshop.com.vn/tin-tuc/for-gamers/di-bien-can-chuan-bi-gi-203076";
+const CANARY_BROKEN_URL = "https://fptshop.com.vn/tin-tuc/for-gamers/di-bien-can-chuan-bi-gi-203074";
 
 function assertEnv(name, value) {
   if (!value) {
@@ -380,6 +382,16 @@ async function checkItem(context, item) {
   return browserChecked;
 }
 
+async function verifyRunnerEnvironment(context) {
+  const okCanary = await checkItem(context, { articleId: -1, url: CANARY_OK_URL });
+  const brokenCanary = await checkItem(context, { articleId: -2, url: CANARY_BROKEN_URL });
+  return {
+    healthy: okCanary.status === "ok" && brokenCanary.status === "broken",
+    okCanary,
+    brokenCanary,
+  };
+}
+
 async function main() {
   assertEnv("LINK_CHECK_URL", LINK_CHECK_URL);
   assertEnv("LINK_CHECK_AUTOMATION_TOKEN", LINK_CHECK_AUTOMATION_TOKEN);
@@ -411,6 +423,17 @@ async function main() {
         "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
       },
     });
+
+    const canary = await verifyRunnerEnvironment(context);
+    if (!canary.healthy) {
+      console.log(JSON.stringify({
+        skipped: true,
+        reason: "runner-canary-failed",
+        slotKey: prepare.slotKey,
+        canary,
+      }));
+      return;
+    }
 
     const checkedItems = [];
     for (const item of items) {
