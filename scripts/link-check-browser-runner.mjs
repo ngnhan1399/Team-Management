@@ -6,6 +6,7 @@ const LINK_CHECK_SLOT_KEY = process.env.LINK_CHECK_SLOT_KEY;
 const LINK_CHECK_LIMIT = Number(process.env.LINK_CHECK_LIMIT || 0);
 const REQUEST_TIMEOUT_MS = 30_000;
 const PAGE_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 10_000;
 const CHALLENGE_PATTERNS = [
   "just a moment",
   "performing security verification",
@@ -24,6 +25,26 @@ const BROKEN_PATTERNS = [
   "page not found",
   "404 page",
   "404 not found",
+];
+const GENERIC_SOFT_404_PATTERNS = [
+  ["page not found"],
+  ["404 page"],
+  ["404 not found"],
+  ["trang khong ton tai"],
+  ["khong tim thay trang"],
+  ["trang nay khong ton tai"],
+  ["duong dan khong ton tai"],
+  ["not found", "go to homepage"],
+];
+const HOST_SOFT_404_PATTERNS = [
+  {
+    hostnamePattern: /(^|\.)fptshop\.com\.vn$/i,
+    patterns: [
+      ["duong dan da het han truy cap hoac khong ton tai"],
+      ["trang het han truy cap hoac khong ton tai"],
+    ],
+    bodyFallbackTitles: BODY_FALLBACK_TITLES,
+  },
 ];
 
 function assertEnv(name, value) {
@@ -62,6 +83,79 @@ function isRedirectedArticleIdMismatch(originalUrl, finalUrl) {
   }
 }
 
+function isBotBlockedStatus(status) {
+  return status === 403 || status === 429;
+}
+
+function extractTagText(html, tagName) {
+  const match = html.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)</${tagName}>`, "i"));
+  return match?.[1] || "";
+}
+
+function foldExtractedText(value) {
+  return fold(
+    String(value || "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&#160;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+}
+
+function detectSoft404Reason(hostname, html) {
+  const foldedHtml = fold(html);
+  if (!foldedHtml) return null;
+
+  const titleSignal = foldExtractedText(extractTagText(html, "title"));
+  const headingSignal = foldExtractedText(extractTagText(html, "h1"));
+  const strongSignals = [titleSignal, headingSignal].filter(Boolean).join("\n");
+
+  const genericPattern = GENERIC_SOFT_404_PATTERNS.find((pattern) => pattern.every((token) => strongSignals.includes(token)));
+  if (genericPattern) {
+    return `soft404:generic:${genericPattern.join("+")}`;
+  }
+
+  const hostPatterns = HOST_SOFT_404_PATTERNS.find((entry) => entry.hostnamePattern.test(hostname));
+  const hostPattern = hostPatterns?.patterns.find((pattern) => pattern.every((token) => strongSignals.includes(token)));
+  if (hostPattern) {
+    return `soft404:host:${hostPattern.join("+")}`;
+  }
+
+  const allowBodyFallback = !strongSignals || Boolean(
+    hostPatterns
+    && !headingSignal
+    && hostPatterns.bodyFallbackTitles.some((title) => titleSignal === title),
+  );
+
+  if (!allowBodyFallback) {
+    return null;
+  }
+
+  const bodyGenericPattern = GENERIC_SOFT_404_PATTERNS.find((pattern) => pattern.every((token) => foldedHtml.includes(token)));
+  if (bodyGenericPattern) {
+    return `soft404:generic-body:${bodyGenericPattern.join("+")}`;
+  }
+
+  const bodyHostPattern = hostPatterns?.patterns.find((pattern) => pattern.every((token) => foldedHtml.includes(token)));
+  return bodyHostPattern ? `soft404:host-body:${bodyHostPattern.join("+")}` : null;
+}
+
+async function fetchWithTimeout(url, init) {
+  return fetch(url, {
+    ...init,
+    redirect: "follow",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+      ...(init?.headers || {}),
+    },
+  });
+}
+
 async function callLinkCheck(body) {
   const response = await fetch(LINK_CHECK_URL, {
     method: "POST",
@@ -95,7 +189,107 @@ async function readSignals(page) {
   };
 }
 
-async function checkItem(context, item) {
+async function checkItemWithFetch(item) {
+  try {
+    const headResponse = await fetchWithTimeout(item.url, { method: "HEAD" }).catch(() => null);
+    const headFinalUrl = headResponse?.url || item.url;
+    const headLooksHealthy = Boolean(headResponse?.ok && !isRedirectedArticleIdMismatch(item.url, headFinalUrl));
+    const headLooksBotBlocked = Boolean(headResponse && isBotBlockedStatus(headResponse.status));
+
+    if (headResponse && headResponse.status >= 400 && headResponse.status !== 403 && headResponse.status !== 405) {
+      return {
+        articleId: item.articleId,
+        url: item.url,
+        finalUrl: headFinalUrl,
+        status: "broken",
+        reason: `head:${headResponse.status}`,
+      };
+    }
+
+    if (isRedirectedArticleIdMismatch(item.url, headFinalUrl)) {
+      return {
+        articleId: item.articleId,
+        url: item.url,
+        finalUrl: headFinalUrl,
+        status: "broken",
+        reason: "redirect-id-mismatch:head",
+      };
+    }
+
+    const headContentType = headResponse?.headers.get("content-type") || "";
+    if (headResponse?.ok && headContentType && !/text\/html|application\/xhtml\+xml/i.test(headContentType)) {
+      return {
+        articleId: item.articleId,
+        url: item.url,
+        finalUrl: headFinalUrl,
+        status: "ok",
+        reason: "head:ok-non-html",
+      };
+    }
+
+    const getResponse = await fetchWithTimeout(item.url, { method: "GET" });
+    const finalUrl = getResponse.url || headFinalUrl || item.url;
+    if (!getResponse.ok && isBotBlockedStatus(getResponse.status) && (headLooksHealthy || headLooksBotBlocked)) {
+      return {
+        articleId: item.articleId,
+        url: item.url,
+        finalUrl,
+        status: "unknown",
+        reason: `bot-blocked:head-${headResponse?.status ?? "none"}:get-${getResponse.status}`,
+      };
+    }
+
+    if (!getResponse.ok || isRedirectedArticleIdMismatch(item.url, finalUrl)) {
+      return {
+        articleId: item.articleId,
+        url: item.url,
+        finalUrl,
+        status: "broken",
+        reason: !getResponse.ok ? `get:${getResponse.status}` : "redirect-id-mismatch:get",
+      };
+    }
+
+    const contentType = getResponse.headers.get("content-type") || "";
+    if (/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+      const html = await getResponse.text();
+      const hostname = (() => {
+        try {
+          return new URL(finalUrl).hostname;
+        } catch {
+          return "";
+        }
+      })();
+      const soft404Reason = detectSoft404Reason(hostname, html);
+      if (soft404Reason) {
+        return {
+          articleId: item.articleId,
+          url: item.url,
+          finalUrl,
+          status: "broken",
+          reason: soft404Reason,
+        };
+      }
+    }
+
+    return {
+      articleId: item.articleId,
+      url: item.url,
+      finalUrl,
+      status: "ok",
+      reason: "ok",
+    };
+  } catch (error) {
+    return {
+      articleId: item.articleId,
+      url: item.url,
+      finalUrl: item.url,
+      status: "unknown",
+      reason: `fetch:error:${error instanceof Error ? error.name : "unknown"}`,
+    };
+  }
+}
+
+async function checkItemWithBrowser(context, item) {
   const page = await context.newPage();
   try {
     const response = await page.goto(item.url, {
@@ -170,6 +364,20 @@ async function checkItem(context, item) {
   } finally {
     await page.close().catch(() => undefined);
   }
+}
+
+async function checkItem(context, item) {
+  const fetched = await checkItemWithFetch(item);
+  if (fetched.status !== "unknown") {
+    return fetched;
+  }
+
+  const browserChecked = await checkItemWithBrowser(context, item);
+  if (browserChecked.status === "unknown") {
+    return fetched;
+  }
+
+  return browserChecked;
 }
 
 async function main() {
