@@ -1,4 +1,4 @@
-export type Page = "dashboard" | "articles" | "tasks" | "team" | "royalty" | "notifications" | "feedback" | "audit" | "profile";
+export type Page = "dashboard" | "articles" | "contentWork" | "tasks" | "team" | "royalty" | "notifications" | "feedback" | "audit" | "profile";
 
 export interface Collaborator {
   id: number;
@@ -152,6 +152,32 @@ export interface FeedbackItem {
   adminNotes: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ContentWorkRegistrationItem {
+  id: number;
+  articleId: number;
+  requestedByUserId: number;
+  penName: string;
+  title: string;
+  articleLink: string | null;
+  contentWorkCategory: string | null;
+  status: "queued" | "submitting_form" | "form_submitted" | "link_written" | "completed" | "failed";
+  statusLabel: string;
+  attemptCount: number;
+  externalSheetName: string | null;
+  externalRowNumber: number | null;
+  automationMessage: string | null;
+  lastError: string | null;
+  formSubmittedAt: string | null;
+  linkWrittenAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  articleDate: string;
+  articleStatus: string;
+  formUrl: string;
+  sheetUrl: string;
 }
 
 export interface DashboardStatusRow {

@@ -249,6 +249,27 @@ const bootstrapStatements = [
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
+  `CREATE TABLE IF NOT EXISTS content_work_registrations (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    team_id INTEGER,
+    requested_by_user_id INTEGER NOT NULL,
+    pen_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    article_link TEXT,
+    content_work_category TEXT,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    external_sheet_name TEXT,
+    external_row_number INTEGER,
+    automation_message TEXT,
+    last_error TEXT,
+    form_submitted_at TEXT,
+    link_written_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
   `CREATE TABLE IF NOT EXISTS article_comments (
     id SERIAL PRIMARY KEY,
     article_id INTEGER NOT NULL,
@@ -381,6 +402,10 @@ const bootstrapStatements = [
   "CREATE INDEX IF NOT EXISTS idx_article_sync_links_source ON article_sync_links(source_url, sheet_name)",
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_article_sync_links_row_key ON article_sync_links(source_url, sheet_name, source_row_key)",
   "CREATE INDEX IF NOT EXISTS idx_article_sync_links_article_ref ON article_sync_links(article_id_ref)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_content_work_registrations_article ON content_work_registrations(article_id)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_requested_by ON content_work_registrations(requested_by_user_id)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_status ON content_work_registrations(status)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_updated_at ON content_work_registrations(updated_at)",
   "CREATE INDEX IF NOT EXISTS idx_article_comments_article_id ON article_comments(article_id)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_assignee ON editorial_tasks(assignee_pen_name)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_due_date ON editorial_tasks(due_date)",
@@ -405,6 +430,7 @@ const teamScopedIndexStatements = [
   "CREATE INDEX IF NOT EXISTS idx_users_team_id ON users(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_collaborators_team_id ON collaborators(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_articles_team_id ON articles(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_team_id ON content_work_registrations(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_team_id ON editorial_tasks(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_kpi_team_id ON kpi_records(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_payments_team_id ON payments(team_id)",
@@ -420,7 +446,7 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "7";
+const BOOTSTRAP_SCHEMA_VERSION = "8";
 
 async function getOrCreateDefaultTeamId() {
   const existingDefault = await pool.query(

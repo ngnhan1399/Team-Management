@@ -1,5 +1,38 @@
 # Codex Handoff
 
+## Update 2026-03-16 (Content Work automation nền bằng Apps Script chung)
+
+- Đã thêm luồng `Content Work` mới cho `CTV`:
+  - sau khi lưu bài mới trong `ArticlesPage`, hệ thống bật prompt `Đăng ký Content Work`
+  - khi bấm, app tạo job trong DB và chạy nền
+  - trạng thái hiển thị ở tab `Content Work`
+- Không dùng đăng nhập Google riêng của từng CTV.
+- Thiết kế chạy bằng `một tài khoản Google automation chung` thông qua Apps Script web app.
+
+### File đã động vào
+
+- `src/db/schema.ts`
+- `src/db/index.ts`
+- `src/app/api/content-work/route.ts`
+- `src/lib/content-work-registration.ts`
+- `src/lib/content-work-automation.ts`
+- `src/app/components/ContentWorkPage.tsx`
+- `src/app/components/MainApp.tsx`
+- `src/app/components/ArticlesPage.tsx`
+- `.env.example`
+- `output/content-work-automation.workdocker.gs`
+- `docs/content-work-automation.md`
+- `docs/codex-handoff.md`
+
+### Ghi chú vận hành
+
+- Muốn tính năng chạy thật, bắt buộc deploy Apps Script ở:
+  - `output/content-work-automation.workdocker.gs`
+- Và set env:
+  - `CONTENT_WORK_SCRIPT_WEB_APP_URL`
+  - `CONTENT_WORK_SCRIPT_SECRET`
+- Nếu chưa cấu hình Apps Script, app vẫn tạo job nhưng job sẽ rơi vào `failed` với thông báo rõ nguyên nhân.
+
 ## Update 2026-03-14 (Google Sheet mirror không chèn dòng giữa sheet nữa)
 
 - Đã sửa Apps Script mẫu ở `output/google-sheets-webhook.workdocker.gs`.

@@ -16,6 +16,7 @@ import { CONTENT_WORK_REGISTRATION_TITLE, CONTENT_WORK_REGISTRATION_URL, isConte
 
 const loadArticlesPage = () => import("./ArticlesPage");
 const loadAuditLogsPage = () => import("./AuditLogsPage");
+const loadContentWorkPage = () => import("./ContentWorkPage");
 const loadEditorialTasksPage = () => import("./EditorialTasksPage");
 const loadFeedbackPage = () => import("./FeedbackPage");
 const loadNotificationsPage = () => import("./NotificationsPage");
@@ -43,6 +44,7 @@ function PageLoadingState({ label }: { label: string }) {
 
 const ArticlesPage = dynamic(loadArticlesPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const AuditLogsPage = dynamic(loadAuditLogsPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const ContentWorkPage = dynamic(loadContentWorkPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const EditorialTasksPage = dynamic(loadEditorialTasksPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const FeedbackPage = dynamic(loadFeedbackPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const NotificationsPage = dynamic(loadNotificationsPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
@@ -53,6 +55,7 @@ const TeamPage = dynamic(loadTeamPage, { loading: () => <PageLoadingState label=
 const pageLoaders: Partial<Record<Page, () => Promise<unknown>>> = {
   articles: loadArticlesPage,
   audit: loadAuditLogsPage,
+  contentWork: loadContentWorkPage,
   feedback: loadFeedbackPage,
   notifications: loadNotificationsPage,
   profile: loadProfilePage,
@@ -64,6 +67,7 @@ const pageLoaders: Partial<Record<Page, () => Promise<unknown>>> = {
 const pageLabels: Record<Page, string> = {
   dashboard: "Tổng quan",
   articles: "Bài viết",
+  contentWork: "Content Work",
   tasks: "Lịch biên tập",
   team: "Đội ngũ",
   royalty: "Nhuận bút",
@@ -389,6 +393,7 @@ export default function MainApp() {
     { id: "notifications", label: "Thông báo", icon: "notifications", section: "Tổng quan", count: unreadCount },
     { id: "feedback", label: "Feedback", icon: "feedback", section: "Tổng quan" },
     { id: "articles", label: "Bài viết", icon: "description", section: "Quản lý" },
+    { id: "contentWork", label: "Content Work", icon: "task_alt", section: "Quản lý", ctvOnly: true },
     { id: "tasks", label: "Lịch biên tập", icon: "calendar_month", section: "Quản lý", hidden: !shouldShowTasksNav },
     { id: "team", label: "Đội ngũ", icon: "group", section: "Quản lý", adminOnly: true },
     { id: "royalty", label: "Nhuận bút", icon: "payments", section: "Quản lý" },
@@ -416,6 +421,7 @@ export default function MainApp() {
               item.section === section
               && !item.hidden
               && (!item.adminOnly || isAdmin)
+              && (!item.ctvOnly || !isAdmin)
               && (!item.leaderOnly || isLeader)
             );
             if (items.length === 0) return null;
@@ -508,6 +514,7 @@ export default function MainApp() {
           {page === "dashboard" && <DashboardPage onNavigate={navigateToPage} />}
           {page === "feedback" && <FeedbackPage />}
           {page === "articles" && <ArticlesPage />}
+          {page === "contentWork" && !isAdmin && <ContentWorkPage />}
           {page === "tasks" && shouldShowTasksNav && <EditorialTasksPage />}
           {page === "team" && isAdmin && <TeamPage />}
           {page === "royalty" && <RoyaltyPage />}

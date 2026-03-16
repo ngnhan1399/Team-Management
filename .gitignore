@@ -34,6 +34,7 @@
 /output/*
 !/output/
 !/output/google-sheets-webhook.workdocker.gs
+!/output/content-work-automation.workdocker.gs
 /tmp/
 /playwright-report/
 /.codex-deploy-temp/

@@ -99,6 +99,30 @@ export const articleSyncLinks = pgTable("article_sync_links", {
   updatedAt: text("updated_at").notNull().default(timestampTextDefault),
 });
 
+export const contentWorkRegistrations = pgTable("content_work_registrations", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").notNull(),
+  teamId: integer("team_id"),
+  requestedByUserId: integer("requested_by_user_id").notNull(),
+  penName: text("pen_name").notNull(),
+  title: text("title").notNull(),
+  articleLink: text("article_link"),
+  contentWorkCategory: text("content_work_category"),
+  status: text("status", {
+    enum: ["queued", "submitting_form", "form_submitted", "link_written", "completed", "failed"],
+  }).notNull().default("queued"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  externalSheetName: text("external_sheet_name"),
+  externalRowNumber: integer("external_row_number"),
+  automationMessage: text("automation_message"),
+  lastError: text("last_error"),
+  formSubmittedAt: text("form_submitted_at"),
+  linkWrittenAt: text("link_written_at"),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull().default(timestampTextDefault),
+  updatedAt: text("updated_at").notNull().default(timestampTextDefault),
+});
+
 export const articleComments = pgTable("article_comments", {
   id: serial("id").primaryKey(),
   articleId: integer("article_id").notNull(),
@@ -242,6 +266,7 @@ export type NewCollaborator = typeof collaborators.$inferInsert;
 export type Article = typeof articles.$inferSelect;
 export type NewArticle = typeof articles.$inferInsert;
 export type ArticleSyncLink = typeof articleSyncLinks.$inferSelect;
+export type ContentWorkRegistration = typeof contentWorkRegistrations.$inferSelect;
 export type ArticleComment = typeof articleComments.$inferSelect;
 export type EditorialTask = typeof editorialTasks.$inferSelect;
 export type KpiRecord = typeof kpiRecords.$inferSelect;

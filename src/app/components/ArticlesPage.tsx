@@ -95,6 +95,8 @@ export default function ArticlesPage() {
   const [formData, setFormData] = useState<Partial<Article>>({});
   const [savingArticle, setSavingArticle] = useState(false);
   const [movingArticleToNextMonth, setMovingArticleToNextMonth] = useState(false);
+  const [contentWorkPromptArticle, setContentWorkPromptArticle] = useState<Article | null>(null);
+  const [registeringContentWork, setRegisteringContentWork] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [importStep, setImportStep] = useState(1);
@@ -1001,7 +1003,11 @@ export default function ArticlesPage() {
       setShowModal(false);
       setFormData({});
       if (data.article) {
-        mergeSavedArticleIntoList(data.article as Article, isEditing);
+        const savedArticle = data.article as Article;
+        mergeSavedArticleIntoList(savedArticle, isEditing);
+        if (!isEditing && user?.role === "ctv") {
+          setContentWorkPromptArticle(savedArticle);
+        }
       } else {
         const currentQuery = articleListQueryRef.current;
         fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters);
@@ -1079,6 +1085,37 @@ export default function ArticlesPage() {
       showUiToast("Chuyển bài thất bại", error instanceof Error ? error.message : String(error), "error");
     } finally {
       setMovingArticleToNextMonth(false);
+    }
+  };
+
+  const handleRegisterContentWork = async (article: Article, force = false) => {
+    if (registeringContentWork) return;
+
+    try {
+      setRegisteringContentWork(true);
+      const res = await fetch("/api/content-work", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articleId: article.id, force }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || "Không thể đăng ký Content Work");
+      }
+
+      if (data.alreadyCompleted) {
+        showUiToast("Content Work đã hoàn thành", `"${article.title}" đã được đăng ký Content Work trước đó.`, "info");
+      } else if (data.alreadyRunning) {
+        showUiToast("Đang xử lý Content Work", `"${article.title}" đang được hệ thống xử lý ở nền.`, "info");
+      } else {
+        showUiToast("Đã xếp hàng Content Work", `"${article.title}" đang được gửi form và điền link ở nền.`, "success");
+      }
+
+      setContentWorkPromptArticle(null);
+    } catch (error) {
+      showUiToast("Đăng ký Content Work thất bại", error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setRegisteringContentWork(false);
     }
   };
 
@@ -2833,6 +2870,34 @@ export default function ArticlesPage() {
             </div>
           </div>
         </BottomSheet>
+      )}
+
+      {contentWorkPromptArticle && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal" style={{ width: "min(92vw, 520px)", maxWidth: 520 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Đăng ký Content Work</h3>
+            </div>
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ padding: 16, borderRadius: 18, background: "rgba(37, 99, 235, 0.08)", border: "1px solid rgba(37, 99, 235, 0.16)" }}>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: "var(--text-main)" }}>
+                  Bài <strong>{contentWorkPromptArticle.title}</strong> đã lưu thành công. Bạn có muốn hệ thống tự đăng ký Content Work ngay bây giờ không?
+                </p>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: "var(--text-muted)" }}>
+                Hệ thống sẽ gửi form và điền link vào sheet Content Work ở nền. Bạn có thể theo dõi tiến độ ở tab <strong>Content Work</strong>.
+              </p>
+            </div>
+            <div className="modal-footer" style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "flex-end" }}>
+              <button className="btn-ios-pill btn-ios-secondary" onClick={() => setContentWorkPromptArticle(null)} disabled={registeringContentWork}>
+                Để sau
+              </button>
+              <button className="btn-ios-pill btn-ios-primary" onClick={() => handleRegisterContentWork(contentWorkPromptArticle)} disabled={registeringContentWork}>
+                {registeringContentWork ? "Đang xử lý..." : "Đăng ký Content Work"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
