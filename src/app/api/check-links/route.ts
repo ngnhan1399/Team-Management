@@ -405,10 +405,6 @@ async function persistLinkHealth(rows: ArticleLinkRow[], statusMap: Map<number, 
       continue;
     }
 
-    if (slotKey === null && checkedStatus.status === "unknown") {
-      continue;
-    }
-
     await db
       .update(articles)
       .set({
@@ -523,7 +519,11 @@ async function loadScheduledRows(limit: number) {
       sql`(${articles.date} >= ${lookbackDateKey} OR ${articles.updatedAt} >= ${lookbackIso})`,
     ))
     .orderBy(
-      sql`CASE WHEN ${articles.linkHealthCheckedAt} IS NULL THEN 0 ELSE 1 END`,
+      sql`CASE
+        WHEN ${articles.linkHealthCheckedAt} IS NULL THEN 0
+        WHEN ${articles.linkHealthStatus} = 'unknown' THEN 1
+        ELSE 2
+      END`,
       asc(articles.linkHealthCheckedAt),
       desc(articles.date),
       desc(articles.updatedAt),

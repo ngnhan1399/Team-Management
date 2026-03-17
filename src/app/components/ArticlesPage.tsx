@@ -40,7 +40,7 @@ import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { extractArticleIdFromLink, isLinkIdRequiredForArticleType } from "@/lib/article-link-id";
 import { resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
-import { LINK_CHECK_MANUAL_MAX_ITEMS, type LinkHealthStatus } from "@/lib/link-health";
+import { LINK_CHECK_MANUAL_MAX_ITEMS, parseLinkHealthCheckedAt, type LinkHealthStatus } from "@/lib/link-health";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
 import { getPreferredArticleNavigationLink } from "@/lib/review-link";
 import type {
@@ -430,9 +430,23 @@ export default function ArticlesPage() {
   }, []);
 
   const checkVisibleLinks = useCallback(async (force = false) => {
-    const visibleItems = deferredArticles
+    const visibleItems = [...deferredArticles]
       .filter((article) => article.link && article.link.startsWith("http"))
       .filter((article) => force || !article.linkHealthCheckedAt)
+      .sort((left, right) => {
+        const priority = (article: Article) => {
+          if (!article.linkHealthCheckedAt) return 0;
+          if (article.linkHealthStatus === "unknown") return 1;
+          return 2;
+        };
+
+        const priorityDiff = priority(left) - priority(right);
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+
+        return parseLinkHealthCheckedAt(left.linkHealthCheckedAt) - parseLinkHealthCheckedAt(right.linkHealthCheckedAt);
+      })
       .slice(0, LINK_CHECK_MANUAL_MAX_ITEMS)
       .map((article) => ({
         articleId: article.id,
