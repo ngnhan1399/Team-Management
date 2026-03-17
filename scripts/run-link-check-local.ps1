@@ -41,7 +41,7 @@ try {
   }
 
   if (-not $env:LINK_CHECK_LIMIT) {
-    $env:LINK_CHECK_LIMIT = "180"
+    $env:LINK_CHECK_LIMIT = "400"
   }
 
   if (-not $env:NODE_TLS_REJECT_UNAUTHORIZED) {

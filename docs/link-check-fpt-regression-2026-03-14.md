@@ -6,6 +6,8 @@
 - `LINKCHECK-FPT-NORMALIZE-002`
 - `LINKCHECK-MANUAL-UNKNOWN-003`
 - `LINKCHECK-FPT-HIDDEN-ERROR-TEXT-004`
+- `LINKCHECK-LOCAL-RUNNER-503-005`
+- `LINKCHECK-SCHEDULED-LOOKBACK-006`
 
 ## Kết luận ngắn
 
@@ -17,6 +19,8 @@ Có 3 lớp vấn đề chồng lên nhau:
 2. Logic phát hiện soft-404 chưa normalize đủ tiếng Việt, nên một số trang lỗi FPT Shop không bị bắt đúng.
 3. Manual check có thể ghi đè trạng thái link từ `ok/broken` thành `unknown`, làm badge UI nhìn sai dù trước đó dữ liệu đúng.
 4. FPT Shop nhúng chuỗi lỗi 404 trong HTML của cả trang bài thật, nên rule soft-404 quét toàn body có thể đánh `broken` oan hàng loạt.
+5. Local runner nền có thể hụt cả lượt quét khi production `/api/check-links` trả `503` thoáng qua đúng lúc chạy.
+6. Scheduler trước đó chỉ nhìn lại `90 ngày`, nên các bài cũ hơn mốc này có thể treo `pending` rất lâu nếu không được recheck thủ công.
 
 ## Điều đã xác minh
 
@@ -243,3 +247,41 @@ Nghĩa là riêng môi trường runner này không đủ tin cậy để persis
 File chính:
 
 - `scripts/link-check-browser-runner.mjs`
+
+## Root Cause 5: `LINKCHECK-LOCAL-RUNNER-503-005`
+
+Local runner trên máy Windows gọi production `/api/check-links` đúng khung giờ `09:00` và `14:00` ngày `2026-03-17` nhưng nhận `503`.
+
+Hệ quả:
+
+- cả lượt quét đó không persist được gì xuống DB
+- các bài chưa có trạng thái vẫn tiếp tục hiện `Đang chờ kiểm tra trạng thái link`
+- user bấm tay vẫn có thể gặp chậm nếu manual check không xác minh chắc được ngay
+
+Đã sửa bằng:
+
+- thêm retry/backoff cho local runner khi gặp `408/425/429/500/502/503/504`
+- giữ log rõ từng lượt để phân biệt lỗi app với lỗi FPT
+
+File chính:
+
+- `scripts/link-check-browser-runner.mjs`
+- `scripts/run-link-check-local.ps1`
+
+## Root Cause 6: `LINKCHECK-SCHEDULED-LOOKBACK-006`
+
+Scheduler trước đó chỉ lấy bài trong `90 ngày` gần nhất.
+
+Hệ quả:
+
+- các bài cũ hơn `90 ngày` nhưng vẫn còn `link_health_status = null` sẽ gần như không bao giờ được local runner động tới
+- UI của các bài đó tiếp tục hiện icon `pending`
+
+Đã sửa bằng:
+
+- tăng phạm vi lookback của scheduler lên `365 ngày`
+- tăng `LINK_CHECK_SCHEDULED_MAX_ITEMS` để local runner dọn backlog nhanh hơn
+
+File chính:
+
+- `src/lib/link-health.ts`

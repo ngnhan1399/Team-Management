@@ -7,6 +7,8 @@ const LINK_CHECK_LIMIT = Number(process.env.LINK_CHECK_LIMIT || 0);
 const REQUEST_TIMEOUT_MS = 30_000;
 const PAGE_TIMEOUT_MS = 15_000;
 const FETCH_TIMEOUT_MS = 10_000;
+const API_MAX_RETRIES = 4;
+const API_RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const CHALLENGE_PATTERNS = [
   "just a moment",
   "performing security verification",
@@ -159,22 +161,44 @@ async function fetchWithTimeout(url, init) {
 }
 
 async function callLinkCheck(body) {
-  const response = await fetch(LINK_CHECK_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LINK_CHECK_AUTOMATION_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+  let lastError = null;
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.error || `Link check API failed with ${response.status}`);
+  for (let attempt = 1; attempt <= API_MAX_RETRIES; attempt += 1) {
+    try {
+      const response = await fetch(LINK_CHECK_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LINK_CHECK_AUTOMATION_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload?.success !== false) {
+        return payload;
+      }
+
+      const shouldRetry = API_RETRYABLE_STATUSES.has(response.status);
+      const errorMessage = payload?.error || `Link check API failed with ${response.status}`;
+      if (!shouldRetry || attempt === API_MAX_RETRIES) {
+        throw new Error(errorMessage);
+      }
+
+      lastError = new Error(`${errorMessage} (attempt ${attempt}/${API_MAX_RETRIES})`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt === API_MAX_RETRIES) {
+        break;
+      }
+    }
+
+    const retryDelayMs = attempt * 5_000;
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
   }
 
-  return payload;
+  throw lastError || new Error("Link check API failed.");
 }
 
 async function readSignals(page) {

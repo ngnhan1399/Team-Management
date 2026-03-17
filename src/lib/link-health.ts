@@ -3,8 +3,8 @@ export type LinkHealthStatus = "ok" | "broken" | "unknown";
 export const LINK_CHECK_SCHEDULE_HOURS = [9, 14, 22] as const;
 export const LINK_CHECK_TIMEZONE_OFFSET_MINUTES = 7 * 60;
 export const LINK_CHECK_MANUAL_MAX_ITEMS = 50;
-export const LINK_CHECK_SCHEDULED_MAX_ITEMS = 180;
-export const LINK_CHECK_SCHEDULED_LOOKBACK_DAYS = 90;
+export const LINK_CHECK_SCHEDULED_MAX_ITEMS = 400;
+export const LINK_CHECK_SCHEDULED_LOOKBACK_DAYS = 365;
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");

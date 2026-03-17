@@ -22,7 +22,7 @@ Tạo file `.env.link-check-runner.local` ở root repo với tối thiểu:
 ```env
 LINK_CHECK_URL=https://www.workdocker.com/api/check-links
 LINK_CHECK_AUTOMATION_TOKEN=...
-LINK_CHECK_LIMIT=180
+LINK_CHECK_LIMIT=400
 ```
 
 ## Cài lịch trên Windows
@@ -55,3 +55,4 @@ Runner ghi log vào:
 
 - Task hiện là task user-level qua `schtasks`, nên máy cần đang bật và user đang đăng nhập Windows.
 - GitHub workflow `Scheduled Link Check` vẫn giữ `workflow_dispatch` để debug thủ công, nhưng không còn cron định kỳ nữa.
+- Runner có retry/backoff khi production `/api/check-links` trả `503` hoặc các lỗi tạm thời tương tự.

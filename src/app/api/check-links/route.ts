@@ -254,7 +254,8 @@ async function fetchWithTimeout(url: string, init: RequestInit) {
     signal: AbortSignal.timeout(LINK_CHECK_TIMEOUT_MS),
     headers: {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "User-Agent": "Workdocker Link Health Bot/1.0",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
       ...(init.headers || {}),
     },
   });
