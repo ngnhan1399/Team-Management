@@ -1,6 +1,13 @@
+import { exec } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { chromium } from "playwright";
+import { promisify } from "node:util";
 
+const execAsync = promisify(exec);
 const LINK_CHECK_URL = process.env.LINK_CHECK_URL;
+const LINK_CHECK_DEPLOYMENT_URL = process.env.LINK_CHECK_DEPLOYMENT_URL;
 const LINK_CHECK_AUTOMATION_TOKEN = process.env.LINK_CHECK_AUTOMATION_TOKEN;
 const LINK_CHECK_SLOT_KEY = process.env.LINK_CHECK_SLOT_KEY;
 const LINK_CHECK_LIMIT = Number(process.env.LINK_CHECK_LIMIT || 0);
@@ -146,6 +153,47 @@ function detectSoft404Reason(hostname, html) {
   return bodyHostPattern ? `soft404:host-body:${bodyHostPattern.join("+")}` : null;
 }
 
+function extractFirstJsonObject(value) {
+  const source = String(value || "");
+  const start = source.indexOf("{");
+  if (start < 0) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
 async function fetchWithTimeout(url, init) {
   return fetch(url, {
     ...init,
@@ -160,7 +208,41 @@ async function fetchWithTimeout(url, init) {
   });
 }
 
+async function callLinkCheckViaVercelCurl(body) {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "workdocker-link-check-"));
+  const bodyPath = path.join(tempDir, "body.json");
+  try {
+    await writeFile(bodyPath, JSON.stringify(body), "utf8");
+    const vercelCliPath = process.env.APPDATA ? path.join(process.env.APPDATA, "npm", "vercel.cmd") : "vercel";
+    const vercelCommand = (
+      '"' + vercelCliPath + '" curl /api/check-links --deployment ' + LINK_CHECK_DEPLOYMENT_URL
+      + ' -- --silent --request POST --header "Authorization: Bearer ' + LINK_CHECK_AUTOMATION_TOKEN
+      + '" --header "Content-Type: application/json" --data-binary "@' + bodyPath + '" 2>nul'
+    );
+    const { stdout } = await execAsync(vercelCommand, {
+      shell: "cmd.exe",
+      windowsHide: true,
+      maxBuffer: 5 * 1024 * 1024,
+    });
+    const jsonText = extractFirstJsonObject(stdout);
+    if (!jsonText) {
+      throw new Error("vercel curl did not return JSON.");
+    }
+    const payload = JSON.parse(jsonText);
+    if (payload?.success === false) {
+      throw new Error(payload.error || "Link check API returned success=false.");
+    }
+    return payload;
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 async function callLinkCheck(body) {
+  if (LINK_CHECK_DEPLOYMENT_URL) {
+    return callLinkCheckViaVercelCurl(body);
+  }
+
   let lastError = null;
 
   for (let attempt = 1; attempt <= API_MAX_RETRIES; attempt += 1) {
@@ -175,13 +257,27 @@ async function callLinkCheck(body) {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
-      const payload = await response.json().catch(() => ({}));
-      if (response.ok && payload?.success !== false) {
+      const responseText = await response.text();
+      let payload = null;
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        payload = null;
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      const looksJson = /application\/json/i.test(contentType) || Boolean(payload && typeof payload === "object");
+      if (response.ok && looksJson && payload?.success !== false) {
         return payload;
       }
 
       const shouldRetry = API_RETRYABLE_STATUSES.has(response.status);
-      const errorMessage = payload?.error || `Link check API failed with ${response.status}`;
+      const blockedReason = responseText.includes("Web Page Blocked")
+        ? "Local runner request was blocked before reaching the API."
+        : "";
+      const errorMessage = blockedReason
+        || payload?.error
+        || (looksJson ? `Link check API failed with ${response.status}` : `Expected JSON from link check API, received ${contentType || "non-JSON response"}`);
       if (!shouldRetry || attempt === API_MAX_RETRIES) {
         throw new Error(errorMessage);
       }
@@ -417,8 +513,10 @@ async function verifyRunnerEnvironment(context) {
 }
 
 async function main() {
-  assertEnv("LINK_CHECK_URL", LINK_CHECK_URL);
   assertEnv("LINK_CHECK_AUTOMATION_TOKEN", LINK_CHECK_AUTOMATION_TOKEN);
+  if (!LINK_CHECK_DEPLOYMENT_URL) {
+    assertEnv("LINK_CHECK_URL", LINK_CHECK_URL);
+  }
 
   const prepare = await callLinkCheck({
     trigger: "scheduled",
@@ -485,3 +583,4 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+

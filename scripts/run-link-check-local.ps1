@@ -40,6 +40,20 @@ try {
     throw "LINK_CHECK_AUTOMATION_TOKEN is missing in $runnerEnvPath"
   }
 
+  Remove-Item Env:LINK_CHECK_DEPLOYMENT_URL -ErrorAction SilentlyContinue
+  if ($env:LINK_CHECK_URL -match "https://www\.workdocker\.com/api/check-links/?$") {
+    $vercelCliPath = Join-Path $env:APPDATA "npm\vercel.cmd"
+    $vercelCommand = if (Test-Path $vercelCliPath) {
+      '"' + $vercelCliPath + '" ls --yes 2>nul'
+    } else {
+      'vercel ls --yes 2>nul'
+    }
+    $latestDeploymentUrl = (& cmd /c $vercelCommand | Where-Object { $_ -match '^https://[^\s]+\.vercel\.app/?$' } | Select-Object -First 1)
+    if ($latestDeploymentUrl) {
+      $env:LINK_CHECK_DEPLOYMENT_URL = $latestDeploymentUrl.Trim().TrimEnd("/")
+    }
+  }
+
   if (-not $env:LINK_CHECK_LIMIT) {
     $env:LINK_CHECK_LIMIT = "400"
   }
@@ -54,6 +68,8 @@ try {
   @(
     "[$(Get-Date -Format s)] Workdocker local link check runner"
     "Repo: $repoRoot"
+    "Link check URL: $env:LINK_CHECK_URL"
+    "Deployment URL: $env:LINK_CHECK_DEPLOYMENT_URL"
     "Output:"
     $outputText
   ) | Set-Content $logPath
