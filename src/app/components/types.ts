@@ -68,6 +68,8 @@ export interface Article {
   linkHealthCheckedAt?: string | null;
   linkHealthCheckSlot?: string | null;
   reviewLink?: string | null;
+  contentWorkStatus?: "queued" | "submitting_form" | "form_submitted" | "link_written" | "completed" | "failed" | null;
+  contentWorkStatusLabel?: string | null;
   reviewerName: string;
   notes: string;
   canDelete?: boolean;

@@ -1,5 +1,5 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments, users } from "@/db/schema";
+import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, contentWorkRegistrations, notifications, payments, users } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextIdentityLabels, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, hasArticleReviewAccess, matchesIdentityCandidate } from "@/lib/auth";
 import {
   createArticleInGoogleSheet,
@@ -11,7 +11,7 @@ import {
 import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import { extractArticleIdFromLink, isLinkIdRequiredForArticleType } from "@/lib/article-link-id";
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
-import { CONTENT_WORK_REGISTRATION_TITLE } from "@/lib/content-work-registration";
+import { CONTENT_WORK_REGISTRATION_TITLE, getContentWorkStatusLabel, type ContentWorkStatus } from "@/lib/content-work-registration";
 import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
@@ -84,6 +84,8 @@ type ArticleResponseRow = {
   linkHealthCheckedAt: string | null;
   linkHealthCheckSlot: string | null;
   reviewLink: string | null;
+  contentWorkStatus: ContentWorkStatus | null;
+  contentWorkStatusLabel: string | null;
   reviewerName: string | null;
   notes: string | null;
   canDelete: boolean;
@@ -284,7 +286,7 @@ async function attachArticleResponseMetadata<
   rows: T[],
   currentUserId: number,
   canManageArticles: boolean
-): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount" | "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole">>> {
+): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount" | "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole" | "contentWorkStatus" | "contentWorkStatusLabel">>> {
   const articleIds = rows.map((row) => row.id).filter((id) => Number.isInteger(id) && id > 0);
   const penNames = Array.from(new Set(rows.map((row) => normalizeString(row.penName)).filter(Boolean)));
   const teamIds = Array.from(new Set(rows.map((row) => Number(row.teamId)).filter((teamId) => Number.isInteger(teamId) && teamId > 0)));
@@ -298,7 +300,7 @@ async function attachArticleResponseMetadata<
     )
   );
 
-  const [commentMeta, collaboratorProfiles, creatorProfiles] = await Promise.all([
+  const [commentMeta, collaboratorProfiles, creatorProfiles, contentWorkRows] = await Promise.all([
     loadArticleCommentMetadata(articleIds, currentUserId),
     penNames.length > 0
       ? db
@@ -333,6 +335,19 @@ async function attachArticleResponseMetadata<
           .where(inArray(users.id, creatorIds))
           .all()
       : Promise.resolve([]),
+    articleIds.length > 0
+      ? db
+          .select({
+            id: contentWorkRegistrations.id,
+            articleId: contentWorkRegistrations.articleId,
+            status: contentWorkRegistrations.status,
+            updatedAt: contentWorkRegistrations.updatedAt,
+          })
+          .from(contentWorkRegistrations)
+          .where(inArray(contentWorkRegistrations.articleId, articleIds))
+          .orderBy(desc(contentWorkRegistrations.updatedAt), desc(contentWorkRegistrations.id))
+          .all()
+      : Promise.resolve([]),
   ]);
   const { commentCounts, unreadCommentCounts } = commentMeta;
   const collaboratorProfileByKey = new Map(
@@ -351,12 +366,26 @@ async function attachArticleResponseMetadata<
   const creatorRoleById = new Map(
     creatorProfiles.map((profile) => [Number(profile.id), profile.role])
   );
+  const contentWorkByArticleId = new Map<number, { status: ContentWorkStatus; statusLabel: string }>();
+  for (const row of contentWorkRows) {
+    const articleId = Number(row.articleId || 0);
+    if (!articleId || contentWorkByArticleId.has(articleId)) {
+      continue;
+    }
+    const status = row.status as ContentWorkStatus;
+    contentWorkByArticleId.set(articleId, {
+      status,
+      statusLabel: getContentWorkStatusLabel(status),
+    });
+  }
 
   return rows.map((row) => ({
     ...row,
     canDelete: canManageArticles || row.createdByUserId === currentUserId,
     commentCount: commentCounts.get(row.id) || 0,
     unreadCommentCount: unreadCommentCounts.get(row.id) || 0,
+    contentWorkStatus: contentWorkByArticleId.get(row.id)?.status || null,
+    contentWorkStatusLabel: contentWorkByArticleId.get(row.id)?.statusLabel || null,
     ...(() => {
       const normalizedPenName = normalizeString(row.penName).toLowerCase();
       const collaboratorProfile = collaboratorProfileByKey.get(

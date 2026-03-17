@@ -12,6 +12,7 @@ interface MobileArticleCardProps {
   onRegisterContentWork?: () => void;
   canEdit?: boolean;
   canRegisterContentWork?: boolean;
+  showContentWorkAction?: boolean;
   canDelete?: boolean;
   showAuthor?: boolean;
   isDeleting?: boolean;
@@ -27,6 +28,7 @@ export default function MobileArticleCard({
   onRegisterContentWork,
   canEdit = true,
   canRegisterContentWork = false,
+  showContentWorkAction = false,
   canDelete = true,
   showAuthor = true,
   isDeleting = false,
@@ -34,6 +36,25 @@ export default function MobileArticleCard({
   unreadComments = 0,
 }: MobileArticleCardProps) {
   const penName = getDisplayedPenName(article.penName) || "N/A";
+  const contentWorkStatus = article.contentWorkStatus || null;
+  const contentWorkPending = contentWorkStatus === "queued"
+    || contentWorkStatus === "submitting_form"
+    || contentWorkStatus === "form_submitted"
+    || contentWorkStatus === "link_written";
+  const contentWorkCompleted = contentWorkStatus === "completed";
+  const contentWorkDisabled = isRegisteringContentWork || contentWorkPending || contentWorkCompleted;
+  const contentWorkLabel = isRegisteringContentWork
+    ? "Đang gửi..."
+    : contentWorkCompleted
+      ? "Đã đăng ký"
+      : contentWorkPending
+        ? (article.contentWorkStatusLabel || "Đang xử lý")
+        : "Content Work";
+  const contentWorkTone = contentWorkCompleted
+    ? { background: "rgba(16, 185, 129, 0.12)", color: "#047857" }
+    : contentWorkPending
+      ? { background: "rgba(245, 158, 11, 0.12)", color: "#b45309" }
+      : { background: "rgba(37, 99, 235, 0.08)", color: "#2563eb" };
 
   const getStatusStyle = (s: string) => {
     const map: Record<string, { bg: string; text: string; icon: string; label: string }> = {
@@ -116,13 +137,20 @@ export default function MobileArticleCard({
         </div>
         
         <div className="flex gap-2">
-          {canRegisterContentWork && onRegisterContentWork && (
+          {showContentWorkAction && (
             <button
-              onClick={(e) => { e.stopPropagation(); onRegisterContentWork(); }}
-              disabled={isRegisteringContentWork}
-              className="px-3 h-10 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/10 text-blue-600 text-[11px] font-bold uppercase tracking-wider active:scale-95 transition-transform disabled:opacity-60"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!contentWorkDisabled && onRegisterContentWork && canRegisterContentWork) {
+                  onRegisterContentWork();
+                }
+              }}
+              disabled={contentWorkDisabled}
+              title={contentWorkCompleted ? "Đã đăng ký Content Work" : article.contentWorkStatusLabel || "Đăng ký Content Work"}
+              className="px-3 h-10 flex items-center justify-center rounded-xl text-[11px] font-bold uppercase tracking-wider active:scale-95 transition-transform disabled:opacity-80"
+              style={contentWorkTone}
             >
-              {isRegisteringContentWork ? "Đang gửi..." : "Content Work"}
+              {contentWorkLabel}
             </button>
           )}
           {canDelete && onDelete && (

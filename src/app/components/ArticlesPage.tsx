@@ -245,12 +245,70 @@ export default function ArticlesPage() {
     return article.penName === user?.collaborator?.penName || article.createdByUserId === user?.id;
   }, [canManageArticles, isWriter, user]);
 
-  const canRegisterContentWork = useCallback((article: Article) => {
+  const showContentWorkAction = useCallback((article: Article) => {
     if (!canManageArticles && !isWriter) return false;
     if (!canManageArticles && !canEditArticle(article)) return false;
     if (resolveAuthorBucket(article) === "editorial") return false;
     return Boolean(String(article.link || "").trim());
   }, [canEditArticle, canManageArticles, isWriter, resolveAuthorBucket]);
+  const canRegisterContentWork = useCallback((article: Article) => {
+    const status = article.contentWorkStatus || null;
+    const isPending = status === "queued"
+      || status === "submitting_form"
+      || status === "form_submitted"
+      || status === "link_written";
+    return showContentWorkAction(article) && status !== "completed" && !isPending;
+  }, [showContentWorkAction]);
+  const getContentWorkActionState = useCallback((article: Article) => {
+    const status = article.contentWorkStatus || null;
+    const isCurrentRegistration = registeringContentWork && registeringContentWorkArticleId === article.id;
+    if (isCurrentRegistration) {
+      return {
+        disabled: true,
+        icon: "progress_activity",
+        title: "Đang đăng ký Content Work",
+        label: "Đang xử lý",
+        background: "rgba(37, 99, 235, 0.08)",
+        color: "var(--accent-blue)",
+        border: "1px solid rgba(37, 99, 235, 0.16)",
+        animation: "spin 1s linear infinite" as string | undefined,
+      };
+    }
+    if (status === "completed") {
+      return {
+        disabled: true,
+        icon: "check_circle",
+        title: "Đã đăng ký Content Work",
+        label: article.contentWorkStatusLabel || "Đã đăng ký",
+        background: "rgba(16, 185, 129, 0.12)",
+        color: "#047857",
+        border: "1px solid rgba(16, 185, 129, 0.18)",
+        animation: undefined,
+      };
+    }
+    if (status === "queued" || status === "submitting_form" || status === "form_submitted" || status === "link_written") {
+      return {
+        disabled: true,
+        icon: "pending_actions",
+        title: article.contentWorkStatusLabel || "Đang xử lý Content Work",
+        label: article.contentWorkStatusLabel || "Đang xử lý",
+        background: "rgba(245, 158, 11, 0.1)",
+        color: "#b45309",
+        border: "1px solid rgba(245, 158, 11, 0.18)",
+        animation: undefined,
+      };
+    }
+    return {
+      disabled: false,
+      icon: "task_alt",
+      title: article.contentWorkStatusLabel || "Đăng ký Content Work",
+      label: "Đăng ký Content Work",
+      background: "rgba(37, 99, 235, 0.08)",
+      color: "var(--accent-blue)",
+      border: "1px solid rgba(37, 99, 235, 0.16)",
+      animation: undefined,
+    };
+  }, [registeringContentWork, registeringContentWorkArticleId]);
 
   const fetchArticles = useCallback((
     p = 1,
@@ -1114,23 +1172,37 @@ export default function ArticlesPage() {
         throw new Error(data.error || "Không thể đăng ký Content Work");
       }
 
+      const nextStatus = String(data.registration?.status || (data.alreadyCompleted ? "completed" : "queued")) as Article["contentWorkStatus"];
+      const nextStatusLabel = String(
+        data.registration?.statusLabel
+        || (data.alreadyCompleted ? "Hoàn thành" : "Đang chờ")
+      );
+      setArticles((prev) => prev.map((item) => (
+        item.id === article.id
+          ? { ...item, contentWorkStatus: nextStatus, contentWorkStatusLabel: nextStatusLabel }
+          : item
+      )));
+      setFormData((prev) => Number(prev.id) === article.id
+        ? { ...prev, contentWorkStatus: nextStatus, contentWorkStatusLabel: nextStatusLabel }
+        : prev);
+
       if (data.alreadyCompleted) {
         showUiToast("Content Work đã hoàn thành", `"${article.title}" đã được đăng ký Content Work trước đó.`, "info");
       } else if (data.alreadyRunning) {
         showUiToast("Đang xử lý Content Work", `"${article.title}" đang được hệ thống xử lý ở nền.`, "info");
       } else {
         showUiToast("Đã xếp hàng Content Work", `"${article.title}" đang được gửi form và điền link ở nền.`, "success");
-        }
-
-        setContentWorkPromptArticle(null);
-        setContentWorkBannerArticle(null);
-      } catch (error) {
-        showUiToast("Đăng ký Content Work thất bại", error instanceof Error ? error.message : String(error), "error");
-      } finally {
-        setRegisteringContentWork(false);
-        setRegisteringContentWorkArticleId(null);
       }
-    };
+
+      setContentWorkPromptArticle(null);
+      setContentWorkBannerArticle(null);
+    } catch (error) {
+      showUiToast("Đăng ký Content Work thất bại", error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setRegisteringContentWork(false);
+      setRegisteringContentWorkArticleId(null);
+    }
+  };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -1820,33 +1892,40 @@ export default function ArticlesPage() {
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                         </button>
                       )}
-                      {canRegisterContentWork(a) && (
-                        <button
-                          onClick={() => { void handleRegisterContentWork(a); }}
-                          disabled={registeringContentWork}
-                          className="btn-ios-pill"
-                          style={{
-                            padding: "5px 9px",
-                            minWidth: 34,
-                            height: 34,
-                            background: "rgba(37, 99, 235, 0.08)",
-                            color: "var(--accent-blue)",
-                            border: "1px solid rgba(37, 99, 235, 0.16)",
-                            opacity: registeringContentWork ? 0.72 : 1,
-                          }}
-                          title={registeringContentWork && registeringContentWorkArticleId === a.id ? "Đang đăng ký Content Work" : "Đăng ký Content Work"}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{
-                              fontSize: 17,
-                              animation: registeringContentWork && registeringContentWorkArticleId === a.id ? "spin 1s linear infinite" : undefined,
+                      {showContentWorkAction(a) && (() => {
+                        const contentWorkAction = getContentWorkActionState(a);
+                        return (
+                          <button
+                            onClick={() => {
+                              if (!contentWorkAction.disabled) {
+                                void handleRegisterContentWork(a);
+                              }
                             }}
+                            disabled={contentWorkAction.disabled}
+                            className="btn-ios-pill"
+                            style={{
+                              padding: "5px 9px",
+                              minWidth: 34,
+                              height: 34,
+                              background: contentWorkAction.background,
+                              color: contentWorkAction.color,
+                              border: contentWorkAction.border,
+                              opacity: contentWorkAction.disabled ? 0.88 : 1,
+                            }}
+                            title={contentWorkAction.title}
                           >
-                            {registeringContentWork && registeringContentWorkArticleId === a.id ? "progress_activity" : "task_alt"}
-                          </span>
-                        </button>
-                      )}
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: 17,
+                                animation: contentWorkAction.animation,
+                              }}
+                            >
+                              {contentWorkAction.icon}
+                            </span>
+                          </button>
+                        );
+                      })()}
                       {(canManageArticles || a.canDelete) && (
                         <button
                           data-testid={`article-delete-${a.id}`}
@@ -1894,6 +1973,7 @@ export default function ArticlesPage() {
               onDelete={() => deleteSingleArticle(a)}
               canEdit={canEditArticle(a)}
               canRegisterContentWork={canRegisterContentWork(a)}
+              showContentWorkAction={showContentWorkAction(a)}
               canDelete={canManageArticles || a.canDelete}
               showAuthor={canManageArticles}
               isDeleting={deletingArticleIds.includes(a.id)}
@@ -2558,29 +2638,37 @@ export default function ArticlesPage() {
                       {movingArticleToNextMonth ? "Đang chuyển..." : "Chuyển sang tháng sau"}
                     </button>
                   )}
-                  {Boolean(formData.id) && canRegisterContentWork(formData as Article) && (
-                    <button
-                      className="btn-ios-pill btn-ios-secondary"
-                      onClick={() => { void handleRegisterContentWork(formData as Article); }}
-                      disabled={registeringContentWork || savingArticle || movingArticleToNextMonth}
-                      style={{
-                        borderColor: "rgba(37, 99, 235, 0.22)",
-                        color: "var(--accent-blue)",
-                        background: "rgba(37, 99, 235, 0.08)",
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          fontSize: 18,
-                          animation: registeringContentWork && registeringContentWorkArticleId === Number(formData.id) ? "spin 1s linear infinite" : undefined,
+                  {Boolean(formData.id) && showContentWorkAction(formData as Article) && (() => {
+                    const contentWorkAction = getContentWorkActionState(formData as Article);
+                    return (
+                      <button
+                        className="btn-ios-pill btn-ios-secondary"
+                        onClick={() => {
+                          if (!contentWorkAction.disabled) {
+                            void handleRegisterContentWork(formData as Article);
+                          }
                         }}
+                        disabled={contentWorkAction.disabled || savingArticle || movingArticleToNextMonth}
+                        style={{
+                          borderColor: contentWorkAction.border.replace("1px solid ", ""),
+                          color: contentWorkAction.color,
+                          background: contentWorkAction.background,
+                        }}
+                        title={contentWorkAction.title}
                       >
-                        {registeringContentWork && registeringContentWorkArticleId === Number(formData.id) ? "progress_activity" : "task_alt"}
-                      </span>
-                      {registeringContentWork && registeringContentWorkArticleId === Number(formData.id) ? "Đang đăng ký..." : "Đăng ký Content Work"}
-                    </button>
-                  )}
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: 18,
+                            animation: contentWorkAction.animation,
+                          }}
+                        >
+                          {contentWorkAction.icon}
+                        </span>
+                        {contentWorkAction.disabled ? contentWorkAction.label : "Đăng ký Content Work"}
+                      </button>
+                    );
+                  })()}
                 </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginLeft: "auto" }}>
                 <button className="btn-ios-pill btn-ios-secondary" onClick={() => setShowModal(false)} disabled={savingArticle || movingArticleToNextMonth}>Hủy bỏ</button>

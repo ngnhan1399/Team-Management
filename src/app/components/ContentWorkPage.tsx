@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth-context";
 import { emitRealtimePayload, useRealtimeRefresh } from "./realtime";
 import type { ContentWorkRegistrationItem } from "./types";
+import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
 
 function formatTimestamp(value: string | null | undefined) {
   if (!value) return "Chưa có";
@@ -33,6 +34,7 @@ export default function ContentWorkPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [runningArticleId, setRunningArticleId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const showUiToast = useCallback((title: string, message: string, variant: "info" | "success" | "warning" | "error" = "info") => {
     emitRealtimePayload({
@@ -104,11 +106,25 @@ export default function ContentWorkPage() {
     running: items.filter((item) => item.status === "queued" || item.status === "submitting_form").length,
     issues: items.filter((item) => item.status === "failed" || item.status === "form_submitted").length,
   }), [items]);
+  const filteredItems = useMemo(() => {
+    const query = foldSearchText(searchQuery);
+    if (!query) {
+      return items;
+    }
+
+    return items.filter((item) =>
+      matchesLooseSearch(item.title, query)
+      || matchesLooseSearch(item.penName, query)
+      || matchesLooseSearch(item.articleLink, query)
+      || matchesLooseSearch(item.contentWorkCategory, query)
+      || matchesLooseSearch(item.statusLabel, query)
+    );
+  }, [items, searchQuery]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div className="card" style={{ padding: 24, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-        <div>
+        <div style={{ minWidth: 0, flex: "1 1 460px" }}>
           <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.1, letterSpacing: "-0.04em" }}>Content Work</h1>
           <p style={{ margin: "8px 0 0", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.7 }}>
             {isAdmin
@@ -116,9 +132,31 @@ export default function ContentWorkPage() {
               : "Theo dõi trạng thái gửi form và điền link Content Work cho các bài viết của bạn."}
           </p>
         </div>
-        <button type="button" className="btn-ios-pill btn-ios-secondary" onClick={() => fetchItems(true)} disabled={refreshing}>
-          {refreshing ? "Đang làm mới..." : "Làm mới"}
-        </button>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, width: "min(100%, 560px)", justifyContent: "flex-end" }}>
+          <div style={{ position: "relative", flex: "1 1 280px", minWidth: 220 }}>
+            <span className="material-symbols-outlined" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 18 }}>
+              search
+            </span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Tìm theo tiêu đề, bút danh, link..."
+              style={{
+                width: "100%",
+                height: 46,
+                borderRadius: 16,
+                border: "1px solid rgba(148, 163, 184, 0.22)",
+                background: "rgba(255,255,255,0.82)",
+                padding: "0 16px 0 42px",
+                fontSize: 14,
+              }}
+            />
+          </div>
+          <button type="button" className="btn-ios-pill btn-ios-secondary" onClick={() => fetchItems(true)} disabled={refreshing}>
+            {refreshing ? "Đang làm mới..." : "Làm mới"}
+          </button>
+        </div>
       </div>
 
       <div className="stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
@@ -145,9 +183,13 @@ export default function ContentWorkPage() {
               ? "Chưa có bài CTV nào được đăng ký Content Work trong phạm vi hiện tại."
               : <>Chưa có bài nào được đăng ký Content Work. Sau khi thêm bài mới, bạn có thể bấm <strong>Đăng ký Content Work</strong>.</>}
           </div>
+        ) : filteredItems.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+            Không tìm thấy bài nào khớp với từ khóa <strong>{searchQuery.trim()}</strong>.
+          </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {items.map((item) => {
+            {filteredItems.map((item) => {
               const tone = getStatusTone(item.status);
               return (
                 <div key={item.id} style={{ border: "1px solid rgba(148, 163, 184, 0.16)", borderRadius: 24, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
