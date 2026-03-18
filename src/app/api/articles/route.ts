@@ -766,8 +766,11 @@ function buildArticleReviewerWhere(identityLabels: string[]): SQL | undefined {
 
 function buildArticleReviewScopeWhere(identityLabels: string[]): SQL {
   const reviewerWhere = buildArticleReviewerWhere(identityLabels);
-  const submittedWhere = eq(articles.status, "Submitted");
-  return reviewerWhere ? or(submittedWhere, reviewerWhere)! : submittedWhere;
+  const unassignedSubmittedWhere = and(
+    eq(articles.status, "Submitted"),
+    sql`coalesce(trim(${articles.reviewerName}), '') = ''`
+  )!;
+  return reviewerWhere ? or(unassignedSubmittedWhere, reviewerWhere)! : unassignedSubmittedWhere;
 }
 
 function buildAffectedPaymentWhere(rows: Array<Pick<ArticleDeleteRow, "penName" | "date">>) {

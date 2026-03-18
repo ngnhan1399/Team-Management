@@ -202,11 +202,6 @@ export default function ArticlesPage() {
     return article.authorBucket === "editorial" ? "editorial" : "ctv";
   }, []);
 
-  const visibleArticleIds = articles
-    .filter((article) => resolveAuthorBucket(article) !== "editorial")
-    .map((article) => article.id);
-  const selectedVisibleCount = visibleArticleIds.filter((id) => selectedArticleIds.includes(id)).length;
-
   const ensureCollaboratorsLoaded = useCallback(async () => {
     if (!canManageArticles || collaboratorsLoaded) {
       return;
@@ -234,10 +229,16 @@ export default function ArticlesPage() {
     await request;
   }, [canManageArticles, collaboratorsLoaded]);
 
-  const articleMatchesReviewerScope = useCallback((article: Article) => {
+  const articleAssignedToReviewer = useCallback((article: Article) => {
     const normalizedReviewerName = normalizeIdentityValue(article.reviewerName);
-    return article.status === "Submitted" || (!!normalizedReviewerName && reviewerIdentityValues.includes(normalizedReviewerName));
+    return !!normalizedReviewerName && reviewerIdentityValues.includes(normalizedReviewerName);
   }, [reviewerIdentityValues]);
+  const articleAvailableForReviewerPickup = useCallback((article: Article) => {
+    return article.status === "Submitted" && !normalizeIdentityValue(article.reviewerName);
+  }, []);
+  const articleMatchesReviewerScope = useCallback((article: Article) => {
+    return articleAssignedToReviewer(article) || articleAvailableForReviewerPickup(article);
+  }, [articleAssignedToReviewer, articleAvailableForReviewerPickup]);
 
   const canEditArticle = useCallback((article: Article) => {
     if (canManageArticles) return true;
@@ -1685,29 +1686,60 @@ export default function ArticlesPage() {
   const showSplitArticleSections = shouldShowSplitArticleSections;
   const ctvArticles = articles.filter((article) => resolveAuthorBucket(article) !== "editorial");
   const editorialArticles = articles.filter((article) => resolveAuthorBucket(article) === "editorial");
+  const assignedReviewArticles = isReviewer
+    ? articles.filter((article) => articleAssignedToReviewer(article))
+    : [];
+  const availableReviewArticles = isReviewer
+    ? articles.filter((article) => articleAvailableForReviewerPickup(article))
+    : [];
   const articleTableMinWidth = showSplitArticleSections ? 1020 : 1080;
-  const articleSections = [
-    {
-      key: "ctv",
-      title: "Bài của CTV",
-      icon: "groups",
-      accent: "#2563eb",
-      background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.04))",
-      rows: ctvArticles,
-      emptyMessage: "Chưa có bài nào ở nhóm CTV.",
-      allowBulkAssign: canBulkAssignReviewer,
-    },
-    {
-      key: "editorial",
-      title: "Bài của Biên tập/Admin",
-      icon: "shield_person",
-      accent: "#f97316",
-      background: "linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(234, 88, 12, 0.04))",
-      rows: editorialArticles,
-      emptyMessage: "Chưa có bài nào ở nhóm Biên tập/Admin.",
-      allowBulkAssign: false,
-    },
-  ] as const;
+  const articleSections = isReviewer
+    ? [
+      {
+        key: "assigned",
+        title: "Bài đã giao cho bạn",
+        icon: "assignment_ind",
+        accent: "#2563eb",
+        background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.04))",
+        rows: assignedReviewArticles,
+        emptyMessage: "Chưa có bài nào đã giao cho bạn.",
+        allowBulkAssign: false,
+      },
+      {
+        key: "available",
+        title: "Bài chờ nhận duyệt",
+        icon: "playlist_add_check_circle",
+        accent: "#0f766e",
+        background: "linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(15, 118, 110, 0.04))",
+        rows: availableReviewArticles,
+        emptyMessage: "Chưa có bài nào đang chờ nhận duyệt.",
+        allowBulkAssign: canBulkAssignReviewer,
+      },
+    ] as const
+    : [
+      {
+        key: "ctv",
+        title: "Bài của CTV",
+        icon: "groups",
+        accent: "#2563eb",
+        background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.04))",
+        rows: ctvArticles,
+        emptyMessage: "Chưa có bài nào ở nhóm CTV.",
+        allowBulkAssign: canBulkAssignReviewer,
+      },
+      {
+        key: "editorial",
+        title: "Bài của Biên tập/Admin",
+        icon: "shield_person",
+        accent: "#f97316",
+        background: "linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(234, 88, 12, 0.04))",
+        rows: editorialArticles,
+        emptyMessage: "Chưa có bài nào ở nhóm Biên tập/Admin.",
+        allowBulkAssign: false,
+      },
+    ] as const;
+  const visibleArticleIds = (isReviewer ? availableReviewArticles : ctvArticles).map((article) => article.id);
+  const selectedVisibleCount = visibleArticleIds.filter((id) => selectedArticleIds.includes(id)).length;
 
   const renderArticleTable = (rows: Article[], emptyMessage: string, allowBulkAssign = false) => {
     const rowIds = rows.map((article) => article.id);
@@ -2449,7 +2481,7 @@ export default function ArticlesPage() {
         <div className="glass-card" style={{ padding: 80, textAlign: "center", color: "var(--text-muted)" }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>📄</div>
           <div style={{ fontWeight: 600 }}>Chưa có bài viết nào</div>
-          {!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>{isReviewer ? "Tài khoản duyệt bài chỉ hiển thị bài chờ duyệt hoặc bài đã được giao cho bạn." : `Tài khoản này đang hiển thị dữ liệu của ${collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.`}</div>}
+          {!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>{isReviewer ? "Tài khoản duyệt bài chỉ hiển thị 2 nhóm rõ ràng: bài đã giao cho bạn và bài chưa phân công đang chờ nhận duyệt." : `Tài khoản này đang hiển thị dữ liệu của ${collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.`}</div>}
         </div>
       ) : showSplitArticleSections ? (
         <div style={{ display: "grid", gap: 24 }}>
