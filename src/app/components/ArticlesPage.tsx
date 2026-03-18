@@ -298,10 +298,22 @@ export default function ArticlesPage() {
         animation: undefined,
       };
     }
+    if (status === "failed") {
+      return {
+        disabled: false,
+        icon: "error",
+        title: "Đăng ký lại Content Work",
+        label: "Đăng ký lại",
+        background: "rgba(239, 68, 68, 0.08)",
+        color: "var(--danger)",
+        border: "1px solid rgba(239, 68, 68, 0.16)",
+        animation: undefined,
+      };
+    }
     return {
       disabled: false,
       icon: "task_alt",
-      title: article.contentWorkStatusLabel || "Đăng ký Content Work",
+      title: "Đăng ký Content Work",
       label: "Đăng ký Content Work",
       background: "rgba(37, 99, 235, 0.08)",
       color: "var(--accent-blue)",
@@ -2679,7 +2691,7 @@ export default function ArticlesPage() {
                         >
                           {contentWorkAction.icon}
                         </span>
-                        {contentWorkAction.disabled ? contentWorkAction.label : "Đăng ký Content Work"}
+                        {contentWorkAction.disabled || (formData as Article).contentWorkStatus === "failed" ? contentWorkAction.label : "Đăng ký Content Work"}
                       </button>
                     );
                   })()}
@@ -3130,4 +3142,6 @@ export default function ArticlesPage() {
 }
 
 /* ══════════════════════════ TEAM ══════════════════════════ */
+
+
 

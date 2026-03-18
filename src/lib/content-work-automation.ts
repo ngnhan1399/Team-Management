@@ -10,7 +10,7 @@ import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { eq } from "drizzle-orm";
 
-const CONTENT_WORK_AUTOMATION_TIMEOUT_MS = 12000;
+const CONTENT_WORK_AUTOMATION_TIMEOUT_MS = 30000;
 
 export type ContentWorkArticleSnapshot = {
   id: number;
@@ -164,33 +164,37 @@ async function callContentWorkScript(input: {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), CONTENT_WORK_AUTOMATION_TIMEOUT_MS);
-    const response = await fetch(webAppUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
 
-    const rawText = await response.text();
-    const parsed = parseJsonSafely(rawText);
+    try {
+      const response = await fetch(webAppUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
 
-    if (!response.ok || parsed?.success === false) {
+      const rawText = await response.text();
+      const parsed = parseJsonSafely(rawText);
+
+      if (!response.ok || parsed?.success === false) {
+        return {
+          skipped: false,
+          success: false,
+          message: normalizeContentWorkScriptMessage(normalizeText(parsed?.error) || normalizeText(parsed?.message) || `Content Work script trả về lỗi ${response.status}.`),
+          response: parsed,
+        } as const;
+      }
+
       return {
         skipped: false,
-        success: false,
-        message: normalizeContentWorkScriptMessage(normalizeText(parsed?.error) || normalizeText(parsed?.message) || `Content Work script trả về lỗi ${response.status}.`),
-        response: parsed,
+        success: true,
+        message: normalizeText(parsed?.message) || "Đã xử lý Content Work.",
+        response: parsed || {},
       } as const;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return {
-      skipped: false,
-      success: true,
-      message: normalizeText(parsed?.message) || "Đã xử lý Content Work.",
-      response: parsed || {},
-    } as const;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
@@ -397,3 +401,4 @@ export async function processContentWorkRegistrationJob(input: {
     });
   }
 }
+

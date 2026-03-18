@@ -42,6 +42,7 @@ export default function MobileArticleCard({
     || contentWorkStatus === "form_submitted"
     || contentWorkStatus === "link_written";
   const contentWorkCompleted = contentWorkStatus === "completed";
+  const contentWorkFailed = contentWorkStatus === "failed";
   const contentWorkDisabled = isRegisteringContentWork || contentWorkPending || contentWorkCompleted;
   const contentWorkLabel = isRegisteringContentWork
     ? "Đang gửi..."
@@ -49,12 +50,16 @@ export default function MobileArticleCard({
       ? "Đã đăng ký"
       : contentWorkPending
         ? (article.contentWorkStatusLabel || "Đang xử lý")
-        : "Content Work";
+        : contentWorkFailed
+          ? "Đăng ký lại"
+          : "Content Work";
   const contentWorkTone = contentWorkCompleted
     ? { background: "rgba(16, 185, 129, 0.12)", color: "#047857" }
     : contentWorkPending
       ? { background: "rgba(245, 158, 11, 0.12)", color: "#b45309" }
-      : { background: "rgba(37, 99, 235, 0.08)", color: "#2563eb" };
+      : contentWorkFailed
+        ? { background: "rgba(239, 68, 68, 0.08)", color: "#dc2626" }
+        : { background: "rgba(37, 99, 235, 0.08)", color: "#2563eb" };
 
   const getStatusStyle = (s: string) => {
     const map: Record<string, { bg: string; text: string; icon: string; label: string }> = {
@@ -146,7 +151,7 @@ export default function MobileArticleCard({
                 }
               }}
               disabled={contentWorkDisabled}
-              title={contentWorkCompleted ? "Đã đăng ký Content Work" : article.contentWorkStatusLabel || "Đăng ký Content Work"}
+              title={contentWorkCompleted ? "Đã đăng ký Content Work" : contentWorkFailed ? "Đăng ký lại Content Work" : article.contentWorkStatusLabel || "Đăng ký Content Work"}
               className="px-3 h-10 flex items-center justify-center rounded-xl text-[11px] font-bold uppercase tracking-wider active:scale-95 transition-transform disabled:opacity-80"
               style={contentWorkTone}
             >
@@ -175,3 +180,4 @@ export default function MobileArticleCard({
     </div>
   );
 }
+
