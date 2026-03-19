@@ -43,6 +43,7 @@ import { resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity
 import { LINK_CHECK_MANUAL_MAX_ITEMS, parseLinkHealthCheckedAt, type LinkHealthStatus } from "@/lib/link-health";
 import { foldSearchText, matchesLooseSearch } from "@/lib/normalize";
 import { getPreferredArticleNavigationLink } from "@/lib/review-link";
+import { consumeTrendRadarArticleDraft, type TrendRadarArticleDraft } from "@/lib/trend-radar-client";
 import type {
   Article,
   ArticleComment,
@@ -66,6 +67,36 @@ const EMPTY_ARTICLE_FILTERS: ArticleFilters = {
   year: "",
 };
 
+function getTrendRadarSuggestedArticleType(category: TrendRadarArticleDraft["recommendedCategory"]) {
+  switch (category) {
+    case "Gia dụng":
+      return "Bài SEO Gia dụng";
+    case "Thủ thuật":
+      return "Thủ thuật";
+    case "SEO AI":
+      return "SEO AI";
+    default:
+      return "Bài SEO ICT";
+  }
+}
+
+function buildTrendRadarPrefillNotes(draft: TrendRadarArticleDraft) {
+  const lines = [
+    "Nguồn đề xuất: Trend Radar",
+    `Keyword: ${draft.keyword}`,
+    draft.headline ? `Tiêu đề nguồn: ${draft.headline}` : null,
+    draft.sourceLabel ? `Nguồn tín hiệu chính: ${draft.sourceLabel}` : null,
+    draft.sourceUrl ? `Link tham khảo: ${draft.sourceUrl}` : null,
+    draft.searchDemandLabel ? `Mức quan tâm: ${draft.searchDemandLabel}` : null,
+    draft.existingCoverageTitle ? `Bài đang có nên xem lại: ${draft.existingCoverageTitle}` : null,
+    draft.supportSignals.length > 0 ? `Tín hiệu hỗ trợ: ${draft.supportSignals.slice(0, 3).join(", ")}` : null,
+    draft.whyNow ? `Vì sao nên làm: ${draft.whyNow}` : null,
+  ];
+
+  return lines.filter(Boolean).join("\n");
+}
+
+
 export default function ArticlesPage() {
   type ArticleListQuery = { page: number; search: string; filters: ArticleFilters };
   const { user, loading: authLoading } = useAuth();
@@ -80,6 +111,7 @@ export default function ArticlesPage() {
     search: "",
     filters: { ...EMPTY_ARTICLE_FILTERS },
   });
+  const trendRadarDraftHandledRef = React.useRef(false);
   const importInputId = React.useId();
   const [articles, setArticles] = useState<Article[]>([]);
   const deferredArticles = useDeferredValue(articles);
@@ -415,6 +447,59 @@ export default function ArticlesPage() {
       toastVariant: variant,
     });
   }, []);
+
+  useEffect(() => {
+    if (trendRadarDraftHandledRef.current || authLoading || !canCreateArticles) {
+      return;
+    }
+
+    trendRadarDraftHandledRef.current = true;
+    const draft = consumeTrendRadarArticleDraft();
+    if (!draft) {
+      return;
+    }
+
+    if (canManageArticles) {
+      void ensureCollaboratorsLoaded();
+    }
+
+    const articleType = getTrendRadarSuggestedArticleType(draft.recommendedCategory);
+    const contentType = draft.recommendation === "refresh_existing" ? "Viết lại" : "Viết mới";
+    const nextFormData: Partial<Article> = {
+      date: new Date().toISOString().split("T")[0],
+      penName: canManageArticles ? MANAGER_DEFAULT_PEN_NAME : user?.collaborator?.penName,
+      reviewerName: "",
+      status: DEFAULT_ARTICLE_STATUS,
+      wordCountRange: "",
+      title: draft.keyword,
+      category: draft.recommendedCategory,
+      articleType,
+      contentType,
+      link: "",
+      articleId: "",
+      notes: buildTrendRadarPrefillNotes(draft),
+    };
+
+    const nextLink = String(nextFormData.link || "").trim();
+    const requiresLinkId = isLinkIdRequiredForArticleType(nextFormData.articleType);
+    const nextArticleId = requiresLinkId
+      ? (extractArticleIdFromLink(nextLink) || String(nextFormData.articleId || "").trim())
+      : String(nextFormData.articleId || "").trim();
+
+    setFormData({
+      ...nextFormData,
+      link: nextLink,
+      articleId: nextArticleId,
+    });
+    setShowModal(true);
+    showUiToast(
+      "Đã đổ sẵn dữ liệu từ Trend Radar",
+      draft.recommendation === "refresh_existing"
+        ? "Mình đã mở sẵn nháp để bạn kiểm tra lại bài cũ và cập nhật tiếp."
+        : "Mình đã chuẩn bị sẵn form thêm bài với dữ liệu trend để bạn chỉnh nhanh rồi lưu.",
+      "success"
+    );
+  }, [authLoading, canCreateArticles, canManageArticles, ensureCollaboratorsLoaded, showUiToast, user?.collaborator?.penName]);
 
   const applyLinkHealthUpdates = useCallback((items: Array<{
     articleId: number;
@@ -3174,6 +3259,9 @@ export default function ArticlesPage() {
 }
 
 /* ══════════════════════════ TEAM ══════════════════════════ */
+
+
+
 
 
 

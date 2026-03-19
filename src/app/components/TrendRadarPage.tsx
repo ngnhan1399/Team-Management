@@ -4,6 +4,12 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Page, TrendRadarItem, TrendRadarResponse } from "./types";
 import { useAuth } from "./auth-context";
 import { useIsMobile } from "./useMediaQuery";
+import { foldSearchText } from "@/lib/normalize";
+import {
+  buildTrendRadarWatchlistStorageKey,
+  normalizeTrendRadarWatchTerm,
+  saveTrendRadarArticleDraft,
+} from "@/lib/trend-radar-client";
 
 function formatUpdatedAt(value: string) {
   const parsed = new Date(value);
@@ -55,6 +61,21 @@ function getIntentLabel(intent: TrendRadarItem["intent"]) {
   }
 }
 
+function mergeWatchTerms(existing: string[], additions: string[]) {
+  const next = [...existing];
+  const seen = new Set(existing.map((term) => foldSearchText(term)));
+  for (const item of additions) {
+    const normalized = normalizeTrendRadarWatchTerm(item);
+    const folded = foldSearchText(normalized);
+    if (!normalized || !folded || seen.has(folded)) {
+      continue;
+    }
+    seen.add(folded);
+    next.push(normalized);
+  }
+  return next;
+}
+
 export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page) => void }) {
   const { user } = useAuth();
   const isMobile = useIsMobile();
@@ -66,6 +87,16 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [recommendationFilter, setRecommendationFilter] = useState("all");
   const [copiedKeyword, setCopiedKeyword] = useState("");
+  const [watchlistInput, setWatchlistInput] = useState("");
+  const [watchTerms, setWatchTerms] = useState<string[]>([]);
+  const [watchOnly, setWatchOnly] = useState(false);
+  const [watchlistReady, setWatchlistReady] = useState(false);
+
+  const canCreateArticles = user?.role === "admin" || (user?.role === "ctv" && user?.collaborator?.role === "writer");
+  const viewerWatchlistKey = useMemo(() => {
+    const viewerKey = user?.id ? `user:${user.id}` : user?.email || user?.collaborator?.penName || "guest";
+    return buildTrendRadarWatchlistStorageKey(viewerKey);
+  }, [user?.collaborator?.penName, user?.email, user?.id]);
 
   const fetchRadar = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -95,8 +126,59 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
     return () => window.clearTimeout(handle);
   }, [copiedKeyword]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    setWatchlistReady(false);
+    try {
+      const raw = window.localStorage.getItem(viewerWatchlistKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const nextTerms = Array.isArray(parsed)
+        ? Array.from(new Set(parsed.map((item) => normalizeTrendRadarWatchTerm(String(item || ""))).filter(Boolean)))
+        : [];
+      setWatchTerms(nextTerms);
+    } catch {
+      setWatchTerms([]);
+    } finally {
+      setWatchlistReady(true);
+    }
+  }, [viewerWatchlistKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !watchlistReady) {
+      return;
+    }
+    window.localStorage.setItem(viewerWatchlistKey, JSON.stringify(watchTerms));
+  }, [viewerWatchlistKey, watchTerms, watchlistReady]);
+
+  useEffect(() => {
+    if (watchTerms.length === 0 && watchOnly) {
+      setWatchOnly(false);
+    }
+  }, [watchOnly, watchTerms.length]);
+
+  const normalizedWatchTerms = useMemo(() => watchTerms.map((term) => foldSearchText(term)).filter(Boolean), [watchTerms]);
+
+  const itemMatchesWatchlist = useCallback((item: TrendRadarItem) => {
+    if (normalizedWatchTerms.length === 0) {
+      return false;
+    }
+
+    const haystack = foldSearchText([
+      item.keyword,
+      item.headline,
+      item.whyNow,
+      item.recommendedCategory,
+      ...item.supportSignals,
+      ...item.sourceMix,
+    ].join(" "));
+
+    return normalizedWatchTerms.some((term) => haystack.includes(term));
+  }, [normalizedWatchTerms]);
+
   const filteredItems = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+    const normalizedSearch = foldSearchText(search);
     return (data?.items || []).filter((item) => {
       if (categoryFilter !== "all" && item.recommendedCategory !== categoryFilter) {
         return false;
@@ -104,27 +186,31 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
       if (recommendationFilter !== "all" && item.recommendation !== recommendationFilter) {
         return false;
       }
+      if (watchOnly && normalizedWatchTerms.length > 0 && !itemMatchesWatchlist(item)) {
+        return false;
+      }
       if (!normalizedSearch) {
         return true;
       }
-      const haystack = [
+      const haystack = foldSearchText([
         item.keyword,
         item.headline,
         item.whyNow,
         item.recommendedCategory,
         ...item.supportSignals,
         ...item.sourceMix,
-      ].join(" ").toLowerCase();
+      ].join(" "));
       return haystack.includes(normalizedSearch);
     });
-  }, [categoryFilter, data?.items, recommendationFilter, search]);
+  }, [categoryFilter, data?.items, itemMatchesWatchlist, normalizedWatchTerms.length, recommendationFilter, search, watchOnly]);
 
   const categoryOptions = useMemo(() => ["all", ...Array.from(new Set((data?.items || []).map((item) => item.recommendedCategory)))], [data?.items]);
+  const matchedWatchCount = useMemo(() => (data?.items || []).filter((item) => itemMatchesWatchlist(item)).length, [data?.items, itemMatchesWatchlist]);
   const quickStats = [
     { label: "Tổng cơ hội", value: data?.summary.total || 0, color: "#2563eb", icon: "travel_explore" },
     { label: "Ưu tiên cao", value: data?.summary.urgent || 0, color: "#dc2626", icon: "local_fire_department" },
     { label: "Nên viết mới", value: data?.summary.writeNew || 0, color: "#0f766e", icon: "add_circle" },
-    { label: "Nên cập nhật", value: data?.summary.refreshExisting || 0, color: "#7c3aed", icon: "refresh" },
+    { label: watchTerms.length > 0 ? "Khớp watchlist" : "Nên cập nhật", value: watchTerms.length > 0 ? matchedWatchCount : (data?.summary.refreshExisting || 0), color: watchTerms.length > 0 ? "#f59e0b" : "#7c3aed", icon: watchTerms.length > 0 ? "bookmark_manager" : "refresh" },
   ];
 
   const handleCopyKeyword = useCallback(async (keyword: string) => {
@@ -135,6 +221,42 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
       setCopiedKeyword(keyword);
     }
   }, []);
+
+  const handleAddWatchTerms = useCallback((rawValue: string) => {
+    const additions = rawValue
+      .split(/[\n,]+/)
+      .map((item) => normalizeTrendRadarWatchTerm(item))
+      .filter(Boolean);
+    if (additions.length === 0) {
+      return;
+    }
+    setWatchTerms((prev) => mergeWatchTerms(prev, additions));
+    setWatchlistInput("");
+  }, []);
+
+  const handleRemoveWatchTerm = useCallback((termToRemove: string) => {
+    const foldedTarget = foldSearchText(termToRemove);
+    setWatchTerms((prev) => prev.filter((term) => foldSearchText(term) !== foldedTarget));
+  }, []);
+
+  const handleSendToArticles = useCallback((item: TrendRadarItem) => {
+    if (canCreateArticles) {
+      saveTrendRadarArticleDraft({
+        keyword: item.keyword,
+        headline: item.headline,
+        recommendedCategory: item.recommendedCategory,
+        recommendation: item.recommendation,
+        whyNow: item.whyNow,
+        searchDemandLabel: item.searchDemandLabel,
+        supportSignals: item.supportSignals,
+        sourceLabel: item.sources[0]?.label || null,
+        sourceUrl: item.sources[0]?.url || null,
+        existingCoverageTitle: item.existingCoverageSamples[0]?.title || null,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    onNavigate("articles");
+  }, [canCreateArticles, onNavigate]);
 
   return (
     <div>
@@ -180,7 +302,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
         ))}
       </div>
 
-      <div className="glass-card" style={{ padding: isMobile ? 16 : 20, marginBottom: 24, background: "white" }}>
+      <div className="glass-card" style={{ padding: isMobile ? 16 : 20, marginBottom: 16, background: "white" }}>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 1.6fr) repeat(2, minmax(180px, 0.7fr)) auto", gap: 12, alignItems: "end" }}>
           <div>
             <label className="form-label" style={{ marginBottom: 8 }}>Tìm nhanh</label>
@@ -201,10 +323,66 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
               <option value="watch">Nên theo dõi</option>
             </select>
           </div>
-          <button className="btn-ios-pill btn-ios-secondary" onClick={() => { setSearch(""); setCategoryFilter("all"); setRecommendationFilter("all"); }} style={{ height: 46, justifyContent: "center" }}>
+          <button className="btn-ios-pill btn-ios-secondary" onClick={() => { setSearch(""); setCategoryFilter("all"); setRecommendationFilter("all"); setWatchOnly(false); }} style={{ height: 46, justifyContent: "center" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>filter_alt_off</span>
             Xóa lọc
           </button>
+        </div>
+      </div>
+
+      <div className="glass-card" style={{ padding: isMobile ? 16 : 20, marginBottom: 24, background: "rgba(255,255,255,0.94)" }}>
+        <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", gap: 12, flexDirection: isMobile ? "column" : "row", marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-main)", marginBottom: 4 }}>Watchlist brand / model</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.55 }}>
+              Thêm các cụm như iPhone, Galaxy, RTX, Xiaomi, Copilot, Gemini để ưu tiên nhìn thấy những trend sát mảng bạn đang theo dõi.
+            </div>
+          </div>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999, background: "rgba(245,158,11,0.12)", color: "#b45309", fontSize: 12, fontWeight: 800 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>bookmark_manager</span>
+            Khớp {matchedWatchCount} cơ hội
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 1.3fr) auto auto", gap: 12, alignItems: "center" }}>
+          <input
+            className="form-input"
+            value={watchlistInput}
+            onChange={(event) => setWatchlistInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                handleAddWatchTerms(watchlistInput);
+              }
+            }}
+            placeholder="Ví dụ: iPhone, Galaxy S, RTX 5090, Xiaomi 16..."
+          />
+          <button className="btn-ios-pill btn-ios-primary" onClick={() => handleAddWatchTerms(watchlistInput)} style={{ justifyContent: "center" }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bookmark_add</span>
+            Thêm watchlist
+          </button>
+          <button className={`btn-ios-pill ${watchOnly ? "btn-ios-primary" : "btn-ios-secondary"}`} onClick={() => setWatchOnly((prev) => !prev)} disabled={watchTerms.length === 0} style={{ justifyContent: "center", opacity: watchTerms.length === 0 ? 0.65 : 1 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{watchOnly ? "visibility" : "filter_list"}</span>
+            {watchOnly ? "Đang lọc watchlist" : "Chỉ hiện khớp watchlist"}
+          </button>
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {watchTerms.length === 0 ? (
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Chưa có watchlist nào. Thêm 2-5 brand/model chính để bảng này sắc nét hơn.</span>
+          ) : watchTerms.map((term) => (
+            <button
+              key={term}
+              type="button"
+              onClick={() => handleRemoveWatchTerm(term)}
+              className="btn-ios-pill btn-ios-secondary"
+              style={{ height: 34, padding: "0 12px", fontSize: 13, borderColor: "rgba(245,158,11,0.22)", color: "#b45309", background: "rgba(245,158,11,0.08)" }}
+              title={`Bỏ ${term} khỏi watchlist`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+              {term}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -242,6 +420,8 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
           ) : filteredItems.map((item) => {
             const priority = getPriorityPresentation(item.priority);
             const recommendation = getRecommendationPresentation(item.recommendation);
+            const matchesWatchlist = itemMatchesWatchlist(item);
+            const keywordWatched = normalizedWatchTerms.includes(foldSearchText(item.keyword));
             return (
               <article key={item.id} className="glass-card" style={{ padding: isMobile ? 18 : 22, background: "white" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexDirection: isMobile ? "column" : "row" }}>
@@ -253,6 +433,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                         {recommendation.label}
                       </span>
                       <span style={{ display: "inline-flex", alignItems: "center", padding: "6px 10px", borderRadius: 999, background: "rgba(15,23,42,0.06)", color: "var(--text-muted)", fontSize: 12, fontWeight: 700 }}>Score {item.score}</span>
+                      {matchesWatchlist && <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999, background: "rgba(245,158,11,0.12)", color: "#b45309", fontSize: 12, fontWeight: 800 }}><span className="material-symbols-outlined" style={{ fontSize: 14 }}>bookmark</span>Khớp watchlist</span>}
                     </div>
                     <h3 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: "var(--text-main)", lineHeight: 1.3 }}>{item.keyword}</h3>
                     <div style={{ marginTop: 6, color: "var(--text-muted)", fontSize: 14, lineHeight: 1.55 }}>{item.headline}</div>
@@ -268,13 +449,17 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                       <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{copiedKeyword === item.keyword ? "check" : "content_copy"}</span>
                       {copiedKeyword === item.keyword ? "Đã copy" : "Copy keyword"}
                     </button>
+                    <button className="btn-ios-pill btn-ios-secondary" onClick={() => handleAddWatchTerms(item.keyword)} disabled={keywordWatched} style={{ opacity: keywordWatched ? 0.7 : 1 }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{keywordWatched ? "bookmark_added" : "bookmark_add"}</span>
+                      {keywordWatched ? "Đang theo dõi" : "Theo dõi keyword"}
+                    </button>
                     <button className="btn-ios-pill btn-ios-secondary" onClick={() => window.open(`https://trends.google.com/trends/explore?q=${encodeURIComponent(item.keyword)}&geo=VN`, "_blank", "noopener,noreferrer")}>
                       <span className="material-symbols-outlined" style={{ fontSize: 18 }}>trending_up</span>
                       Xem trend
                     </button>
-                    <button className="btn-ios-pill btn-ios-primary" onClick={() => onNavigate("articles")}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>description</span>
-                      Sang Bài viết
+                    <button className="btn-ios-pill btn-ios-primary" onClick={() => handleSendToArticles(item)}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{canCreateArticles ? "edit_square" : "description"}</span>
+                      {canCreateArticles ? (item.recommendation === "refresh_existing" ? "Tạo nháp cập nhật" : "Tạo bài từ trend") : "Sang Bài viết"}
                     </button>
                   </div>
                 </div>
@@ -333,3 +518,4 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
     </div>
   );
 }
+
