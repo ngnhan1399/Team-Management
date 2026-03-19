@@ -544,7 +544,7 @@ export interface TrendRadarItem {
   headline: string;
   score: number;
   priority: "urgent" | "high" | "watch";
-  recommendedCategory: "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đánh giá" | "SEO AI" | "Khác";
+  recommendedCategory: "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đời sống" | "Thể thao" | "Đánh giá" | "SEO AI" | "Khác";
   intent: TrendRadarIntent;
   recommendation: TrendRadarRecommendation;
   recommendationLabel: string;
@@ -554,6 +554,9 @@ export interface TrendRadarItem {
   searchDemandLabel?: string | null;
   suggestedFormatLabel: string;
   suggestedWorkflowLabel: string;
+  fitLevel: "core" | "adjacent" | "broad";
+  fitLabel: string;
+  fitReason: string;
   whyNow: string;
   supportSignals: string[];
   sourceMix: string[];

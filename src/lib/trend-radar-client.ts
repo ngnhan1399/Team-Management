@@ -1,7 +1,7 @@
 export interface TrendRadarArticleDraft {
   keyword: string;
   headline: string;
-  recommendedCategory: "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đánh giá" | "SEO AI" | "Khác";
+  recommendedCategory: "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đời sống" | "Thể thao" | "Đánh giá" | "SEO AI" | "Khác";
   recommendation: "write_new" | "refresh_existing" | "watch";
   whyNow: string;
   searchDemandLabel?: string | null;

@@ -44,6 +44,17 @@ function getRecommendationPresentation(recommendation: TrendRadarItem["recommend
   }
 }
 
+function getFitPresentation(fitLevel: TrendRadarItem["fitLevel"]) {
+  switch (fitLevel) {
+    case "core":
+      return { label: "Fit cao với Workdocker", color: "#047857", background: "rgba(16,185,129,0.12)" };
+    case "adjacent":
+      return { label: "Fit mở rộng", color: "#7c3aed", background: "rgba(124,58,237,0.12)" };
+    default:
+      return { label: "Trend rộng, cần chọn góc", color: "#b45309", background: "rgba(245,158,11,0.12)" };
+  }
+}
+
 function getIntentLabel(intent: TrendRadarItem["intent"]) {
   switch (intent) {
     case "commercial":
@@ -99,6 +110,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [recommendationFilter, setRecommendationFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | TrendRadarItem["sources"][number]["type"]>("all");
   const [copiedKeyword, setCopiedKeyword] = useState("");
   const [watchlistInput, setWatchlistInput] = useState("");
   const [watchTerms, setWatchTerms] = useState<string[]>([]);
@@ -199,6 +211,9 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
       if (recommendationFilter !== "all" && item.recommendation !== recommendationFilter) {
         return false;
       }
+      if (sourceFilter !== "all" && !item.sources.some((source) => source.type === sourceFilter)) {
+        return false;
+      }
       if (watchOnly && normalizedWatchTerms.length > 0 && !itemMatchesWatchlist(item)) {
         return false;
       }
@@ -215,7 +230,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
       ].join(" "));
       return haystack.includes(normalizedSearch);
     });
-  }, [categoryFilter, data?.items, itemMatchesWatchlist, normalizedWatchTerms.length, recommendationFilter, search, watchOnly]);
+  }, [categoryFilter, data?.items, itemMatchesWatchlist, normalizedWatchTerms.length, recommendationFilter, search, sourceFilter, watchOnly]);
 
   const categoryOptions = useMemo(() => ["all", ...Array.from(new Set((data?.items || []).map((item) => item.recommendedCategory)))], [data?.items]);
   const matchedWatchCount = useMemo(() => (data?.items || []).filter((item) => itemMatchesWatchlist(item)).length, [data?.items, itemMatchesWatchlist]);
@@ -286,7 +301,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
             </span>
           </div>
           <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6, maxWidth: 920 }}>
-            Tổng hợp xu hướng từ Google Trends, social buzz Việt Nam và các nguồn tin công nghệ lớn, rồi chấm điểm theo góc nhìn SEO để biết nên viết mới, cập nhật bài cũ hay chỉ nên theo dõi thêm.
+            Tổng hợp xu hướng từ Google Trends, social buzz Việt Nam, đời sống, thể thao, giải trí và các nguồn tin công nghệ lớn, rồi chấm điểm theo góc nhìn SEO để biết trend nào fit với Workdocker, trend nào chỉ nên theo dõi thêm.
           </p>
           <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>
             Phạm vi gợi ý nội dung hiện tại: {user?.role === "admin" ? "team của bạn" : "dữ liệu bạn đang được phép xem"}. Cập nhật lúc {data?.updatedAt ? formatUpdatedAt(data.updatedAt) : "--"}.
@@ -319,7 +334,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
       </div>
 
       <div className="glass-card" style={{ padding: isMobile ? 16 : 20, marginBottom: 16, background: "white" }}>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 1.6fr) repeat(2, minmax(180px, 0.7fr)) auto", gap: 12, alignItems: "end" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 1.45fr) repeat(3, minmax(170px, 0.62fr)) auto", gap: 12, alignItems: "end" }}>
           <div>
             <label className="form-label" style={{ marginBottom: 8 }}>Tìm nhanh</label>
             <input className="form-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ví dụ: iPhone 17, Grok, lỗi WiFi, Galaxy A series..." />
@@ -339,7 +354,16 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
               <option value="watch">Nên theo dõi</option>
             </select>
           </div>
-          <button className="btn-ios-pill btn-ios-secondary" onClick={() => { setSearch(""); setCategoryFilter("all"); setRecommendationFilter("all"); setWatchOnly(false); }} style={{ height: 46, justifyContent: "center" }}>
+          <div>
+            <label className="form-label" style={{ marginBottom: 8 }}>Nguồn tín hiệu</label>
+            <select className="form-input" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as "all" | TrendRadarItem["sources"][number]["type"])}>
+              <option value="all">Tất cả nguồn</option>
+              <option value="google_trends">Google Trends</option>
+              <option value="social_reference">Social buzz</option>
+              <option value="tech_news">Tin công nghệ</option>
+            </select>
+          </div>
+          <button className="btn-ios-pill btn-ios-secondary" onClick={() => { setSearch(""); setCategoryFilter("all"); setRecommendationFilter("all"); setSourceFilter("all"); setWatchOnly(false); }} style={{ height: 46, justifyContent: "center" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>filter_alt_off</span>
             Xóa lọc
           </button>
@@ -436,6 +460,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
           ) : filteredItems.map((item) => {
             const priority = getPriorityPresentation(item.priority);
             const recommendation = getRecommendationPresentation(item.recommendation);
+            const fit = getFitPresentation(item.fitLevel);
             const matchesWatchlist = itemMatchesWatchlist(item);
             const keywordWatched = normalizedWatchTerms.includes(foldSearchText(item.keyword));
             return (
@@ -455,6 +480,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                     <div style={{ marginTop: 6, color: "var(--text-muted)", fontSize: 14, lineHeight: 1.55 }}>{item.headline}</div>
                     <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(37,99,235,0.08)", color: "#2563eb", fontSize: 12, fontWeight: 800 }}>{item.recommendedCategory}</span>
+                      <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: fit.background, color: fit.color, fontSize: 12, fontWeight: 800 }}>{item.fitLabel}</span>
                       <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(15,23,42,0.06)", color: "var(--text-main)", fontSize: 12, fontWeight: 700 }}>{getIntentLabel(item.intent)}</span>
                       <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(124,58,237,0.12)", color: "#7c3aed", fontSize: 12, fontWeight: 700 }}>{item.suggestedFormatLabel}</span>
                       <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(16,185,129,0.08)", color: "#047857", fontSize: 12, fontWeight: 700 }}>{item.freshnessLabel}</span>
@@ -489,7 +515,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                       <span key={signal} style={{ display: "inline-flex", alignItems: "center", padding: "5px 9px", borderRadius: 999, background: "white", color: "var(--text-muted)", fontSize: 12, fontWeight: 700, border: "1px solid rgba(148,163,184,0.14)" }}>{signal}</span>
                     ))}
                   </div>
-                  <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                  <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 10 }}>
                     <div style={{ padding: "12px 14px", borderRadius: 16, background: "white", border: "1px solid rgba(148,163,184,0.12)" }}>
                       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Dạng bài nên làm</div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", lineHeight: 1.5 }}>{item.suggestedFormatLabel}</div>
@@ -497,6 +523,11 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                     <div style={{ padding: "12px 14px", borderRadius: 16, background: "white", border: "1px solid rgba(148,163,184,0.12)" }}>
                       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Luồng xử lý</div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", lineHeight: 1.5 }}>{item.suggestedWorkflowLabel}</div>
+                    </div>
+                    <div style={{ padding: "12px 14px", borderRadius: 16, background: fit.background, border: `1px solid ${fit.color}22` }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Độ hợp hệ thống</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: fit.color, lineHeight: 1.5, marginBottom: 6 }}>{item.fitLabel}</div>
+                      <div style={{ fontSize: 13, color: "var(--text-main)", lineHeight: 1.55 }}>{item.fitReason}</div>
                     </div>
                   </div>
                 </div>

@@ -72,11 +72,31 @@ const SOCIAL_BUZZ_TERMS = [
   "neu ca doi nay khong ruc ro thi sao", "hay khong", "thi sao", "co dang", "dang hot",
 ];
 
+const SPORTS_TERMS = [
+  "bong da", "dau voi", "vs", "truc tiep", "ty so", "tran dau", "thi dau", "vong loai",
+  "doi tuyen", "champions league", "premier league", "europa league", "ucl", "cup quoc gia",
+  "world cup", "tottenham", "liverpool", "bayern", "atalanta", "atletico", "southampton",
+  "norwich", "galatasaray", "barca", "fermin lopez", "marc bernal", "uzbekistan", "nam dinh",
+];
+
+const LIFESTYLE_TERMS = [
+  "van khan", "mung 1", "xo so", "mien nam", "gia bac", "gia vang", "phu quy", "doi song",
+  "meo vat", "kinh nghiem", "cach nau", "mua gi", "di bien", "ngay tot", "gio dep",
+];
+
+const ENTERTAINMENT_TERMS = [
+  "phim", "tap", "ca si", "nhac si", "dien vien", "gameshow", "showbiz", "giai tri",
+  "shark", "idol", "concert", "mv", "rap viet", "anh trai", "anh dep", "nemoclaw",
+];
+
 const CATEGORY_HINTS: Array<{ category: TrendRadarItem["recommendedCategory"]; terms: string[] }> = [
   { category: "SEO AI", terms: ["ai", "grok", "gemini", "chatgpt", "claude", "copilot", "llm"] },
   { category: "Gia dụng", terms: ["may giat", "tu lanh", "may lanh", "noi com", "bep tu", "loc khong khi", "robot hut bui", "may loc nuoc", "dieu hoa", "quat"] },
   { category: "Đánh giá", terms: ["review", "danh gia", "co tot khong", "nen mua", "so sanh", "vs", "tren tay"] },
   { category: "Thủ thuật", terms: ["cach", "huong dan", "fix", "sua", "loi", "khac phuc", "meo", "how to"] },
+  { category: "Thể thao", terms: SPORTS_TERMS },
+  { category: "Đời sống", terms: LIFESTYLE_TERMS },
+  { category: "Giải trí", terms: ENTERTAINMENT_TERMS },
   { category: "ICT", terms: ["iphone", "ipad", "macbook", "samsung", "galaxy", "xiaomi", "android", "windows", "laptop", "dien thoai", "tablet", "router", "wifi", "camera"] },
 ];
 
@@ -209,11 +229,36 @@ function isSocialBuzzRelevant(text: string) {
   return false;
 }
 
+function isSportsRelevant(text: string) {
+  const folded = foldText(text);
+  return SPORTS_TERMS.some((term) => folded.includes(foldText(term)));
+}
+
+function isLifestyleRelevant(text: string) {
+  const folded = foldText(text);
+  return LIFESTYLE_TERMS.some((term) => folded.includes(foldText(term)));
+}
+
+function isEntertainmentRelevant(text: string) {
+  const folded = foldText(text);
+  return ENTERTAINMENT_TERMS.some((term) => folded.includes(foldText(term)));
+}
+
+function isBroadTrendRelevant(text: string) {
+  return [
+    isTechnologyRelevant(text),
+    isSocialBuzzRelevant(text),
+    isSportsRelevant(text),
+    isLifestyleRelevant(text),
+    isEntertainmentRelevant(text),
+  ].some(Boolean);
+}
+
 function isTrendRelevant(text: string, relevance: FeedConfig["relevance"]) {
-  if (isTechnologyRelevant(text)) {
-    return true;
+  if (relevance === "tech") {
+    return isTechnologyRelevant(text);
   }
-  return relevance === "social" ? isSocialBuzzRelevant(text) : false;
+  return isBroadTrendRelevant(text);
 }
 
 function detectCategory(text: string): TrendRadarItem["recommendedCategory"] {
@@ -223,7 +268,13 @@ function detectCategory(text: string): TrendRadarItem["recommendedCategory"] {
       return entry.category;
     }
   }
-  if (isSocialBuzzRelevant(text) && !isTechnologyRelevant(text)) {
+  if (isSportsRelevant(text)) {
+    return "Thể thao";
+  }
+  if (isLifestyleRelevant(text)) {
+    return "Đời sống";
+  }
+  if (isEntertainmentRelevant(text) || (isSocialBuzzRelevant(text) && !isTechnologyRelevant(text))) {
     return "Giải trí";
   }
   return resolveArticleCategory("", text);
@@ -320,7 +371,7 @@ async function fetchGoogleTrendSignals() {
     const newsUrls = extractAllTags(block, "ht:news_item_url");
     const headline = newsTitles[0] || keyword;
     const combinedSignal = [keyword, ...newsTitles].join(" ");
-    if (!isTechnologyRelevant(combinedSignal)) {
+    if (!isBroadTrendRelevant(combinedSignal)) {
       continue;
     }
 
@@ -415,6 +466,15 @@ function getRecommendationLabel(value: TrendRadarRecommendation) {
 }
 
 function getSuggestedFormatLabel(intent: TrendRadarIntent, category: TrendRadarItem["recommendedCategory"]) {
+  if (category === "Thể thao") {
+    return intent === "comparison" ? "Nhận định / đối đầu / lịch thi đấu" : "Tin nhanh / diễn biến thể thao";
+  }
+  if (category === "Đời sống") {
+    return intent === "problem_solving" ? "How-to / mẹo đời sống" : "Explainer / tổng hợp nhanh";
+  }
+  if (category === "Giải trí" && intent === "news") {
+    return "Tin nhanh / giải thích trend";
+  }
   if (intent === "comparison") {
     return "Bài so sánh / chọn mua";
   }
@@ -449,11 +509,68 @@ function buildPriority(score: number): TrendRadarItem["priority"] {
   return "watch";
 }
 
+function getFitLevel(category: TrendRadarItem["recommendedCategory"]): TrendRadarItem["fitLevel"] {
+  switch (category) {
+    case "ICT":
+    case "Gia dụng":
+    case "Thủ thuật":
+    case "Đánh giá":
+    case "SEO AI":
+      return "core";
+    case "Giải trí":
+      return "adjacent";
+    default:
+      return "broad";
+  }
+}
+
+function getFitLabel(fitLevel: TrendRadarItem["fitLevel"]) {
+  switch (fitLevel) {
+    case "core":
+      return "Fit cao với Workdocker";
+    case "adjacent":
+      return "Fit mở rộng";
+    default:
+      return "Trend rộng, cần chọn góc";
+  }
+}
+
+function getFitReason(category: TrendRadarItem["recommendedCategory"], fitLevel: TrendRadarItem["fitLevel"]) {
+  if (fitLevel === "core") {
+    return `Nằm sát trục nội dung chính của team ở nhóm ${category}, phù hợp để ra bài và giao việc ngay.`;
+  }
+  if (fitLevel === "adjacent") {
+    return `Thuộc lớp ${category} đang nóng trên social; nên ưu tiên khi có góc bám sản phẩm, công nghệ hoặc nhu cầu tìm hiểu rõ ràng.`;
+  }
+  if (category === "Đời sống") {
+    return "Trend đời sống hút tìm kiếm nhanh, nhưng nên chọn góc how-to, giải thích hoặc ngách gần sản phẩm trước khi giao bài.";
+  }
+  if (category === "Thể thao") {
+    return "Trend thể thao tạo spike tốt, nhưng không phải trục lõi của hệ thống; chỉ nên làm khi bạn muốn mở rộng traffic theo thời điểm.";
+  }
+  return `Keyword đang nóng ở nhóm ${category}, nhưng cần cân nhắc thêm độ hợp với chiến lược nội dung hiện tại.`;
+}
+
+function describeTrendWindow(hasGoogleTrendsSignal: boolean, hasSocialSignal: boolean) {
+  if (hasGoogleTrendsSignal && hasSocialSignal) {
+    return "Google Trends + social buzz 24 giờ";
+  }
+  if (hasGoogleTrendsSignal) {
+    return "Google Trends 24 giờ";
+  }
+  if (hasSocialSignal) {
+    return "Social buzz 24 giờ";
+  }
+  return "Tech/news pulse";
+}
+
 function buildWhyNow(signal: RawTrendSignal, category: TrendRadarItem["recommendedCategory"], recommendationLabel: string, coverageCount: number) {
   const fragments = [
     signal.sourceType === "google_trends"
       ? `đang tăng trên Google Trends VN${signal.searchDemandLabel ? ` (${signal.searchDemandLabel})` : ""}`
-      : "đang được các nguồn công nghệ lớn nhắc tới",
+      : signal.sourceType === "tech_news"
+        ? "đang được các nguồn công nghệ lớn nhắc tới"
+        : "đang được các nguồn social / đời sống nhắc tới",
     `phù hợp nhóm ${category}`,
     coverageCount > 0 ? "đã có tín hiệu nội dung liên quan trong hệ thống" : "chưa có bài phủ rõ trong hệ thống",
   ];
@@ -532,6 +649,9 @@ export async function buildTrendRadarResponse(accessibleArticles: CoverageArticl
     const recommendationLabel = getRecommendationLabel(recommendation);
     const suggestedFormatLabel = getSuggestedFormatLabel(intent, category);
     const suggestedWorkflowLabel = getSuggestedWorkflowLabel(recommendation, coverage.count);
+    const fitLevel = getFitLevel(category);
+    const fitLabel = getFitLabel(fitLevel);
+    const fitReason = getFitReason(category, fitLevel);
     const supportSignals = [
       ...new Set([
         leadSignal.searchDemandLabel ? `Search demand ${leadSignal.searchDemandLabel}` : "",
@@ -554,10 +674,13 @@ export async function buildTrendRadarResponse(accessibleArticles: CoverageArticl
       recommendationLabel,
       freshnessHours: Math.round(freshestHours * 10) / 10,
       freshnessLabel: describeFreshness(freshestHours),
-      trendWindowLabel: signals.some((signal) => signal.sourceType === "google_trends") ? "Past 24 hours" : "Tech news pulse",
+      trendWindowLabel: describeTrendWindow(hasGoogleTrendsSignal, hasSocialSignal),
       searchDemandLabel: leadSignal.searchDemandLabel,
       suggestedFormatLabel,
       suggestedWorkflowLabel,
+      fitLevel,
+      fitLabel,
+      fitReason,
       whyNow: buildWhyNow(leadSignal, category, recommendationLabel, coverage.count),
       supportSignals,
       sourceMix: Array.from(new Set(signals.map((signal) => signal.sourceLabel))),

@@ -67,8 +67,18 @@ const EMPTY_ARTICLE_FILTERS: ArticleFilters = {
   year: "",
 };
 
-function getTrendRadarSuggestedArticleType(category: TrendRadarArticleDraft["recommendedCategory"]) {
+function normalizeTrendRadarArticleCategory(category: TrendRadarArticleDraft["recommendedCategory"]) {
   switch (category) {
+    case "Đời sống":
+      return "Khác";
+    case "Thể thao":
+      return "Giải trí";
+    default:
+      return category;
+  }
+}
+function getTrendRadarSuggestedArticleType(category: TrendRadarArticleDraft["recommendedCategory"]) {
+  switch (normalizeTrendRadarArticleCategory(category)) {
     case "Gia dụng":
       return "Bài SEO Gia dụng";
     case "Thủ thuật":
@@ -85,6 +95,7 @@ function buildTrendRadarPrefillNotes(draft: TrendRadarArticleDraft) {
     "Nguồn đề xuất: Trend Radar",
     `Keyword: ${draft.keyword}`,
     draft.headline ? `Tiêu đề nguồn: ${draft.headline}` : null,
+    draft.recommendedCategory ? `Nhóm trend gợi ý: ${draft.recommendedCategory}` : null,
     draft.suggestedFormatLabel ? `Dạng bài gợi ý: ${draft.suggestedFormatLabel}` : null,
     draft.suggestedWorkflowLabel ? `Luồng xử lý gợi ý: ${draft.suggestedWorkflowLabel}` : null,
     draft.sourceLabel ? `Nguồn tín hiệu chính: ${draft.sourceLabel}` : null,
@@ -487,6 +498,7 @@ export default function ArticlesPage() {
     let cancelled = false;
 
     const openNewDraftFromTrend = () => {
+      const normalizedCategory = normalizeTrendRadarArticleCategory(draft.recommendedCategory);
       const articleType = getTrendRadarSuggestedArticleType(draft.recommendedCategory);
       const contentType = draft.recommendation === "refresh_existing" ? "Viết lại" : "Viết mới";
       const nextFormData: Partial<Article> = {
@@ -496,7 +508,7 @@ export default function ArticlesPage() {
         status: DEFAULT_ARTICLE_STATUS,
         wordCountRange: "",
         title: draft.keyword,
-        category: draft.recommendedCategory,
+        category: normalizedCategory,
         articleType,
         contentType,
         link: "",
