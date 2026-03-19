@@ -24,6 +24,7 @@ const loadNotificationsPage = () => import("./NotificationsPage");
 const loadProfilePage = () => import("./ProfilePage");
 const loadRoyaltyPage = () => import("./RoyaltyPage");
 const loadTeamPage = () => import("./TeamPage");
+const loadTrendRadarPage = () => import("./TrendRadarPage");
 const UNREAD_REFRESH_TTL_MS = 20_000;
 const TASK_VISIBILITY_REFRESH_TTL_MS = 30_000;
 
@@ -55,6 +56,7 @@ const NotificationsPage = dynamic(loadNotificationsPage, { loading: () => <PageL
 const ProfilePage = dynamic(loadProfilePage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const RoyaltyPage = dynamic(loadRoyaltyPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 const TeamPage = dynamic(loadTeamPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
+const TrendRadarPage = dynamic(loadTrendRadarPage, { loading: () => <PageLoadingState label="Đang tải nội dung..." /> });
 
 const pageLoaders: Partial<Record<Page, () => Promise<unknown>>> = {
   articles: loadArticlesPage,
@@ -67,11 +69,13 @@ const pageLoaders: Partial<Record<Page, () => Promise<unknown>>> = {
   royalty: loadRoyaltyPage,
   tasks: loadEditorialTasksPage,
   team: loadTeamPage,
+  trends: loadTrendRadarPage,
 };
 
 const pageLabels: Record<Page, string> = {
   dashboard: "Tổng quan",
   articles: "Bài viết",
+  trends: "Trend Radar",
   contentWork: "Content Work",
   tasks: "Lịch biên tập",
   team: "Đội ngũ",
@@ -467,6 +471,7 @@ export default function MainApp() {
     { id: "notifications", label: "Thông báo", icon: "notifications", section: "Tổng quan", count: unreadCount },
     { id: "feedback", label: "Feedback", icon: "feedback", section: "Tổng quan" },
     { id: "articles", label: "Bài viết", icon: "description", section: "Quản lý" },
+    { id: "trends", label: "Trend Radar", icon: "trending_up", section: "Quản lý" },
     { id: "contentWork", label: "Content Work", icon: "task_alt", section: "Quản lý" },
     { id: "tasks", label: "Lịch biên tập", icon: "calendar_month", section: "Quản lý", hidden: !shouldShowTasksNav },
     { id: "team", label: "Đội ngũ", icon: "group", section: "Quản lý", adminOnly: true },
@@ -589,6 +594,7 @@ export default function MainApp() {
           {page === "dashboard" && <DashboardPage onNavigate={navigateToPage} />}
           {page === "feedback" && <FeedbackPage />}
           {page === "articles" && <ArticlesPage />}
+          {page === "trends" && <TrendRadarPage onNavigate={navigateToPage} />}
           {page === "contentWork" && <ContentWorkPage />}
           {page === "tasks" && shouldShowTasksNav && <EditorialTasksPage />}
           {page === "team" && isAdmin && <TeamPage />}

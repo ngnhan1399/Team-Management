@@ -1,4 +1,4 @@
-export type Page = "dashboard" | "articles" | "contentWork" | "tasks" | "team" | "kpi" | "royalty" | "notifications" | "feedback" | "audit" | "profile";
+export type Page = "dashboard" | "articles" | "trends" | "contentWork" | "tasks" | "team" | "kpi" | "royalty" | "notifications" | "feedback" | "audit" | "profile";
 
 export interface Collaborator {
   id: number;
@@ -511,4 +511,76 @@ export interface RoyaltyDashboardData {
   };
   topWriters: RoyaltyTopWriter[];
   contentBalance: RoyaltyContentBalance;
+}
+
+export type TrendRadarIntent =
+  | "news"
+  | "commercial"
+  | "comparison"
+  | "problem_solving"
+  | "product_lookup"
+  | "awareness";
+
+export type TrendRadarRecommendation = "write_new" | "refresh_existing" | "watch";
+
+export interface TrendRadarSourceRef {
+  label: string;
+  type: "google_trends" | "tech_news" | "social_reference";
+  url: string;
+  publishedAt?: string | null;
+}
+
+export interface TrendRadarCoverageSample {
+  articleId: number;
+  title: string;
+  date: string;
+  status: string;
+  link?: string | null;
+}
+
+export interface TrendRadarItem {
+  id: string;
+  keyword: string;
+  headline: string;
+  score: number;
+  priority: "urgent" | "high" | "watch";
+  recommendedCategory: "ICT" | "Gia dụng" | "Thủ thuật" | "Giải trí" | "Đánh giá" | "SEO AI" | "Khác";
+  intent: TrendRadarIntent;
+  recommendation: TrendRadarRecommendation;
+  recommendationLabel: string;
+  freshnessHours: number;
+  freshnessLabel: string;
+  trendWindowLabel: string;
+  searchDemandLabel?: string | null;
+  whyNow: string;
+  supportSignals: string[];
+  sourceMix: string[];
+  sourceCount: number;
+  sources: TrendRadarSourceRef[];
+  existingCoverageCount: number;
+  existingCoverageSamples: TrendRadarCoverageSample[];
+}
+
+export interface TrendRadarSummary {
+  total: number;
+  urgent: number;
+  writeNew: number;
+  refreshExisting: number;
+  watch: number;
+  averageScore: number;
+  categories: Array<{ category: TrendRadarItem["recommendedCategory"]; count: number }>;
+}
+
+export interface TrendRadarReferenceLink {
+  label: string;
+  url: string;
+  note: string;
+}
+
+export interface TrendRadarResponse {
+  items: TrendRadarItem[];
+  summary: TrendRadarSummary;
+  referenceLinks: TrendRadarReferenceLink[];
+  updatedAt: string;
+  cacheTtlMs: number;
 }
