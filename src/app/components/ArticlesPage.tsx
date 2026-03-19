@@ -85,6 +85,8 @@ function buildTrendRadarPrefillNotes(draft: TrendRadarArticleDraft) {
     "Nguồn đề xuất: Trend Radar",
     `Keyword: ${draft.keyword}`,
     draft.headline ? `Tiêu đề nguồn: ${draft.headline}` : null,
+    draft.suggestedFormatLabel ? `Dạng bài gợi ý: ${draft.suggestedFormatLabel}` : null,
+    draft.suggestedWorkflowLabel ? `Luồng xử lý gợi ý: ${draft.suggestedWorkflowLabel}` : null,
     draft.sourceLabel ? `Nguồn tín hiệu chính: ${draft.sourceLabel}` : null,
     draft.sourceUrl ? `Link tham khảo: ${draft.sourceUrl}` : null,
     draft.searchDemandLabel ? `Mức quan tâm: ${draft.searchDemandLabel}` : null,
@@ -94,6 +96,30 @@ function buildTrendRadarPrefillNotes(draft: TrendRadarArticleDraft) {
   ];
 
   return lines.filter(Boolean).join("\n");
+}
+
+function mergeTrendRadarIntoExistingNotes(existingNotes: string | null | undefined, draft: TrendRadarArticleDraft) {
+  const currentNotes = String(existingNotes || "").trim();
+  if (currentNotes.includes("Nguồn đề xuất: Trend Radar") && currentNotes.includes(draft.keyword)) {
+    return currentNotes;
+  }
+
+  const nextBlock = [
+    "",
+    "-----",
+    buildTrendRadarPrefillNotes(draft),
+  ].join("\n");
+
+  return currentNotes ? `${currentNotes}${nextBlock}` : buildTrendRadarPrefillNotes(draft);
+}
+
+function buildTrendRadarRefreshArticle(existingArticle: Article, draft: TrendRadarArticleDraft) {
+  return {
+    ...existingArticle,
+    status: existingArticle.status === "Approved" ? "Published" : existingArticle.status,
+    wordCountRange: normalizeWordCountRangeValue(existingArticle.wordCountRange),
+    notes: mergeTrendRadarIntoExistingNotes(existingArticle.notes, draft),
+  } satisfies Partial<Article>;
 }
 
 
@@ -458,47 +484,88 @@ export default function ArticlesPage() {
     if (!draft) {
       return;
     }
+    let cancelled = false;
 
-    if (canManageArticles) {
-      void ensureCollaboratorsLoaded();
-    }
+    const openNewDraftFromTrend = () => {
+      const articleType = getTrendRadarSuggestedArticleType(draft.recommendedCategory);
+      const contentType = draft.recommendation === "refresh_existing" ? "Viết lại" : "Viết mới";
+      const nextFormData: Partial<Article> = {
+        date: new Date().toISOString().split("T")[0],
+        penName: canManageArticles ? MANAGER_DEFAULT_PEN_NAME : user?.collaborator?.penName,
+        reviewerName: "",
+        status: DEFAULT_ARTICLE_STATUS,
+        wordCountRange: "",
+        title: draft.keyword,
+        category: draft.recommendedCategory,
+        articleType,
+        contentType,
+        link: "",
+        articleId: "",
+        notes: buildTrendRadarPrefillNotes(draft),
+      };
 
-    const articleType = getTrendRadarSuggestedArticleType(draft.recommendedCategory);
-    const contentType = draft.recommendation === "refresh_existing" ? "Viết lại" : "Viết mới";
-    const nextFormData: Partial<Article> = {
-      date: new Date().toISOString().split("T")[0],
-      penName: canManageArticles ? MANAGER_DEFAULT_PEN_NAME : user?.collaborator?.penName,
-      reviewerName: "",
-      status: DEFAULT_ARTICLE_STATUS,
-      wordCountRange: "",
-      title: draft.keyword,
-      category: draft.recommendedCategory,
-      articleType,
-      contentType,
-      link: "",
-      articleId: "",
-      notes: buildTrendRadarPrefillNotes(draft),
+      const nextLink = String(nextFormData.link || "").trim();
+      const requiresLinkId = isLinkIdRequiredForArticleType(nextFormData.articleType);
+      const nextArticleId = requiresLinkId
+        ? (extractArticleIdFromLink(nextLink) || String(nextFormData.articleId || "").trim())
+        : String(nextFormData.articleId || "").trim();
+
+      setFormData({
+        ...nextFormData,
+        link: nextLink,
+        articleId: nextArticleId,
+      });
+      setShowModal(true);
+      showUiToast(
+        "Đã đổ sẵn dữ liệu từ Trend Radar",
+        draft.recommendation === "refresh_existing"
+          ? "Mình chưa lấy được bài cũ phù hợp, nên đã mở sẵn nháp để bạn cập nhật nhanh."
+          : "Mình đã chuẩn bị sẵn form thêm bài với dữ liệu trend để bạn chỉnh nhanh rồi lưu.",
+        "success"
+      );
     };
 
-    const nextLink = String(nextFormData.link || "").trim();
-    const requiresLinkId = isLinkIdRequiredForArticleType(nextFormData.articleType);
-    const nextArticleId = requiresLinkId
-      ? (extractArticleIdFromLink(nextLink) || String(nextFormData.articleId || "").trim())
-      : String(nextFormData.articleId || "").trim();
+    void (async () => {
+      if (canManageArticles) {
+        await ensureCollaboratorsLoaded();
+      }
 
-    setFormData({
-      ...nextFormData,
-      link: nextLink,
-      articleId: nextArticleId,
-    });
-    setShowModal(true);
-    showUiToast(
-      "Đã đổ sẵn dữ liệu từ Trend Radar",
-      draft.recommendation === "refresh_existing"
-        ? "Mình đã mở sẵn nháp để bạn kiểm tra lại bài cũ và cập nhật tiếp."
-        : "Mình đã chuẩn bị sẵn form thêm bài với dữ liệu trend để bạn chỉnh nhanh rồi lưu.",
-      "success"
-    );
+      if (draft.recommendation === "refresh_existing" && draft.existingCoverageArticleId) {
+        try {
+          const response = await fetch(`/api/articles?mode=detail&articleId=${draft.existingCoverageArticleId}`, { cache: "no-store" });
+          const payload = await response.json().catch(() => ({}));
+          if (!cancelled && response.ok && payload.success && payload.article) {
+            const existingArticle = buildTrendRadarRefreshArticle(payload.article as Article, draft);
+            const nextLink = String(existingArticle.link || "").trim();
+            const requiresLinkId = isLinkIdRequiredForArticleType(existingArticle.articleType);
+            const nextArticleId = requiresLinkId
+              ? (extractArticleIdFromLink(nextLink) || String(existingArticle.articleId || "").trim())
+              : String(existingArticle.articleId || "").trim();
+            setFormData({
+              ...existingArticle,
+              link: nextLink,
+              articleId: nextArticleId,
+            });
+            setShowModal(true);
+            showUiToast(
+              "Đã mở bài cũ nên cập nhật",
+              `Mình đã mở "${payload.article.title}" để bạn cập nhật theo tín hiệu trend mới.`,
+              "success"
+            );
+            return;
+          }
+        } catch {
+        }
+      }
+
+      if (!cancelled) {
+        openNewDraftFromTrend();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [authLoading, canCreateArticles, canManageArticles, ensureCollaboratorsLoaded, showUiToast, user?.collaborator?.penName]);
 
   const applyLinkHealthUpdates = useCallback((items: Array<{

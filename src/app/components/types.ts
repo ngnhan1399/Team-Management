@@ -552,6 +552,8 @@ export interface TrendRadarItem {
   freshnessLabel: string;
   trendWindowLabel: string;
   searchDemandLabel?: string | null;
+  suggestedFormatLabel: string;
+  suggestedWorkflowLabel: string;
   whyNow: string;
   supportSignals: string[];
   sourceMix: string[];

@@ -61,6 +61,19 @@ function getIntentLabel(intent: TrendRadarItem["intent"]) {
   }
 }
 
+function getPrimaryActionLabel(item: TrendRadarItem, canCreateArticles: boolean) {
+  if (!canCreateArticles) {
+    return "Sang Bài viết";
+  }
+  if (item.recommendation === "refresh_existing") {
+    return "Mở bài nên cập nhật";
+  }
+  if (item.recommendation === "watch") {
+    return "Tạo nháp theo dõi";
+  }
+  return "Tạo bài từ trend";
+}
+
 function mergeWatchTerms(existing: string[], additions: string[]) {
   const next = [...existing];
   const seen = new Set(existing.map((term) => foldSearchText(term)));
@@ -248,9 +261,12 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
         recommendation: item.recommendation,
         whyNow: item.whyNow,
         searchDemandLabel: item.searchDemandLabel,
+        suggestedFormatLabel: item.suggestedFormatLabel,
+        suggestedWorkflowLabel: item.suggestedWorkflowLabel,
         supportSignals: item.supportSignals,
         sourceLabel: item.sources[0]?.label || null,
         sourceUrl: item.sources[0]?.url || null,
+        existingCoverageArticleId: item.existingCoverageSamples[0]?.articleId || null,
         existingCoverageTitle: item.existingCoverageSamples[0]?.title || null,
         createdAt: new Date().toISOString(),
       });
@@ -440,6 +456,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                     <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(37,99,235,0.08)", color: "#2563eb", fontSize: 12, fontWeight: 800 }}>{item.recommendedCategory}</span>
                       <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(15,23,42,0.06)", color: "var(--text-main)", fontSize: 12, fontWeight: 700 }}>{getIntentLabel(item.intent)}</span>
+                      <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(124,58,237,0.12)", color: "#7c3aed", fontSize: 12, fontWeight: 700 }}>{item.suggestedFormatLabel}</span>
                       <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(16,185,129,0.08)", color: "#047857", fontSize: 12, fontWeight: 700 }}>{item.freshnessLabel}</span>
                       {item.searchDemandLabel && <span style={{ display: "inline-flex", padding: "6px 10px", borderRadius: 999, background: "rgba(249,115,22,0.08)", color: "#c2410c", fontSize: 12, fontWeight: 700 }}>{item.searchDemandLabel}</span>}
                     </div>
@@ -459,7 +476,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                     </button>
                     <button className="btn-ios-pill btn-ios-primary" onClick={() => handleSendToArticles(item)}>
                       <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{canCreateArticles ? "edit_square" : "description"}</span>
-                      {canCreateArticles ? (item.recommendation === "refresh_existing" ? "Tạo nháp cập nhật" : "Tạo bài từ trend") : "Sang Bài viết"}
+                      {getPrimaryActionLabel(item, canCreateArticles)}
                     </button>
                   </div>
                 </div>
@@ -471,6 +488,16 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                     {item.supportSignals.map((signal) => (
                       <span key={signal} style={{ display: "inline-flex", alignItems: "center", padding: "5px 9px", borderRadius: 999, background: "white", color: "var(--text-muted)", fontSize: 12, fontWeight: 700, border: "1px solid rgba(148,163,184,0.14)" }}>{signal}</span>
                     ))}
+                  </div>
+                  <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                    <div style={{ padding: "12px 14px", borderRadius: 16, background: "white", border: "1px solid rgba(148,163,184,0.12)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Dạng bài nên làm</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", lineHeight: 1.5 }}>{item.suggestedFormatLabel}</div>
+                    </div>
+                    <div style={{ padding: "12px 14px", borderRadius: 16, background: "white", border: "1px solid rgba(148,163,184,0.12)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Luồng xử lý</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", lineHeight: 1.5 }}>{item.suggestedWorkflowLabel}</div>
+                    </div>
                   </div>
                 </div>
 
@@ -484,8 +511,14 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
                       <div style={{ color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6 }}>Chưa thấy bài nào phủ rõ keyword/topic này trong phạm vi hiện tại.</div>
                     ) : (
                       <div style={{ display: "grid", gap: 10 }}>
-                        {item.existingCoverageSamples.map((sample) => (
+                        {item.existingCoverageSamples.map((sample, index) => (
                           <div key={`${sample.articleId}-${sample.title}`} style={{ padding: 12, borderRadius: 14, background: "rgba(248,250,252,0.8)", border: "1px solid rgba(148,163,184,0.12)" }}>
+                            {index === 0 && item.recommendation === "refresh_existing" && (
+                              <div style={{ marginBottom: 8, display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 999, background: "rgba(124,58,237,0.12)", color: "#7c3aed", fontSize: 11, fontWeight: 800 }}>
+                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>history</span>
+                                Bài gần nhất nên sửa
+                              </div>
+                            )}
                             <div style={{ fontWeight: 700, color: "var(--text-main)", fontSize: 14, lineHeight: 1.45 }}>{sample.title}</div>
                             <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-muted)" }}>{sample.date} • {sample.status}</div>
                           </div>

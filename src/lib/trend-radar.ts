@@ -342,6 +342,35 @@ function getRecommendationLabel(value: TrendRadarRecommendation) {
   }
 }
 
+function getSuggestedFormatLabel(intent: TrendRadarIntent, category: TrendRadarItem["recommendedCategory"]) {
+  if (intent === "comparison") {
+    return "Bài so sánh / chọn mua";
+  }
+  if (intent === "commercial") {
+    return category === "Đánh giá" ? "Review / đánh giá chi tiết" : "Top list / review thương mại";
+  }
+  if (intent === "problem_solving") {
+    return "How-to / xử lý lỗi / thủ thuật";
+  }
+  if (intent === "product_lookup") {
+    return "Tin ra mắt / thông số / giải thích sản phẩm";
+  }
+  if (intent === "awareness") {
+    return "Giải thích khái niệm / evergreen";
+  }
+  return "Tin nhanh / topical explainer";
+}
+
+function getSuggestedWorkflowLabel(recommendation: TrendRadarRecommendation, coverageCount: number) {
+  if (recommendation === "refresh_existing") {
+    return coverageCount > 1 ? "Ưu tiên cập nhật bài gần nhất rồi gom cannibalization" : "Mở bài cũ gần nhất để cập nhật";
+  }
+  if (recommendation === "watch") {
+    return "Cho vào watchlist, theo dõi thêm 6-24 giờ";
+  }
+  return "Tạo bài mới và giao writer phù hợp ngay";
+}
+
 function buildPriority(score: number): TrendRadarItem["priority"] {
   if (score >= 72) return "urgent";
   if (score >= 50) return "high";
@@ -425,6 +454,8 @@ export async function buildTrendRadarResponse(accessibleArticles: CoverageArticl
     );
     const recommendation = buildRecommendation(coverage.count, coverage.topSimilarity, score);
     const recommendationLabel = getRecommendationLabel(recommendation);
+    const suggestedFormatLabel = getSuggestedFormatLabel(intent, category);
+    const suggestedWorkflowLabel = getSuggestedWorkflowLabel(recommendation, coverage.count);
     const supportSignals = [
       ...new Set([
         leadSignal.searchDemandLabel ? `Search demand ${leadSignal.searchDemandLabel}` : "",
@@ -448,6 +479,8 @@ export async function buildTrendRadarResponse(accessibleArticles: CoverageArticl
       freshnessLabel: describeFreshness(freshestHours),
       trendWindowLabel: signals.some((signal) => signal.sourceType === "google_trends") ? "Past 24 hours" : "Tech news pulse",
       searchDemandLabel: leadSignal.searchDemandLabel,
+      suggestedFormatLabel,
+      suggestedWorkflowLabel,
       whyNow: buildWhyNow(leadSignal, category, recommendationLabel, coverage.count),
       supportSignals,
       sourceMix: Array.from(new Set(signals.map((signal) => signal.sourceLabel))),

@@ -960,10 +960,52 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, ...preview });
     }
 
-    const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
-    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 2000);
     const ownerCandidates = getContextArticleOwnerCandidates(context);
     const reviewerLabels = getContextIdentityLabels(context);
+    const scopedWhereClause = canManageArticles
+      ? combineWhereClauses(teamScopeWhere, whereClause)
+      : canReviewArticles
+        ? combineWhereClauses(whereClause, buildArticleReviewScopeWhere(reviewerLabels))
+        : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
+
+    if (mode === "detail") {
+      const detailId = Number.parseInt(normalizeString(searchParams.get("articleId") || searchParams.get("id")), 10);
+      if (!Number.isInteger(detailId) || detailId <= 0) {
+        return NextResponse.json({ success: false, error: "ID bài viết không hợp lệ" }, { status: 400 });
+      }
+
+      if (canManageArticles && !isLeader(context) && !adminTeamId) {
+        return NextResponse.json({ success: false, error: "Không xác định được team của admin hiện tại" }, { status: 400 });
+      }
+
+      if (!canManageArticles && !canReviewArticles && ownerCandidates.length === 0) {
+        return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+      }
+
+      const detailRow = await db
+        .select(articleResponseSelection)
+        .from(articles)
+        .where(combineWhereClauses(scopedWhereClause, eq(articles.id, detailId)))
+        .get();
+
+      if (!detailRow) {
+        return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+      }
+
+      const article = await attachArticleResponseMetadata(
+        [{
+          ...detailRow,
+          reviewLink: normalizeArticleReviewLink(detailRow.reviewLink) || null,
+        }],
+        context.user.id,
+        canManageArticles
+      );
+
+      return NextResponse.json({ success: true, article: article[0] || null });
+    }
+
+    const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 2000);
 
     if (canManageArticles && !isLeader(context) && !adminTeamId) {
       return NextResponse.json({
@@ -980,12 +1022,6 @@ export async function GET(request: NextRequest) {
         pagination: { page, limit, total: 0, totalPages: 0 },
       });
     }
-
-    const scopedWhereClause = canManageArticles
-      ? combineWhereClauses(teamScopeWhere, whereClause)
-      : canReviewArticles
-        ? combineWhereClauses(whereClause, buildArticleReviewScopeWhere(reviewerLabels))
-        : combineWhereClauses(whereClause, buildArticleOwnershipWhere(ownerCandidates));
 
     const [{ count: totalCount }, pagedRows] = await Promise.all([
       db

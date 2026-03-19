@@ -5,9 +5,12 @@ export interface TrendRadarArticleDraft {
   recommendation: "write_new" | "refresh_existing" | "watch";
   whyNow: string;
   searchDemandLabel?: string | null;
+  suggestedFormatLabel?: string | null;
+  suggestedWorkflowLabel?: string | null;
   supportSignals: string[];
   sourceLabel?: string | null;
   sourceUrl?: string | null;
+  existingCoverageArticleId?: number | null;
   existingCoverageTitle?: string | null;
   createdAt: string;
 }
