@@ -35,16 +35,24 @@ type FeedConfig = {
   label: string;
   type: TrendRadarSourceRef["type"];
   url: string;
+  relevance: "tech" | "social";
+  maxItems?: number;
 };
 
 const TREND_RADAR_CACHE_TTL_MS = 20 * 60 * 1000;
 
 const GOOGLE_TRENDS_FEED_URL = "https://trends.google.com/trending/rss?geo=VN";
+const GOOGLE_NEWS_SOCIAL_BUZZ_FEED_URL = "https://news.google.com/rss/search?q=(viral%20OR%20trend%20OR%20%22m%E1%BA%A1ng%20x%C3%A3%20h%E1%BB%99i%22%20OR%20Threads%20OR%20Facebook%20OR%20%22g%C3%A2y%20s%E1%BB%91t%22)%20when:1d&hl=vi&gl=VN&ceid=VN:vi";
 const FEED_SOURCES: FeedConfig[] = [
-  { label: "The Verge", type: "tech_news", url: "https://www.theverge.com/rss/index.xml" },
-  { label: "TechCrunch Gadgets", type: "tech_news", url: "https://techcrunch.com/category/gadgets/feed/" },
-  { label: "Android Authority", type: "tech_news", url: "https://www.androidauthority.com/feed/" },
-  { label: "MacRumors", type: "tech_news", url: "https://www.macrumors.com/macrumors.xml" },
+  { label: "Google News Social Buzz VN", type: "social_reference", url: GOOGLE_NEWS_SOCIAL_BUZZ_FEED_URL, relevance: "social", maxItems: 24 },
+  { label: "Kenh14", type: "social_reference", url: "https://kenh14.vn/rss/home.rss", relevance: "social", maxItems: 18 },
+  { label: "Thanh Niên Giới trẻ", type: "social_reference", url: "https://thanhnien.vn/rss/gioi-tre.rss", relevance: "social", maxItems: 18 },
+  { label: "GenK", type: "tech_news", url: "https://genk.vn/rss/home.rss", relevance: "tech", maxItems: 18 },
+  { label: "Thanh Niên Công nghệ", type: "tech_news", url: "https://thanhnien.vn/rss/cong-nghe.rss", relevance: "tech", maxItems: 18 },
+  { label: "The Verge", type: "tech_news", url: "https://www.theverge.com/rss/index.xml", relevance: "tech", maxItems: 16 },
+  { label: "TechCrunch Gadgets", type: "tech_news", url: "https://techcrunch.com/category/gadgets/feed/", relevance: "tech", maxItems: 16 },
+  { label: "Android Authority", type: "tech_news", url: "https://www.androidauthority.com/feed/", relevance: "tech", maxItems: 16 },
+  { label: "MacRumors", type: "tech_news", url: "https://www.macrumors.com/macrumors.xml", relevance: "tech", maxItems: 16 },
 ];
 
 const TECHNOLOGY_TERMS = [
@@ -56,6 +64,12 @@ const TECHNOLOGY_TERMS = [
   "smartphone", "dien thoai", "laptop", "tablet", "tai nghe", "loa", "camera", "may anh", "monitor",
   "router", "modem", "smart tv", "tivi", "google tv",
   "robot hut bui", "may loc khong khi", "may giat", "tu lanh", "bep tu", "noi com", "may lanh",
+];
+
+const SOCIAL_BUZZ_TERMS = [
+  "threads", "facebook", "tiktok", "mang xa hoi", "mxh", "viral", "trend", "hot trend", "gay sot",
+  "xon xao", "day song", "cau noi", "quoted", "meme", "drama", "top top", "reels", "story",
+  "neu ca doi nay khong ruc ro thi sao", "hay khong", "thi sao", "co dang", "dang hot",
 ];
 
 const CATEGORY_HINTS: Array<{ category: TrendRadarItem["recommendedCategory"]; terms: string[] }> = [
@@ -134,7 +148,33 @@ function parseApproxTraffic(label: string | null) {
   return numeric;
 }
 
-function extractKeywordFromHeadline(title: string) {
+function extractQuotedKeyword(title: string) {
+  const matches = Array.from(title.matchAll(/[“"'‘’]([^“"'‘’]{12,120})[”"'‘’]/g));
+  for (const match of matches) {
+    const candidate = decodeHtmlEntities(String(match[1] || "")).replace(/\s+/g, " ").trim();
+    const tokenCount = tokenize(candidate).length;
+    if (tokenCount >= 4 && tokenCount <= 18) {
+      return candidate;
+    }
+  }
+  return "";
+}
+
+function extractKeywordFromHeadline(title: string, relevance: FeedConfig["relevance"] = "tech") {
+  const quoted = extractQuotedKeyword(title);
+  if (quoted) {
+    return quoted;
+  }
+
+  if (relevance === "social") {
+    const colonParts = title.split(/\s*:\s*/).map((part) => part.trim()).filter(Boolean);
+    const tailCandidate = colonParts.length > 1 ? colonParts[colonParts.length - 1] : "";
+    const tailTokenCount = tokenize(tailCandidate).length;
+    if (tailCandidate && tailTokenCount >= 4 && tailTokenCount <= 18) {
+      return tailCandidate;
+    }
+  }
+
   const cleaned = title
     .replace(/\s*[-|:]\s*.*$/, "")
     .replace(/\b(Review|Hands-on|Opinion|How to|Explained)\b.*$/i, "")
@@ -147,12 +187,44 @@ function isTechnologyRelevant(text: string) {
   return TECHNOLOGY_TERMS.some((term) => folded.includes(foldText(term)));
 }
 
+function isSocialBuzzRelevant(text: string) {
+  const folded = foldText(text);
+  if (SOCIAL_BUZZ_TERMS.some((term) => folded.includes(foldText(term)))) {
+    return true;
+  }
+
+  const quoted = extractQuotedKeyword(text);
+  if (quoted) {
+    return true;
+  }
+
+  const normalizedText = String(text || "").trim();
+  if (/[?？]/.test(normalizedText)) {
+    const tokenCount = tokenize(normalizedText).length;
+    if (tokenCount >= 5 && tokenCount <= 18) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isTrendRelevant(text: string, relevance: FeedConfig["relevance"]) {
+  if (isTechnologyRelevant(text)) {
+    return true;
+  }
+  return relevance === "social" ? isSocialBuzzRelevant(text) : false;
+}
+
 function detectCategory(text: string): TrendRadarItem["recommendedCategory"] {
   const folded = foldText(text);
   for (const entry of CATEGORY_HINTS) {
     if (entry.terms.some((term) => folded.includes(foldText(term)))) {
       return entry.category;
     }
+  }
+  if (isSocialBuzzRelevant(text) && !isTechnologyRelevant(text)) {
+    return "Giải trí";
   }
   return resolveArticleCategory("", text);
 }
@@ -267,7 +339,7 @@ async function fetchGoogleTrendSignals() {
   return signals;
 }
 
-async function fetchTechFeedSignals(config: FeedConfig) {
+async function fetchFeedSignals(config: FeedConfig) {
   const xml = await fetchText(config.url);
   const rssItems = xml.match(/<item>[\s\S]*?<\/item>/gi) || [];
   const atomItems = rssItems.length > 0 ? [] : (xml.match(/<entry>[\s\S]*?<\/entry>/gi) || []);
@@ -277,13 +349,13 @@ async function fetchTechFeedSignals(config: FeedConfig) {
   for (const block of blocks) {
     const title = extractTag(block, "title");
     const headline = title;
-    if (!title || !isTechnologyRelevant(title)) {
+    if (!title || !isTrendRelevant(title, config.relevance)) {
       continue;
     }
 
     const link = rssItems.length > 0 ? extractTag(block, "link") : extractAtomLink(block);
     signals.push({
-      keyword: extractKeywordFromHeadline(title),
+      keyword: extractKeywordFromHeadline(title, config.relevance),
       headline,
       sourceLabel: config.label,
       sourceType: config.type,
@@ -294,7 +366,7 @@ async function fetchTechFeedSignals(config: FeedConfig) {
     });
   }
 
-  return signals.slice(0, 18);
+  return signals.slice(0, config.maxItems || 18);
 }
 
 function buildCoverage(keyword: string, headline: string, articles: CoverageArticle[]) {
@@ -410,7 +482,7 @@ function buildSummary(items: TrendRadarItem[]): TrendRadarSummary {
 export async function buildTrendRadarResponse(accessibleArticles: CoverageArticle[]): Promise<TrendRadarResponse> {
   const signalJobs: Array<Promise<RawTrendSignal[]>> = [
     fetchGoogleTrendSignals(),
-    ...FEED_SOURCES.map((source) => fetchTechFeedSignals(source)),
+    ...FEED_SOURCES.map((source) => fetchFeedSignals(source)),
   ];
   const settled = await Promise.allSettled(signalJobs);
 
@@ -438,9 +510,12 @@ export async function buildTrendRadarResponse(accessibleArticles: CoverageArticl
     const coverage = buildCoverage(leadSignal.keyword, leadSignal.headline, accessibleArticles);
     const distinctSourceCount = new Set(signals.map((signal) => signal.sourceLabel)).size;
     const multiSourceBoost = Math.max(0, distinctSourceCount - 1) * 8;
-    const sourceBaseScore = signals.some((signal) => signal.sourceType === "google_trends") ? 42 : 28;
+    const hasGoogleTrendsSignal = signals.some((signal) => signal.sourceType === "google_trends");
+    const hasSocialSignal = signals.some((signal) => signal.sourceType === "social_reference");
+    const sourceBaseScore = hasGoogleTrendsSignal ? 42 : hasSocialSignal ? 34 : 28;
     const intentBoost = intent === "commercial" || intent === "comparison" || intent === "product_lookup" ? 8 : 4;
     const coverageBoost = coverage.count === 0 ? 8 : coverage.topSimilarity >= 0.58 ? 6 : 3;
+    const socialBuzzBoost = hasSocialSignal ? 8 : 0;
     const score = Math.min(
       100,
       Math.round(
@@ -450,6 +525,7 @@ export async function buildTrendRadarResponse(accessibleArticles: CoverageArticl
         + multiSourceBoost
         + intentBoost
         + coverageBoost
+        + socialBuzzBoost
       )
     );
     const recommendation = buildRecommendation(coverage.count, coverage.topSimilarity, score);
@@ -461,6 +537,7 @@ export async function buildTrendRadarResponse(accessibleArticles: CoverageArticl
         leadSignal.searchDemandLabel ? `Search demand ${leadSignal.searchDemandLabel}` : "",
         `${distinctSourceCount} nguồn tín hiệu`,
         `Intent ${intent.replace(/_/g, " ")}`,
+        hasSocialSignal ? "Có tín hiệu social buzz" : "",
         coverage.count > 0 ? `${coverage.count} bài liên quan trong hệ thống` : "Chưa có bài tương tự rõ ràng",
       ].filter(Boolean)),
     ];
@@ -504,6 +581,7 @@ export async function buildTrendRadarResponse(accessibleArticles: CoverageArticl
     referenceLinks: [
       { label: "Google Trends VN", url: "https://trends.google.com/trending?geo=VN", note: "Nguồn spike tìm kiếm công khai, cập nhật nhanh." },
       { label: "Google Trends Explore", url: "https://trends.google.com/trends/", note: "Phân tích sâu cho từng keyword hoặc cluster." },
+      { label: "Google News Social Buzz VN", url: "https://news.google.com/search?q=(viral+OR+trend+OR+%22m%E1%BA%A1ng+x%C3%A3+h%E1%BB%99i%22+OR+Threads+OR+Facebook+OR+%22g%C3%A2y+s%E1%BB%91t%22)+when:1d&hl=vi&gl=VN&ceid=VN:vi", note: "Lớp tín hiệu gần Facebook, Threads và các phrase đang nổi nhanh ở Việt Nam." },
       { label: "TikTok Creative Center", url: "https://ads.tiktok.com/business/creativecenter/keyword-insights/pc/en", note: "Tham khảo hook social và cách diễn đạt keyword." },
     ],
     updatedAt: new Date().toISOString(),

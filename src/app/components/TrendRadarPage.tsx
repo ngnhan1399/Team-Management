@@ -286,7 +286,7 @@ export default function TrendRadarPage({ onNavigate }: { onNavigate: (page: Page
             </span>
           </div>
           <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6, maxWidth: 920 }}>
-            Tổng hợp xu hướng từ Google Trends và các nguồn tin công nghệ lớn, rồi chấm điểm theo góc nhìn SEO để biết nên viết mới, cập nhật bài cũ hay chỉ nên theo dõi thêm.
+            Tổng hợp xu hướng từ Google Trends, social buzz Việt Nam và các nguồn tin công nghệ lớn, rồi chấm điểm theo góc nhìn SEO để biết nên viết mới, cập nhật bài cũ hay chỉ nên theo dõi thêm.
           </p>
           <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>
             Phạm vi gợi ý nội dung hiện tại: {user?.role === "admin" ? "team của bạn" : "dữ liệu bạn đang được phép xem"}. Cập nhật lúc {data?.updatedAt ? formatUpdatedAt(data.updatedAt) : "--"}.
