@@ -1,5 +1,20 @@
 # Optimization Memory
 
+## 2026-03-25 - Production copy memory
+
+- Da copy DB production that tu Nile sang PostgreSQL tren VPS thanh cong.
+- Da verify row counts dich:
+  - `articles = 9785`
+  - `payments = 36`
+  - `content_work_registrations = 46`
+- Da xac dinh mot bai hoc quan trong voi Coolify:
+  - khong upsert `environment_variables` bang SQL plaintext neu muon app nhan env dung
+  - phai dung model `App\\Models\\EnvironmentVariable` de value duoc encrypt dung chuan
+- Da redeploy app sau khi sync env bang model va container moi da nhan day du env production quan trong.
+- Khong nen lap lai:
+  - khong dung SQL thuan de ghi secret env vao bang `environment_variables`
+  - khong coi VPS la production live neu chua doi domain/DNS va repoint webhook
+
 ## 2026-03-25 - Vercel/Nile cutover memory
 
 - Production that da duoc xac nhan tren:

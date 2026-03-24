@@ -1,5 +1,28 @@
 # Codex Handoff
 
+## Update 2026-03-25 (production copy tu Vercel/Nile da vao VPS)
+
+- Da vao duoc Vercel CLI account va verify production that:
+  - project `team-management`
+  - domain `www.workdocker.com`
+- Da pull env production tu Vercel ve file tam de doi chieu va sync sang Coolify.
+- Da import DB production Nile vao PostgreSQL tren VPS thanh cong:
+  - `articles = 9785`
+  - `payments = 36`
+  - `content_work_registrations = 46`
+- Da xac dinh `GOOGLE_SHEETS_ARTICLE_SOURCE_URL` tu du lieu `article_sync_links` khi Vercel env khong co key nay.
+- Da sync env production quan trong vao Coolify bang chinh model `EnvironmentVariable` cua Coolify (khong chot SQL plaintext nua vi gia tri env cua Coolify duoc encrypt).
+- App tren VPS da redeploy thanh cong o commit `c8f34af039dce78d989c2196f0790652905366b5` va container moi da co day du:
+  - `APP_ORIGIN` / `APP_ORIGINS`
+  - `JWT_SECRET`
+  - `GOOGLE_SHEETS_*`
+  - `CONTENT_WORK_*`
+  - `LINK_CHECK_AUTOMATION_TOKEN`
+- Hien trang:
+  - VPS/Coolify da co ban sao production day du code + env + data
+  - domain/DNS chua duoc doi, nen Vercel van la ban public that
+  - Apps Script / webhook / link-check runner chua repoint sang domain moi
+
 ## Update 2026-03-25 (xac nhan production that tren Vercel + Nile)
 
 - Da verify production that hien tai dang nam o:

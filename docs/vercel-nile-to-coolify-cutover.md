@@ -4,6 +4,32 @@ Ngay cap nhat: `2026-03-25`
 
 Tai lieu nay chot lai cach di chuyen ban production that tu `Vercel + Nile` sang `Coolify + PostgreSQL tren VPS`.
 
+## 0. Trang thai hien tai
+
+Da hoan tat tren VPS/Coolify:
+
+- import DB production tu Nile vao PostgreSQL dich
+- row counts da khop:
+  - `articles = 9785`
+  - `payments = 36`
+  - `content_work_registrations = 46`
+- env production quan trong da duoc sync vao Coolify bang model `EnvironmentVariable` cua chinh Coolify
+- app da redeploy thanh cong o commit `c8f34af039dce78d989c2196f0790652905366b5`
+- container moi da nhan du:
+  - `GOOGLE_SHEETS_ARTICLE_SOURCE_URL`
+  - `GOOGLE_SHEETS_WEBHOOK_SECRET`
+  - `GOOGLE_SHEETS_SCRIPT_*`
+  - `CONTENT_WORK_SCRIPT_*`
+  - `LINK_CHECK_AUTOMATION_TOKEN`
+  - `JWT_SECRET`
+  - `APP_ORIGIN` / `APP_ORIGINS`
+
+Chua hoan tat:
+
+- chua doi domain/DNS traffic that sang VPS
+- chua repoint Apps Script / webhook / link-check runner sang domain moi
+- vi vay ban Vercel van la production public that o thoi diem nay
+
 ## 1. Source of truth da xac nhan
 
 - Repo dang linked voi Vercel project: `team-management`
@@ -96,6 +122,12 @@ Da duoc sua lai de dung duoc cho cutover production:
    - `notifications`
    - `audit_logs`
 
+Trang thai 2026-03-25:
+
+- pha nay da hoan tat
+- health check tren VPS da tra `ok=true`
+- `AUTH_REGISTER_ENABLED=false` van duoc giu dung
+
 ### Pha 3 - cutover cuoi
 
 1. Freeze write tren ban Vercel
@@ -144,3 +176,4 @@ Da duoc sua lai de dung duoc cho cutover production:
 - Production that dang nam o Vercel project `team-management`, khong phai project `ctv-management`
 - Cutover nay la `code + env + DB + integrations`, khong phai chi push repo
 - Truoc khi migrate DB that, uu tien dung script da sua, khong dung ban cu cua `migrate-neon-to-nile.mjs`
+- Ban VPS hien tai da la ban sao production dung du lieu that, nhung chua cat traffic domain
