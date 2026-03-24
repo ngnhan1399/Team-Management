@@ -36,6 +36,52 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
     return bcrypt.compare(password, hash);
 }
 
+function isTruthyEnvFlag(value: string | undefined): boolean | null {
+    if (!value) return null;
+
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on", "enabled"].includes(normalized)) {
+        return true;
+    }
+
+    if (["0", "false", "no", "off", "disabled"].includes(normalized)) {
+        return false;
+    }
+
+    return null;
+}
+
+export function shouldUseSecureCookies(request?: Request): boolean {
+    const envOverride = isTruthyEnvFlag(process.env.AUTH_COOKIE_SECURE);
+    if (envOverride !== null) {
+        return envOverride;
+    }
+
+    if (request) {
+        const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+        if (forwardedProto) {
+            return forwardedProto === "https";
+        }
+
+        const origin = request.headers.get("origin");
+        if (origin) {
+            try {
+                return new URL(origin).protocol === "https:";
+            } catch {
+                // Ignore malformed origin values and continue with URL fallback.
+            }
+        }
+
+        try {
+            return new URL(request.url).protocol === "https:";
+        } catch {
+            // Fall back to environment-based default below.
+        }
+    }
+
+    return process.env.NODE_ENV === "production";
+}
+
 function getJwtSecret() {
     const jwtSecretValue = process.env.JWT_SECRET?.trim();
     if (!jwtSecretValue || jwtSecretValue.length < 32) {
@@ -221,11 +267,11 @@ export function getContextDisplayName(context: CurrentUserContext): string {
         || "bạn";
 }
 
-export async function setAuthCookie(token: string) {
+export async function setAuthCookie(token: string, options?: { secure?: boolean }) {
     const cookieStore = await cookies();
     cookieStore.set(COOKIE_NAME, token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: options?.secure ?? shouldUseSecureCookies(),
         sameSite: "strict",
         maxAge: 60 * 60 * 24 * 7,
         path: "/",

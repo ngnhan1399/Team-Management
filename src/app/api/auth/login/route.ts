@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { users, collaborators } from "@/db/schema";
-import { verifyPassword, createToken, setAuthCookie } from "@/lib/auth";
+import { verifyPassword, createToken, setAuthCookie, shouldUseSecureCookies } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { checkRateLimit, clearRateLimit, recordFailedAttempt } from "@/lib/rate-limit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
         await ensureDatabaseInitialized();
         const originError = enforceTrustedOrigin(request);
         if (originError) return originError;
+        const useSecureCookies = shouldUseSecureCookies(request);
 
         const { email, password } = await request.json();
         const normalizedEmail = String(email || "").toLowerCase().trim();
@@ -123,12 +124,12 @@ export async function POST(request: NextRequest) {
             teamId: user.teamId,
         });
 
-        await setAuthCookie(token);
+        await setAuthCookie(token, { secure: useSecureCookies });
         if (isFirstLoginToday) {
             const cookieStore = await cookies();
             cookieStore.set(DAILY_KPI_POPUP_COOKIE, "1", {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
+                secure: useSecureCookies,
                 sameSite: "strict",
                 maxAge: 60 * 15,
                 path: "/",

@@ -15,6 +15,15 @@
   - khong dung SQL thuan de ghi secret env vao bang `environment_variables`
   - khong coi VPS la production live neu chua doi domain/DNS va repoint webhook
 
+## 2026-03-25 - Coolify HTTP login memory
+
+- Ban VPS/Coolify test bang `http://IP` co the dang login that thanh cong o backend nhung giao dien van dung im neu auth cookie bi set `Secure`.
+- Auth cookie can duoc quyet dinh theo request protocol thuc te (`x-forwarded-proto` / URL) thay vi mac dinh `NODE_ENV=production`.
+- Da harden frontend auth flow de neu request login/register loi mang thi phai hien error thay vi im lang.
+- Khong nen lap lai:
+  - khong ep `Secure` cho cookie auth khi ban staging van duoc truy cap qua `http://IP`
+  - khong bo qua truong hop frontend bat fetch loi ma khong surface error cho user
+
 ## 2026-03-25 - Vercel/Nile cutover memory
 
 - Production that da duoc xac nhan tren:

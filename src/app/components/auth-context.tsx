@@ -74,31 +74,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { refreshUser(); }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      await refreshUser();
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await refreshUser();
+      }
+      return data as AuthLoginResult;
+    } catch {
+      return {
+        success: false as const,
+        error: "Khong the ket noi den he thong. Vui long thu lai sau.",
+      };
     }
-    return data as AuthLoginResult;
   }, [refreshUser]);
 
   const register = useCallback(async (email: string, password: string) => {
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      await refreshUser();
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await refreshUser();
+      }
+      return data as AuthRegisterResult;
+    } catch {
+      return {
+        success: false as const,
+        error: "Khong the ket noi den he thong. Vui long thu lai sau.",
+      };
     }
-    return data as AuthRegisterResult;
   }, [refreshUser]);
 
   const logout = useCallback(async () => {

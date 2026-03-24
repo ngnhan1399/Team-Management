@@ -1,6 +1,6 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { collaborators, users } from "@/db/schema";
-import { createToken, hashPassword, setAuthCookie } from "@/lib/auth";
+import { createToken, hashPassword, setAuthCookie, shouldUseSecureCookies } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
         await ensureDatabaseInitialized();
         const originError = enforceTrustedOrigin(request);
         if (originError) return originError;
+        const useSecureCookies = shouldUseSecureCookies(request);
 
         const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
         const email = normalizeEmail(body.email);
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
             teamId: collaborator.teamId,
         });
 
-        await setAuthCookie(token);
+        await setAuthCookie(token, { secure: useSecureCookies });
 
         await writeAuditLog({
             userId,

@@ -9,6 +9,7 @@ Tai lieu nay chot lai huong van hanh cho ban deploy `ctv-management` len `Coolif
 - Chi public app qua `80/443`.
 - Dashboard Coolify va cac cong quan tri khong nen mo rong rai hon muc can thiet.
 - Production phai dung `APP_ORIGIN` / `APP_ORIGINS` cau hinh tuong minh.
+- Neu chua gan domain/HTTPS va dang test bang `http://IP`, auth cookie phai duoc set theo request protocol thuc te; khong duoc ep `Secure` chi vi `NODE_ENV=production`.
 - Sau khi DB da init on dinh, dat `DATABASE_BOOTSTRAP_MODE=skip`.
 - Khong giu `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` trong runtime env sau khi tao admin dau tien.
 - Google Sheets sync production phai cau hinh day du env, khong duoc dua vao fallback secret hoac default sheet URL.
