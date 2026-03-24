@@ -1,5 +1,26 @@
 # Codex Handoff
 
+## Update 2026-03-25 (xac nhan production that tren Vercel + Nile)
+
+- Da verify production that hien tai dang nam o:
+  - Vercel project `team-management`
+  - scope `nhans-projects-1be8e712`
+  - aliases `www.workdocker.com`, `workdocker.com`
+- Da inventory env production qua Vercel CLI:
+  - da pull env production vao file tam de doi chieu khi copy sang Coolify
+  - khong duoc copy cac bien `VERCEL_*` sang runtime Coolify
+- Da tao tai lieu cutover rieng:
+  - `docs/vercel-nile-to-coolify-cutover.md`
+- Da va script migration DB:
+  - `scripts/migrate-neon-to-nile.mjs` gio cover them `content_work_registrations`, `kpi_monthly_targets`
+  - preserve serial IDs that
+  - reset target sequences
+  - import trong transaction
+- Truoc khi cat traffic that:
+  - can domain + HTTPS
+  - can repoint Apps Script / webhook / link-check runner
+  - can import DB production Nile vao PostgreSQL VPS va doi chieu row counts
+
 ## Update 2026-03-25 (Coolify/VPS hardening before domain)
 
 - Repo da them hardening cho production:

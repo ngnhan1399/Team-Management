@@ -1,5 +1,23 @@
 # Optimization Memory
 
+## 2026-03-25 - Vercel/Nile cutover memory
+
+- Production that da duoc xac nhan tren:
+  - Vercel project `team-management`
+  - domain `www.workdocker.com`
+- Da co tai lieu runbook:
+  - `docs/vercel-nile-to-coolify-cutover.md`
+- Script migration DB da duoc nang cap de phuc vu cutover:
+  - them `content_work_registrations`
+  - them `kpi_monthly_targets`
+  - preserve serial IDs that thay vi tao id moi
+  - reset sequence sau import
+  - chay import trong transaction
+- Khong nen lap lai:
+  - khong dung ban cu cua `scripts/migrate-neon-to-nile.mjs` cho production cutover
+  - khong coi cutover la xong neu chua repoint Apps Script / webhook / link-check
+  - khong doi `APP_ORIGIN` sang IP/HTTP de cho nguoi dung that dang nhap lau dai
+
 ## 2026-03-25 - Production hardening memory
 
 - Production hardening da them cho `Coolify/VPS`:

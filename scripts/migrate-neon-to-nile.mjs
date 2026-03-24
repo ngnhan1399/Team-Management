@@ -18,9 +18,11 @@ const TABLES = [
   { name: "users", orderBy: "id", booleanColumns: ["is_leader", "must_change_password"] },
   { name: "articles", orderBy: "id" },
   { name: "article_sync_links", orderBy: "id" },
+  { name: "content_work_registrations", orderBy: "id" },
   { name: "article_comments", orderBy: "id" },
   { name: "editorial_tasks", orderBy: "id" },
   { name: "kpi_records", orderBy: "id" },
+  { name: "kpi_monthly_targets", orderBy: "id" },
   { name: "royalty_rates", orderBy: "id", booleanColumns: ["is_active"] },
   { name: "payments", orderBy: "id" },
   { name: "notifications", orderBy: "id", booleanColumns: ["is_read"] },
@@ -52,7 +54,7 @@ Supported env vars:
 
 Notes:
   - The script truncates the target tables before importing.
-  - IDs are preserved and serial sequences are resynced afterward.
+  - Serial IDs are preserved via explicit INSERTs and target sequences are resynced afterward.
   - If the source is legacy SQLite, team-scoped fields are backfilled after import.
 `;
 
@@ -332,6 +334,13 @@ function remapRow(tableName, row, idMaps) {
     return next;
   }
 
+  if (tableName === "content_work_registrations") {
+    next.article_id = remapId(articlesMap, next.article_id);
+    next.team_id = remapId(teamsMap, next.team_id);
+    next.requested_by_user_id = remapId(usersMap, next.requested_by_user_id);
+    return next;
+  }
+
   if (tableName === "article_comments") {
     next.article_id = remapId(articlesMap, next.article_id);
     next.user_id = remapId(usersMap, next.user_id);
@@ -345,6 +354,11 @@ function remapRow(tableName, row, idMaps) {
   }
 
   if (tableName === "kpi_records") {
+    next.team_id = remapId(teamsMap, next.team_id);
+    return next;
+  }
+
+  if (tableName === "kpi_monthly_targets") {
     next.team_id = remapId(teamsMap, next.team_id);
     return next;
   }
@@ -394,9 +408,7 @@ async function insertRows(pool, table, rows, idMaps) {
       const mappedRow = remapRow(table.name, row, idMaps);
       return {
         originalId: mappedRow.id,
-        insertRow: table.hasSerialId === false
-          ? mappedRow
-          : Object.fromEntries(Object.entries(mappedRow).filter(([column]) => column !== "id")),
+        insertRow: mappedRow,
       };
     });
 
@@ -410,25 +422,44 @@ async function insertRows(pool, table, rows, idMaps) {
       });
       return `(${placeholders.join(", ")})`;
     });
-    const query = table.hasSerialId === false
-      ? `INSERT INTO ${quoteIdentifier(table.name)} (${quotedColumns}) VALUES ${rowPlaceholders.join(", ")}`
-      : `INSERT INTO ${quoteIdentifier(table.name)} (${quotedColumns}) VALUES ${rowPlaceholders.join(", ")} RETURNING id`;
-    const result = await pool.query(
-      query,
-      values
-    );
+    const query = `INSERT INTO ${quoteIdentifier(table.name)} (${quotedColumns}) VALUES ${rowPlaceholders.join(", ")}`;
+    await pool.query(query, values);
 
     if (table.hasSerialId !== false) {
-      batchRows.forEach((entry, rowIndex) => {
+      batchRows.forEach((entry) => {
         if (entry.originalId === null || entry.originalId === undefined) {
           return;
         }
-        idMaps[table.name].set(Number(entry.originalId), Number(result.rows[rowIndex]?.id));
+        idMaps[table.name].set(Number(entry.originalId), Number(entry.originalId));
       });
     }
   }
 
   return rows.length;
+}
+
+async function resetSerialSequences(pool) {
+  for (const table of TABLES) {
+    if (table.hasSerialId === false) continue;
+
+    const sequenceResult = await pool.query(
+      "SELECT pg_get_serial_sequence($1, 'id') AS sequence_name",
+      [table.name]
+    );
+    const sequenceName = sequenceResult.rows[0]?.sequence_name;
+    if (!sequenceName) continue;
+
+    const statsResult = await pool.query(
+      `SELECT COALESCE(MAX(id), 0)::bigint AS max_id, COUNT(*)::int AS row_count FROM ${quoteIdentifier(table.name)}`
+    );
+    const maxId = Number(statsResult.rows[0]?.max_id || 0);
+    const hasRows = Number(statsResult.rows[0]?.row_count || 0) > 0;
+
+    await pool.query(
+      "SELECT setval($1::regclass, $2, $3)",
+      [sequenceName, hasRows ? maxId : 1, hasRows]
+    );
+  }
 }
 
 async function finalizeReferenceFixups(pool, idMaps, payload) {
@@ -525,28 +556,41 @@ async function main() {
   }
 
   const pool = createTargetPool(targetUrl);
-  const idMaps = Object.fromEntries(
-    TABLES.filter((table) => table.hasSerialId !== false).map((table) => [table.name, new Map()])
-  );
 
   try {
-    await initializeDatabase(pool);
-    await truncateTables(pool);
+    const client = await pool.connect();
+    const idMaps = Object.fromEntries(
+      TABLES.filter((table) => table.hasSerialId !== false).map((table) => [table.name, new Map()])
+    );
 
-    for (const table of TABLES) {
-      const rows = payload[table.name] || [];
-      const inserted = await insertRows(pool, table, rows, idMaps);
-      console.log(`Imported ${inserted} rows into ${table.name}`);
-    }
+    try {
+      await client.query("BEGIN");
+      await initializeDatabase(client);
+      await truncateTables(client);
 
-    await finalizeReferenceFixups(pool, idMaps, payload);
-    await postImportNormalize(pool);
-    const verification = await verifyTarget(pool);
-    console.log("Verification:");
-    for (const table of TABLES) {
-      console.log(`  ${table.name}: ${verification[table.name]}`);
+      for (const table of TABLES) {
+        const rows = payload[table.name] || [];
+        const inserted = await insertRows(client, table, rows, idMaps);
+        console.log(`Imported ${inserted} rows into ${table.name}`);
+      }
+
+      await finalizeReferenceFixups(client, idMaps, payload);
+      await postImportNormalize(client);
+      await resetSerialSequences(client);
+      const verification = await verifyTarget(client);
+      await client.query("COMMIT");
+
+      console.log("Verification:");
+      for (const table of TABLES) {
+        console.log(`  ${table.name}: ${verification[table.name]}`);
+      }
+      console.log("Migration completed.");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
     }
-    console.log("Migration completed.");
   } finally {
     await pool.end();
   }
