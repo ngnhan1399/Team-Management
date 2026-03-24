@@ -12,8 +12,6 @@ export async function GET() {
         {
           ok: false,
           service: "ctv-management",
-          code: jwtIssue.code,
-          hint: jwtIssue.message,
           checkedAt: new Date().toISOString(),
         },
         { status: 503 }
@@ -26,8 +24,6 @@ export async function GET() {
         {
           ok: false,
           service: "ctv-management",
-          code: databaseIssue.code,
-          hint: databaseIssue.message,
           checkedAt: new Date().toISOString(),
         },
         { status: 503 }
@@ -44,17 +40,14 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       service: "ctv-management",
-      databaseBootstrapMode,
       checkedAt: new Date().toISOString(),
     });
   } catch (error) {
-    const issue = diagnoseRuntimeError(error);
+    diagnoseRuntimeError(error);
     return NextResponse.json(
       {
         ok: false,
         service: "ctv-management",
-        code: issue.code,
-        hint: issue.message,
         checkedAt: new Date().toISOString(),
       },
       { status: 503 }

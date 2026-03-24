@@ -1,6 +1,12 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import { countRows, createPoolFromEnv, initializeDatabase } from "./db-bootstrap.mjs";
+import {
+  DEFAULT_TEAM_NAME,
+  countRows,
+  createPoolFromEnv,
+  initializeDatabase,
+  postImportNormalize,
+} from "./db-bootstrap.mjs";
 
 const ROYALTY_DATA = [
   ["Mô tả SP ngắn", "Viết mới", 80000],
@@ -32,14 +38,39 @@ const CTV_DATA = [
   ["CTV Demo 06", "Bút Danh 06", "writer", 25, "writer06@demo.local", "0900000006", "Demo Bank"],
   ["CTV Demo 07", "Bút Danh 07", "writer", 25, "writer07@demo.local", "0900000007", "Demo Bank"],
   ["CTV Demo 08", "Bút Danh 08", "writer", 25, "writer08@demo.local", "0900000008", "Demo Bank"],
-  ["Admin Demo", "Quản trị Demo", "editor", 100, "admin@demo.local", "", ""],
+  ["Admin Demo", "Quản trị Demo", "reviewer", 100, "admin@demo.local", "", ""],
 ];
+
+function resolveSeedMode() {
+  const rawValue = process.env.SEED_MODE?.trim().toLowerCase();
+  return rawValue === "admin-only" ? "admin-only" : "demo";
+}
+
+async function getDefaultTeamId(pool) {
+  const defaultTeam = await pool.query(
+    "SELECT id FROM teams WHERE name = $1 ORDER BY id ASC LIMIT 1",
+    [DEFAULT_TEAM_NAME]
+  );
+
+  if (defaultTeam.rowCount) {
+    return Number(defaultTeam.rows[0]?.id);
+  }
+
+  const firstTeam = await pool.query("SELECT id FROM teams ORDER BY id ASC LIMIT 1");
+  return Number(firstTeam.rows[0]?.id || 1);
+}
 
 const pool = createPoolFromEnv();
 
 async function main() {
+  const seedMode = resolveSeedMode();
+  const shouldSeedDemoData = seedMode === "demo";
+
   try {
     await initializeDatabase(pool);
+    await postImportNormalize(pool);
+
+    const defaultTeamId = await getDefaultTeamId(pool);
 
     if (await countRows(pool, "royalty_rates") === 0) {
       for (const [articleType, contentType, price] of ROYALTY_DATA) {
@@ -51,14 +82,14 @@ async function main() {
       console.log(`Seeded ${ROYALTY_DATA.length} royalty rates`);
     }
 
-    if (await countRows(pool, "collaborators") === 0) {
+    if (shouldSeedDemoData && await countRows(pool, "collaborators") === 0) {
       for (const [name, penName, role, kpiStandard, email, phone, bankName] of CTV_DATA) {
         await pool.query(
           `
-            INSERT INTO collaborators (name, pen_name, role, kpi_standard, email, phone, bank_name, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
+            INSERT INTO collaborators (team_id, name, pen_name, role, kpi_standard, email, phone, bank_name, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')
           `,
-          [name, penName, role, kpiStandard, email, phone, bankName]
+          [defaultTeamId, name, penName, role, kpiStandard, email, phone, bankName]
         );
       }
       console.log(`Seeded ${CTV_DATA.length} demo collaborators`);
@@ -69,18 +100,20 @@ async function main() {
       const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase() || "admin@demo.local";
       const adminPassword = process.env.SEED_ADMIN_PASSWORD || crypto.randomBytes(12).toString("base64url");
       const passwordHash = bcrypt.hashSync(adminPassword, 10);
-      const collaboratorResult = await pool.query(
-        "SELECT id FROM collaborators WHERE pen_name = $1 LIMIT 1",
-        ["Quản trị Demo"]
-      );
+      const collaboratorResult = shouldSeedDemoData
+        ? await pool.query(
+            "SELECT id FROM collaborators WHERE pen_name = $1 LIMIT 1",
+            ["Quản trị Demo"]
+          )
+        : { rows: [] };
       const collaboratorId = collaboratorResult.rows[0]?.id ?? null;
 
       await pool.query(
         `
-          INSERT INTO users (email, password_hash, role, collaborator_id, must_change_password)
-          VALUES ($1, $2, 'admin', $3, true)
+          INSERT INTO users (email, password_hash, role, is_leader, collaborator_id, team_id, must_change_password)
+          VALUES ($1, $2, 'admin', true, $3, $4, true)
         `,
-        [adminEmail, passwordHash, collaboratorId]
+        [adminEmail, passwordHash, collaboratorId, defaultTeamId]
       );
 
       console.log(`Seeded admin user: ${adminEmail}`);
@@ -88,7 +121,7 @@ async function main() {
       console.log("First login will require a password change.");
     }
 
-    console.log("Database seed completed.");
+    console.log(`Database seed completed in ${seedMode} mode.`);
   } finally {
     await pool.end();
   }

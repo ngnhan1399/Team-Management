@@ -1,5 +1,32 @@
 # Optimization Memory
 
+## 2026-03-25 - Production hardening memory
+
+- Production hardening da them cho `Coolify/VPS`:
+  - `same-origin` tren production chi nen dua vao `APP_ORIGIN` / `APP_ORIGINS`
+  - production phai fail-fast neu thieu `DATABASE_URL`
+  - `AUTH_REGISTER_ENABLED` mac dinh nen de `false`
+  - `GOOGLE_SHEETS_WEBHOOK_SECRET` va `GOOGLE_SHEETS_ARTICLE_SOURCE_URL` khong con fallback an danh tren production
+  - sau khi DB init xong, dat `DATABASE_BOOTSTRAP_MODE=skip`
+- Seed strategy da doi:
+  - `npm run db:seed` = dev/demo flow
+  - `npm run db:seed:admin-only` = production init flow cho DB trong
+  - khong giu `SEED_ADMIN_*` trong runtime env sau khi tao admin
+- Ops scripts da co san:
+  - `scripts/db-backup-docker.sh`
+  - `scripts/db-restore-docker.sh`
+  - `scripts/prune-runtime-data.mjs`
+  - doc van hanh: `docs/coolify-vps-production.md`
+- Tren VPS hien tai da ap:
+  - local daily backup
+  - block cong public `8080`, `6001`, `6002`
+  - clean demo collaborators va runtime noise ban dau
+  - app dang chay voi `DATABASE_BOOTSTRAP_MODE=skip`
+- Khong nen lap lai:
+  - khong mo lai `SEED_ADMIN_*` cho runtime app
+  - khong bat lai `AUTH_REGISTER_ENABLED` tru khi thuc su muon mo luong self-activation
+  - khong de production sync vao default Google Sheet URL
+
 Ngày cập nhật: `2026-03-13`
 
 Tài liệu này là bộ nhớ tối ưu hóa của dự án. Mục tiêu là để các thread sau không lặp lại cùng một vòng "tối ưu lại từ đầu" nếu các thay đổi này vẫn còn hiệu lực.

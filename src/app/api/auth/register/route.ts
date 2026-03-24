@@ -17,8 +17,20 @@ function normalizePassword(value: unknown) {
     return String(value || "");
 }
 
+function isRegistrationEnabled() {
+    const rawValue = process.env.AUTH_REGISTER_ENABLED?.trim().toLowerCase();
+    return ["1", "true", "yes", "on", "enabled"].includes(rawValue || "");
+}
+
 export async function POST(request: NextRequest) {
     try {
+        if (!isRegistrationEnabled()) {
+            return NextResponse.json(
+                { success: false, error: "Tự đăng ký hiện đang bị tắt. Vui lòng liên hệ quản trị viên." },
+                { status: 403 }
+            );
+        }
+
         await ensureDatabaseInitialized();
         const originError = enforceTrustedOrigin(request);
         if (originError) return originError;

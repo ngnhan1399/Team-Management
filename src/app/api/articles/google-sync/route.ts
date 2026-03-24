@@ -42,6 +42,19 @@ function parseArticleIds(value: unknown) {
   );
 }
 
+function resolveProductionSourceUrlOverride(value: unknown) {
+  const sourceUrl = normalizeText(value);
+  if (!sourceUrl) {
+    return undefined;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Không cho phép override sourceUrl trên production.");
+  }
+
+  return sourceUrl;
+}
+
 export async function POST(request: NextRequest) {
   try {
     await ensureDatabaseInitialized();
@@ -56,7 +69,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const month = parseOptionalNumber(body.month, "Tháng");
     const year = parseOptionalNumber(body.year, "Năm");
-    const sourceUrl = normalizeText(body.sourceUrl);
+    const sourceUrl = resolveProductionSourceUrlOverride(body.sourceUrl);
     const articleIds = parseArticleIds(body.articleIds);
     const reconcileAllSheets = body.reconcileAllSheets === true || normalizeText(body.reconcileAllSheets) === "true";
 

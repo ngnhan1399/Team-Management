@@ -10,9 +10,6 @@ import { publishRealtimeEvent } from "@/lib/realtime";
 import { handleServerError } from "@/lib/server-error";
 import { NextRequest, NextResponse } from "next/server";
 
-const DEFAULT_WEBHOOK_SECRET_SHA256 =
-  "454ca66696d097b715dcc1ddb931b887a49686905b750a1c65552d8f44063c67";
-
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -48,18 +45,29 @@ function sha256Hex(value: string) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
-function matchesSecret(secret: string | null, envSecret: string | undefined) {
+function matchesSecret(secret: string | null, envSecret: string) {
   if (!secret) return false;
 
-  const expectedHash = envSecret?.trim()
-    ? sha256Hex(envSecret.trim())
-    : DEFAULT_WEBHOOK_SECRET_SHA256;
   const receivedHash = sha256Hex(secret);
+  const expectedHash = sha256Hex(envSecret.trim());
 
   return timingSafeEqual(
     Buffer.from(receivedHash, "utf8"),
     Buffer.from(expectedHash, "utf8")
   );
+}
+
+function resolveProductionSourceUrlOverride(value: unknown) {
+  const sourceUrl = normalizeText(value);
+  if (!sourceUrl) {
+    return undefined;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Webhook không cho phép override sourceUrl trên production.");
+  }
+
+  return sourceUrl;
 }
 
 function buildWebhookResponse(result: GoogleSheetSyncExecutionResult, ignored = false, message?: string) {
@@ -86,6 +94,13 @@ export async function POST(request: NextRequest) {
     const secret = readSecretFromRequest(request, body);
     const expectedSecret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET?.trim();
 
+    if (!expectedSecret) {
+      return NextResponse.json(
+        { success: false, error: "Webhook secret chưa được cấu hình." },
+        { status: 503 }
+      );
+    }
+
     if (!matchesSecret(secret || null, expectedSecret)) {
       return NextResponse.json(
         { success: false, error: "Webhook secret không hợp lệ." },
@@ -104,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     const month = parseOptionalNumber(body.month, "Tháng");
     const year = parseOptionalNumber(body.year, "Năm");
-    const sourceUrl = normalizeText(body.sourceUrl);
+    const sourceUrl = resolveProductionSourceUrlOverride(body.sourceUrl);
 
     if ((month === null) !== (year === null)) {
       return NextResponse.json(

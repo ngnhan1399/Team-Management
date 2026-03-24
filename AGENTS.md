@@ -1,5 +1,7 @@
 # AGENTS.md
 
+- NÃªu task liÃªn quan Coolify/VPS/production hardening, Ä‘á»c thÃªm `docs/coolify-vps-production.md`.
+
 ## Mục tiêu
 
 Giữ các thread Codex gọn, dễ nối tiếp, và tránh kẹt ở bước "Tự động nén ngữ cảnh".

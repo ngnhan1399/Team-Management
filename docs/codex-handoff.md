@@ -1,5 +1,38 @@
 # Codex Handoff
 
+## Update 2026-03-25 (Coolify/VPS hardening before domain)
+
+- Repo da them hardening cho production:
+  - `request-security.ts` chi con trust `APP_ORIGIN` / `APP_ORIGINS` neu da cau hinh, khong tu them `Host` header vao allowlist nua.
+  - `db/index.ts` fail-fast neu production thieu `DATABASE_URL`.
+  - `auth/register` da bi khoa bang env `AUTH_REGISTER_ENABLED` va mac dinh production la tat.
+  - `google-sync webhook` khong con fallback secret mac dinh, va production khong cho override `sourceUrl`.
+  - `google-sheet-sync.ts` khong con fallback default sheet URL tren production neu chua set `GOOGLE_SHEETS_ARTICLE_SOURCE_URL`.
+  - public `health` response da duoc toi gian hoa.
+- Da them script/ops:
+  - `npm run db:seed:admin-only`
+  - `npm run db:prune-runtime-data`
+  - `npm run db:prune-runtime-data:apply`
+  - `scripts/db-backup-docker.sh`
+  - `scripts/db-restore-docker.sh`
+  - tai lieu `docs/coolify-vps-production.md`
+- `scripts/db-bootstrap.mjs` da duoc nang schema/init gan hon voi runtime bootstrap version `9`.
+- VPS/Coolify da duoc harden truc tiep:
+  - backup snapshot truoc hardening: `/var/backups/ctv-management/postgres/pre-hardening-2026-03-24T18-06-10Z.dump`
+  - da xoa collaborator demo va xoa het `audit_logs` / `realtime_events` test ban dau vi production chua co du lieu that
+  - admin hien tai: `admin@workdocker.local`, `is_leader=true`, `team_id=1`, `collaborator_id=null`, `must_change_password=true`
+  - da set env runtime trong Coolify: `DATABASE_BOOTSTRAP_MODE=skip`, `AUTH_REGISTER_ENABLED=false`
+  - da xoa `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` khoi runtime env
+  - da tao backup local hang ngay tren VPS:
+    - script: `/usr/local/bin/ctv-management-db-backup.sh`
+    - cron: `/etc/cron.d/ctv-management-db-backup`
+    - backup test: `/var/backups/ctv-management/postgres/scheduled-2026-03-24T18-09-12Z.dump`
+  - da chan cong khai `8080`, `6001`, `6002` bang `DOCKER-USER` iptables va luu qua `iptables-persistent`
+- Chua lam:
+  - chua gan domain/HTTPS
+  - chua cau hinh bo `GOOGLE_SHEETS_*` va `CONTENT_WORK_*` thuc te cho production
+  - chua co offsite backup (hien moi co local backup tren cung VPS)
+
 ## Update 2026-03-16 (Content Work automation nền bằng Apps Script chung)
 
 - Đã thêm luồng `Content Work` mới cho `CTV`:

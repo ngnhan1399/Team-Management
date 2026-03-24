@@ -22,6 +22,9 @@ function getConfiguredOrigins() {
 
 function getAllowedOrigins(request: Request) {
   const configuredOrigins = getConfiguredOrigins();
+  if (configuredOrigins.length > 0) {
+    return configuredOrigins;
+  }
 
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const forwardedHost = request.headers.get("x-forwarded-host");

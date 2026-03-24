@@ -412,7 +412,16 @@ export async function loadGoogleSheetImport(options: {
 }
 
 function resolveGoogleSheetSourceUrl(sourceUrlInput?: string) {
-  return sourceUrlInput?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL || DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+  const sourceUrl = sourceUrlInput?.trim() || process.env.GOOGLE_SHEETS_ARTICLE_SOURCE_URL?.trim();
+  if (sourceUrl) {
+    return sourceUrl;
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return DEFAULT_GOOGLE_SHEET_SOURCE_URL;
+  }
+
+  throw new Error("Chưa cấu hình GOOGLE_SHEETS_ARTICLE_SOURCE_URL cho production.");
 }
 
 function normalizeGoogleSheetSyncIdentityCandidates(values?: string[]) {

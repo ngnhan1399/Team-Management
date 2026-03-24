@@ -36,6 +36,10 @@ function resolveDatabaseUrl() {
     );
   }
 
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("DATABASE_URL must be configured in production.");
+  }
+
   return DEFAULT_DATABASE_URL;
 }
 

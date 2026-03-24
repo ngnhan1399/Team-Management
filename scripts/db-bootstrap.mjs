@@ -3,7 +3,7 @@ import { Pool } from "pg";
 export const DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/ctv_management";
 export const DEFAULT_TEAM_NAME = "Team mặc định";
 export const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-export const BOOTSTRAP_SCHEMA_VERSION = "6";
+export const BOOTSTRAP_SCHEMA_VERSION = "9";
 
 function buildConnectionString(baseUrl, user, password) {
   const parsed = new URL(baseUrl);
@@ -35,6 +35,10 @@ export function resolveDatabaseUrl() {
       process.env.DATABASE_NILEDB_USER?.trim(),
       process.env.DATABASE_NILEDB_PASSWORD?.trim()
     );
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("DATABASE_URL must be configured in production.");
   }
 
   return DEFAULT_DATABASE_URL;
@@ -117,6 +121,27 @@ const bootstrapStatements = [
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
+  `CREATE TABLE IF NOT EXISTS content_work_registrations (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    team_id INTEGER,
+    requested_by_user_id INTEGER NOT NULL,
+    pen_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    article_link TEXT,
+    content_work_category TEXT,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    external_sheet_name TEXT,
+    external_row_number INTEGER,
+    automation_message TEXT,
+    last_error TEXT,
+    form_submitted_at TEXT,
+    link_written_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
   `CREATE TABLE IF NOT EXISTS article_comments (
     id SERIAL PRIMARY KEY,
     article_id INTEGER NOT NULL,
@@ -151,6 +176,16 @@ const bootstrapStatements = [
     kpi_actual INTEGER NOT NULL DEFAULT 0,
     evaluation TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
+  `CREATE TABLE IF NOT EXISTS kpi_monthly_targets (
+    id SERIAL PRIMARY KEY,
+    team_id INTEGER,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    target_kpi INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
   `CREATE TABLE IF NOT EXISTS royalty_rates (
     id SERIAL PRIMARY KEY,
@@ -259,12 +294,20 @@ const bootstrapStatements = [
   "CREATE INDEX IF NOT EXISTS idx_article_sync_links_source ON article_sync_links(source_url, sheet_name)",
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_article_sync_links_row_key ON article_sync_links(source_url, sheet_name, source_row_key)",
   "CREATE INDEX IF NOT EXISTS idx_article_sync_links_article_ref ON article_sync_links(article_id_ref)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_content_work_registrations_article ON content_work_registrations(article_id)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_requested_by ON content_work_registrations(requested_by_user_id)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_status ON content_work_registrations(status)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_updated_at ON content_work_registrations(updated_at)",
+  "CREATE INDEX IF NOT EXISTS idx_content_work_registrations_team_id ON content_work_registrations(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_article_comments_article_id ON article_comments(article_id)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_assignee ON editorial_tasks(assignee_pen_name)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_due_date ON editorial_tasks(due_date)",
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_team_id ON editorial_tasks(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_kpi_month_year ON kpi_records(month, year)",
   "CREATE INDEX IF NOT EXISTS idx_kpi_team_id ON kpi_records(team_id)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_monthly_targets_scope ON kpi_monthly_targets(team_id, month, year, role)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_month_year ON kpi_monthly_targets(month, year)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_team_id ON kpi_monthly_targets(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_payments_month_year ON payments(month, year)",
   "CREATE INDEX IF NOT EXISTS idx_payments_team_id ON payments(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_notifications_to_user ON notifications(to_user_id)",
@@ -340,9 +383,33 @@ export async function initializeDatabase(pool) {
   await ensureColumnExists(pool, "collaborators", "team_id", "INTEGER");
   await ensureColumnExists(pool, "articles", "team_id", "INTEGER");
   await ensureColumnExists(pool, "articles", "created_by_user_id", "INTEGER");
+  await ensureColumnExists(pool, "articles", "link_health_status", "TEXT");
+  await ensureColumnExists(pool, "articles", "link_health_checked_at", "TEXT");
+  await ensureColumnExists(pool, "articles", "link_health_check_slot", "TEXT");
   await ensureColumnExists(pool, "articles", "review_link", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "team_id", "INTEGER");
+  await ensureColumnExists(pool, "content_work_registrations", "article_link", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "content_work_category", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "status", "TEXT NOT NULL DEFAULT 'queued'");
+  await ensureColumnExists(pool, "content_work_registrations", "attempt_count", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumnExists(pool, "content_work_registrations", "external_sheet_name", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "external_row_number", "INTEGER");
+  await ensureColumnExists(pool, "content_work_registrations", "automation_message", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "last_error", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "form_submitted_at", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "link_written_at", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "completed_at", "TEXT");
+  await ensureColumnExists(pool, "content_work_registrations", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+  await ensureColumnExists(pool, "content_work_registrations", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists(pool, "editorial_tasks", "team_id", "INTEGER");
   await ensureColumnExists(pool, "kpi_records", "team_id", "INTEGER");
+  await ensureColumnExists(pool, "kpi_monthly_targets", "team_id", "INTEGER");
+  await ensureColumnExists(pool, "kpi_monthly_targets", "month", "INTEGER NOT NULL DEFAULT 1");
+  await ensureColumnExists(pool, "kpi_monthly_targets", "year", "INTEGER NOT NULL DEFAULT 2000");
+  await ensureColumnExists(pool, "kpi_monthly_targets", "role", "TEXT NOT NULL DEFAULT 'writer'");
+  await ensureColumnExists(pool, "kpi_monthly_targets", "target_kpi", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumnExists(pool, "kpi_monthly_targets", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+  await ensureColumnExists(pool, "kpi_monthly_targets", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists(pool, "payments", "team_id", "INTEGER");
   await ensureColumnExists(pool, "payments", "approved_by_user_id", "INTEGER");
   await ensureColumnExists(pool, "payments", "approved_at", "TEXT");
@@ -391,6 +458,7 @@ export async function postImportNormalize(pool) {
   await pool.query(`UPDATE articles SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE editorial_tasks SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE kpi_records SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
+  await pool.query(`UPDATE kpi_monthly_targets SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE payments SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
   await pool.query(`UPDATE feedback_entries SET team_id = $1 WHERE team_id IS NULL`, [defaultTeamId]);
 

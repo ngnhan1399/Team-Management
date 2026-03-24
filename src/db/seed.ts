@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { db, ensureDatabaseInitialized } from "./index";
 import { royaltyRates, collaborators, teams, users } from "./schema";
 import { hashPassword } from "@/lib/auth";
+import { eq } from "drizzle-orm";
 
 const ROYALTY_DATA = [
     { articleType: "Mô tả SP ngắn", contentType: "Viết mới" as const, price: 80000 },
@@ -36,8 +37,15 @@ const CTV_DATA = [
     { name: "Admin Demo", penName: "Quản trị Demo", role: "reviewer" as const, kpiStandard: 100, email: "admin@demo.local", phone: "" },
 ];
 
+function resolveSeedMode() {
+    const rawValue = process.env.SEED_MODE?.trim().toLowerCase();
+    return rawValue === "admin-only" ? "admin-only" : "demo";
+}
+
 export async function seedDatabase() {
     await ensureDatabaseInitialized();
+    const seedMode = resolveSeedMode();
+    const shouldSeedDemoData = seedMode === "demo";
     const defaultTeam = await db.select().from(teams).orderBy(teams.id).get();
     const defaultTeamId = Number(defaultTeam?.id || 1);
 
@@ -50,7 +58,7 @@ export async function seedDatabase() {
     }
 
     const existingCTVs = await db.select().from(collaborators).all();
-    if (existingCTVs.length === 0) {
+    if (shouldSeedDemoData && existingCTVs.length === 0) {
         for (const ctv of CTV_DATA) {
             await db.insert(collaborators).values({
                 ...ctv,
@@ -65,12 +73,19 @@ export async function seedDatabase() {
         const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase() || "admin@demo.local";
         const adminPassword = process.env.SEED_ADMIN_PASSWORD || crypto.randomBytes(12).toString("base64url");
         const adminPasswordHash = await hashPassword(adminPassword);
+        const adminCollaborator = shouldSeedDemoData
+            ? await db.select({ id: collaborators.id })
+                .from(collaborators)
+                .where(eq(collaborators.penName, "Quản trị Demo"))
+                .get()
+            : undefined;
+
         await db.insert(users).values({
             email: adminEmail,
             passwordHash: adminPasswordHash,
             role: "admin",
             isLeader: true,
-            collaboratorId: 9,
+            collaboratorId: adminCollaborator?.id ?? null,
             teamId: defaultTeamId,
             mustChangePassword: true,
         }).run();
