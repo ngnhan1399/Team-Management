@@ -1,3 +1,5 @@
+// Optional proxy script for KPI Content.
+// The app can submit the Google Form directly when KPI_CONTENT_SCRIPT_* is not configured.
 const KPI_CONTENT_SECRET = "replace-with-the-same-secret-as-KPI_CONTENT_SCRIPT_SECRET";
 const KPI_CONTENT_FORM_PUBLIC_ID = "1FAIpQLScS-CMH8FwKAQQ_dcAGRzF__2l7G_dYo2Z4UxR5h--3XOF1_w";
 const KPI_CONTENT_FORM_VIEW_URL = "https://docs.google.com/forms/d/e/" + KPI_CONTENT_FORM_PUBLIC_ID + "/viewform";

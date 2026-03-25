@@ -4,7 +4,8 @@
 
 - KPI Content chi danh cho `admin/leader`, khong danh cho CTV.
 - Khi bam `Dang ky KPI` tren bai editorial, app se gom toi da `5` bai cung nhom va gui form Google theo luong tu dong.
-- Luong nay dung chung tai khoan Google automation qua Apps Script, khong luu login Google rieng cua user.
+- Backend app co the submit truc tiep Google Form, khong can luu login Google rieng cua user.
+- Apps Script chi con la phuong an proxy du phong, khong bat buoc cho flow mac dinh.
 
 ## Form da mapping
 
@@ -31,11 +32,10 @@
     - `entry.779972713`
     - `entry.1418536144`
 
-## Luu y ky thuat quan trong
+## Luong van hanh mac dinh
 
-- Form nay khong on dinh neu submit tung page rieng bang `pageHistory`.
-- Cach submit da duoc verify an toan hon la:
-  - tai `viewform` de lay `fbzx`, `partialResponse`, va cac field `_sentinel`
+- App se:
+  - tai `viewform` de lay `fbzx`, `partialResponse`, va `_sentinel`
   - gui `mot request cuoi` toi `formResponse`
   - request cuoi phai chua day du:
     - `employeeCode`
@@ -43,9 +43,16 @@
     - `detail`
     - toi da `5` link
     - `pageHistory = 0,1,2`
+
+## Luu y ky thuat quan trong
+
+- Form nay khong on dinh neu submit tung page rieng bang `pageHistory`.
+- Cach submit da duoc verify an toan hon la:
+  - mapping van theo 3 page
+  - nhung submit that chi la `1 final POST`
 - Nghia la:
   - logic chon field van theo 3 page
-  - nhung submit that chi la `1 final POST`
+  - nhung khong gui tung page rieng nua
 
 ## Env can cau hinh
 
@@ -54,7 +61,11 @@ KPI_CONTENT_SCRIPT_WEB_APP_URL=
 KPI_CONTENT_SCRIPT_SECRET=
 ```
 
-## Cach cai Apps Script
+- Hai bien nay la `optional`.
+- Neu bo trong, app se submit KPI Content truc tiep tu backend.
+- Chi can set khi ban muon di qua Apps Script proxy rieng.
+
+## Cach cai Apps Script (optional)
 
 1. Mo Google Apps Script bang tai khoan automation chung co quyen voi form KPI Content.
 2. Tao project script moi.
@@ -68,13 +79,13 @@ KPI_CONTENT_SCRIPT_SECRET=
 ## Checklist test sau khi deploy script
 
 1. Chac chan `employeeCode` da duoc dien cho admin/leader trong Team.
-2. Set du `KPI_CONTENT_SCRIPT_WEB_APP_URL` va `KPI_CONTENT_SCRIPT_SECRET`.
+2. Neu ban dung Apps Script proxy, set du `KPI_CONTENT_SCRIPT_WEB_APP_URL` va `KPI_CONTENT_SCRIPT_SECRET`.
 3. Dang ky 1 batch nho truoc, uu tien dung `NhanND18`.
 4. Kiem tra batch trong tab KPI:
    - `queued`
    - `submitting_form`
-   - `form_submitted` hoac `completed`
-5. Neu script fail voi HTTP `400`, uu tien kiem tra lai:
+   - `completed`
+5. Neu fail voi HTTP `400`, uu tien kiem tra lai:
    - entry id cua form
    - option label cua form
    - `partialResponse` / `_sentinel` co thay doi hay khong
@@ -82,5 +93,5 @@ KPI_CONTENT_SCRIPT_SECRET=
 ## Luu y van hanh
 
 - Batch toi da `5` link.
-- Script chi submit form, khong dong bo Google Sheet.
-- Neu form thay doi entry id hoac option label, cap nhat lai file Apps Script mau va redeploy.
+- KPI Content hien chi submit form, khong dong bo Google Sheet.
+- Neu form thay doi entry id hoac option label, cap nhat lai backend mapping va neu co dung proxy thi cap nhat lai file Apps Script mau va redeploy.

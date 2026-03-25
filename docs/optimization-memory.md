@@ -5,6 +5,8 @@
 - KPI Content da duoc bo sung cho admin/leader, khong danh cho CTV.
 - Dang ky KPI Content gom toi da `5` bai cung nhom.
 - Logic map field van theo `3` page cua Google Form, nhung submit that can gui bang `1 final POST` day du field bat buoc thay vi `3` request pageHistory rieng.
+- Backend app hien co the submit truc tiep Google Form neu chua cau hinh `KPI_CONTENT_SCRIPT_*`.
+- Apps Script KPI Content tro thanh phuong an proxy du phong, khong con la dependency bat buoc de chay flow co ban.
 - Da verify truc tiep voi form that:
   - submit tung page rieng de bi `data-validation-failed`
   - submit mot request cuoi voi day du `employeeCode + task + detail + 5 links + pageHistory=0,1,2` thi on dinh hon
@@ -15,6 +17,7 @@
   - khong chay KPI Content bang luong CTV Content Work
   - khong submit qua 5 link trong mot batch
   - khong quay lai flow submit `3` request pageHistory cho form nay
+  - khong coi `KPI_CONTENT_SCRIPT_*` la bat buoc neu nhu cau chi la submit Google Form
   - khong doi mapping form neu chua cap nhat lai Apps Script mau va docs
 
 ## 2026-03-25 - Production copy memory

@@ -18,6 +18,8 @@
   - page 3: `entry.1708619375`, `entry.115890814`, `entry.1057708020`, `entry.779972713`, `entry.1418536144`
 - Batch KPI Content toi da `5` link.
 - Logic chon field van theo `3` page, nhung Apps Script mau da doi sang `1 final POST` day du field bat buoc sau khi fetch `fbzx`, `partialResponse`, `_sentinel`.
+- Backend `src/lib/kpi-content-automation.ts` gio co the submit truc tiep toi Google Form neu chua set `KPI_CONTENT_SCRIPT_WEB_APP_URL` va `KPI_CONTENT_SCRIPT_SECRET`.
+- Apps Script KPI Content chi con la phuong an proxy du phong.
 - Da verify truc tiep voi form that:
   - flow submit tung page rieng bi validation fail
   - flow submit mot request cuoi on dinh hon cho form nay
