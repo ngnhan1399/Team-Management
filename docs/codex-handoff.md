@@ -2,6 +2,8 @@
 
 ## Update 2026-03-25 (KPI Content automation for admin/leader)
 
+- Từ thời điểm này, toàn bộ thông báo UI/API mới phải dùng tiếng Việt có dấu đầy đủ.
+- Không thêm chuỗi thông báo không dấu hoặc bị lỗi mã hóa.
 - Da them luong `KPI Content` cho admin/leader:
   - `ArticlesPage` co nut `Dang ky KPI`
   - `Team` co luu `employeeCode` cho admin/leader

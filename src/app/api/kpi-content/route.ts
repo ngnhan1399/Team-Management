@@ -260,10 +260,10 @@ export async function GET(request: NextRequest) {
 
     const context = await getCurrentUserContext();
     if (!context) {
-      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Bạn cần đăng nhập để tiếp tục." }, { status: 401 });
     }
     if (context.user.role !== "admin") {
-      return NextResponse.json({ success: false, error: "Quyen truy cap khong hop le" }, { status: 403 });
+      return NextResponse.json({ success: false, error: "Quyền truy cập không hợp lệ." }, { status: 403 });
     }
 
     const requestedTeamId = normalizeText(request.nextUrl.searchParams.get("teamId"));
@@ -323,10 +323,10 @@ export async function POST(request: NextRequest) {
 
     const context = await getCurrentUserContext();
     if (!context) {
-      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Bạn cần đăng nhập để tiếp tục." }, { status: 401 });
     }
     if (context.user.role !== "admin") {
-      return NextResponse.json({ success: false, error: "Chi admin/leader moi co quyen dang ky KPI Content" }, { status: 403 });
+      return NextResponse.json({ success: false, error: "Chỉ admin/leader mới có quyền đăng ký KPI Content." }, { status: 403 });
     }
 
     const body = await request.json().catch(() => ({}));
@@ -334,12 +334,12 @@ export async function POST(request: NextRequest) {
     const articleIds = normalizeArticleIds(body?.articleIds ?? body?.articleId);
 
     if (articleIds.length === 0) {
-      return NextResponse.json({ success: false, error: "Can chon toi thieu 1 bai viet" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Cần chọn ít nhất 1 bài viết." }, { status: 400 });
     }
 
     const employeeCode = normalizeEmployeeCode(context.user.employeeCode ?? context.token.employeeCode ?? null);
     if (!employeeCode) {
-      return NextResponse.json({ success: false, error: "Vui long khai bao ma nhan vien cho admin/leader truoc khi dang ky KPI Content" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Vui lòng khai báo mã nhân viên cho admin/leader trước khi đăng ký KPI Content." }, { status: 400 });
     }
 
     const articleRows = await db
@@ -361,35 +361,35 @@ export async function POST(request: NextRequest) {
       .all();
 
     if (articleRows.length !== articleIds.length) {
-      return NextResponse.json({ success: false, error: "Khong tim thay du bai viet de tao batch KPI Content" }, { status: 404 });
+      return NextResponse.json({ success: false, error: "Không tìm thấy đủ bài viết để tạo batch KPI Content." }, { status: 404 });
     }
 
     const firstTeamId = articleRows[0]?.teamId ?? null;
     if (!canAccessTeam(context, firstTeamId)) {
-      return NextResponse.json({ success: false, error: "Bai viet nam ngoai pham vi team cua ban" }, { status: 403 });
+      return NextResponse.json({ success: false, error: "Bài viết nằm ngoài phạm vi team của bạn." }, { status: 403 });
     }
 
     if (articleRows.some((row) => !canAccessTeam(context, row.teamId))) {
-      return NextResponse.json({ success: false, error: "Tat ca bai viet trong batch phai thuoc pham vi team cua ban" }, { status: 403 });
+      return NextResponse.json({ success: false, error: "Tất cả bài viết trong batch phải thuộc phạm vi team của bạn." }, { status: 403 });
     }
 
     if (articleRows.some((row) => !normalizeText(row.link))) {
-      return NextResponse.json({ success: false, error: "Chi dang ky KPI Content cho cac bai da co link" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Chỉ đăng ký KPI Content cho các bài đã có link." }, { status: 400 });
     }
 
     const editorialArticleIds = await resolveEditorialArticleIds(articleRows);
     if (editorialArticleIds.size !== articleRows.length) {
-      return NextResponse.json({ success: false, error: "KPI Content chi danh cho bai bien tap/admin trong pham vi ban quan ly" }, { status: 403 });
+      return NextResponse.json({ success: false, error: "KPI Content chỉ dành cho bài biên tập/admin trong phạm vi bạn quản lý." }, { status: 403 });
     }
 
     const taskSelections = articleRows.map((row) => resolveKpiContentTaskSelection(row));
     if (taskSelections.some((selection) => !selection)) {
-      return NextResponse.json({ success: false, error: "Co bai chua duoc anh xa sang KPI Content" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Có bài chưa được ánh xạ sang KPI Content." }, { status: 400 });
     }
 
     const firstSelection = taskSelections[0]!;
     if (taskSelections.some((selection) => selection!.taskLabel !== firstSelection.taskLabel || selection!.detailLabel !== firstSelection.detailLabel)) {
-      return NextResponse.json({ success: false, error: "Chi co the gom cac bai cung loai KPI Content vao chung mot batch" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Chỉ có thể gom các bài cùng loại KPI Content vào chung một batch." }, { status: 400 });
     }
 
     const activeStatuses: KpiContentStatus[] = ["queued", "submitting_form", "form_submitted"];
@@ -408,7 +408,7 @@ export async function POST(request: NextRequest) {
     if (!force && existingItems.some((item) => activeStatuses.includes(item.status as KpiContentStatus))) {
       return NextResponse.json({
         success: false,
-        error: "Co it nhat mot bai dang KPI Content duoc xu ly. Hay doi hoan thanh hoac dung force de ghi de.",
+        error: "Có ít nhất một bài đang được xử lý KPI Content. Hãy đợi hoàn thành hoặc dùng force để ghi đè.",
       }, { status: 409 });
     }
 
@@ -469,7 +469,7 @@ export async function POST(request: NextRequest) {
         detailLabel: firstSelection.detailLabel,
         status: "queued",
         attemptCount: 1,
-        automationMessage: "Dang xep hang dang ky KPI Content...",
+        automationMessage: "Đang xếp hàng đăng ký KPI Content...",
         createdAt,
         updatedAt: createdAt,
       })
@@ -497,7 +497,7 @@ export async function POST(request: NextRequest) {
         detailLabel: firstSelection.detailLabel,
         status: "queued" as KpiContentInsertStatus,
         attemptCount: 1,
-        automationMessage: "Dang xep hang dang ky KPI Content...",
+        automationMessage: "Đang xếp hàng đăng ký KPI Content...",
         createdAt,
         updatedAt: createdAt,
       })))

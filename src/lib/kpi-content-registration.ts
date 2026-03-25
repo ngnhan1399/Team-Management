@@ -15,7 +15,7 @@ function foldText(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/gi, "d")
+    .replace(/\u0111/gi, "d")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();

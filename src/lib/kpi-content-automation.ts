@@ -112,15 +112,15 @@ function normalizeKpiContentAutomationMessage(message: string) {
   const folded = foldText(normalized);
 
   if (/urlfetchapp\.fetch/i.test(normalized) || /script\.external_request/i.test(normalized)) {
-    return "KPI Content Apps Script chua duoc cap quyen goi dich vu ngoai. Hay mo script va authorize mot lan.";
+    return "KPI Content Apps Script chưa được cấp quyền gọi dịch vụ ngoài. Hãy mở script và cấp quyền một lần.";
   }
 
   if (/data-validation-failed/i.test(normalized) || (/form/i.test(folded) && /400/.test(normalized))) {
-    return "KPI Content dang gui sai hoac thieu truong bat buoc cua Google Form. Hay kiem tra lai entry id va option label.";
+    return "KPI Content đang gửi sai hoặc thiếu trường bắt buộc của Google Form. Hãy kiểm tra lại entry id và option label.";
   }
 
   if (/login|sign in|dang nhap/i.test(folded)) {
-    return "Google Form KPI Content dang yeu cau dang nhap hoac da doi quyen truy cap.";
+    return "Google Form KPI Content đang yêu cầu đăng nhập hoặc đã đổi quyền truy cập.";
   }
 
   return normalized;
@@ -249,7 +249,7 @@ async function fetchKpiContentFormState(signal: AbortSignal): Promise<DirectForm
   const html = await response.text();
 
   if (!response.ok || !html) {
-    throw new Error(`Khong tai duoc Google Form KPI Content (HTTP ${response.status}).`);
+    throw new Error(`Không tải được Google Form KPI Content (HTTP ${response.status}).`);
   }
 
   const fbzxMatch = html.match(/name="fbzx"\s+value="([^"]+)"/i);
@@ -257,7 +257,7 @@ async function fetchKpiContentFormState(signal: AbortSignal): Promise<DirectForm
   const sentinelMatches = html.match(/name="entry\.\d+_sentinel"/g) || [];
 
   if (!fbzxMatch?.[1]) {
-    throw new Error("Khong lay duoc token fbzx cua Google Form KPI Content.");
+    throw new Error("Không lấy được token fbzx của Google Form KPI Content.");
   }
 
   return {
@@ -346,17 +346,17 @@ async function submitKpiContentDirectly(input: {
       /da xay ra loi/i.test(body) ||
       /vui long thu lai/i.test(body)
     ) {
-      throw new Error(`Gui KPI Content form that bai (HTTP ${response.status}).`);
+      throw new Error(`Gửi KPI Content form thất bại (HTTP ${response.status}).`);
     }
 
     const now = new Date().toISOString();
     return {
       skipped: false,
       success: true,
-      message: "Da gui KPI Content form truc tiep.",
+      message: "Đã gửi KPI Content form trực tiếp.",
       response: {
         success: true,
-        message: "Da gui KPI Content form truc tiep.",
+        message: "Đã gửi KPI Content form trực tiếp.",
         formSubmitted: true,
         completed: true,
         submittedAt: now,
@@ -370,8 +370,8 @@ async function submitKpiContentDirectly(input: {
       skipped: false,
       success: false,
       message: /aborted|timeout/i.test(message)
-        ? "Gui KPI Content truc tiep toi Google Form bi timeout."
-        : (normalizeKpiContentAutomationMessage(message) || "Khong gui duoc KPI Content toi Google Form."),
+        ? "Gửi KPI Content trực tiếp tới Google Form bị timeout."
+        : (normalizeKpiContentAutomationMessage(message) || "Không gửi được KPI Content tới Google Form."),
       response: null,
     } as const;
   } finally {
@@ -440,7 +440,7 @@ async function callKpiContentScript(input: {
           skipped: false,
           success: false,
           message: normalizeKpiContentAutomationMessage(
-            normalizeText(parsed?.error) || normalizeText(parsed?.message) || `KPI Content script tra ve loi ${response.status}.`,
+            normalizeText(parsed?.error) || normalizeText(parsed?.message) || `KPI Content script trả về lỗi ${response.status}.`,
           ),
           response: parsed,
         } as const;
@@ -449,7 +449,7 @@ async function callKpiContentScript(input: {
       return {
         skipped: false,
         success: true,
-        message: normalizeText(parsed?.message) || "Da xu ly KPI Content.",
+        message: normalizeText(parsed?.message) || "Đã xử lý KPI Content.",
         response: parsed || {},
       } as const;
     } finally {
@@ -461,8 +461,8 @@ async function callKpiContentScript(input: {
       skipped: false,
       success: false,
       message: /aborted|timeout/i.test(message)
-        ? "KPI Content script phan hoi qua cham."
-        : (normalizeKpiContentAutomationMessage(message) || "Khong goi duoc KPI Content Apps Script."),
+        ? "KPI Content script phản hồi quá chậm."
+        : (normalizeKpiContentAutomationMessage(message) || "Không gọi được KPI Content Apps Script."),
       response: null,
     } as const;
   }
@@ -508,7 +508,7 @@ export async function processKpiContentRegistrationJob(input: {
   const { batch, items } = loaded;
 
   if (!batch.employeeCode) {
-    const errorMessage = "Chua co ma nhan vien KPI Content.";
+    const errorMessage = "Chưa có mã nhân viên KPI Content.";
     await syncBatchState(batch.id, batch.batchKey, "failed", errorMessage);
     await writeAuditLog({
       userId: input.requestedByUserId,
@@ -520,7 +520,7 @@ export async function processKpiContentRegistrationJob(input: {
     await publishRealtimeEvent({
       channels: ["kpi-content"],
       userIds: [input.requestedByUserId],
-      toastTitle: "Dang ky KPI Content that bai",
+      toastTitle: "Đăng ký KPI Content thất bại",
       toastMessage: errorMessage,
       toastVariant: "error",
     });
@@ -528,7 +528,7 @@ export async function processKpiContentRegistrationJob(input: {
   }
 
   if (!batch.taskLabel || !batch.detailLabel) {
-    const errorMessage = "Khong xac dinh duoc loai KPI Content cho loi dang ky nay.";
+    const errorMessage = "Không xác định được loại KPI Content cho lượt đăng ký này.";
     await syncBatchState(batch.id, batch.batchKey, "failed", errorMessage);
     await writeAuditLog({
       userId: input.requestedByUserId,
@@ -540,7 +540,7 @@ export async function processKpiContentRegistrationJob(input: {
     await publishRealtimeEvent({
       channels: ["kpi-content"],
       userIds: [input.requestedByUserId],
-      toastTitle: "Chua xac dinh duoc KPI Content",
+      toastTitle: "Chưa xác định được KPI Content",
       toastMessage: errorMessage,
       toastVariant: "error",
     });
@@ -549,14 +549,14 @@ export async function processKpiContentRegistrationJob(input: {
 
   await updateBatch(batch.id, {
     status: "submitting_form",
-    automationMessage: "Dang gui form KPI Content...",
+    automationMessage: "Đang gửi form KPI Content...",
     lastError: null,
     taskLabel: batch.taskLabel,
     detailLabel: batch.detailLabel,
   });
   await updateBatchItems(batch.batchKey, {
     status: "submitting_form",
-    automationMessage: "Dang gui form KPI Content...",
+    automationMessage: "Đang gửi form KPI Content...",
     lastError: null,
     taskLabel: batch.taskLabel,
     detailLabel: batch.detailLabel,
@@ -587,7 +587,7 @@ export async function processKpiContentRegistrationJob(input: {
     await publishRealtimeEvent({
       channels: ["kpi-content"],
       userIds: [input.requestedByUserId],
-      toastTitle: "Dang ky KPI Content that bai",
+      toastTitle: "Đăng ký KPI Content thất bại",
       toastMessage: errorMessage,
       toastVariant: "error",
     });
@@ -595,7 +595,7 @@ export async function processKpiContentRegistrationJob(input: {
       toUserId: input.requestedByUserId,
       toPenName: items[0]?.penName || input.requestedByDisplayName,
       type: "system",
-      title: "Dang ky KPI Content that bai",
+      title: "Đăng ký KPI Content thất bại",
       message: `${items[0]?.title || "KPI Content"}: ${errorMessage}`,
       relatedArticleId: items[0]?.articleId || null,
     });
@@ -627,7 +627,7 @@ export async function processKpiContentRegistrationJob(input: {
   await publishRealtimeEvent({
     channels: ["kpi-content", "team"],
     userIds: [input.requestedByUserId],
-    toastTitle: status === "completed" ? "Dang ky KPI Content thanh cong" : "Da gui form KPI Content",
+    toastTitle: status === "completed" ? "Đăng ký KPI Content thành công" : "Đã gửi form KPI Content",
     toastMessage: message,
     toastVariant: status === "completed" ? "success" : "warning",
   });
@@ -636,7 +636,7 @@ export async function processKpiContentRegistrationJob(input: {
     toUserId: input.requestedByUserId,
     toPenName: items[0]?.penName || input.requestedByDisplayName,
     type: "system",
-    title: status === "completed" ? "Dang ky KPI Content thanh cong" : "Da gui form KPI Content",
+    title: status === "completed" ? "Đăng ký KPI Content thành công" : "Đã gửi form KPI Content",
     message: `${items[0]?.title || "KPI Content"}: ${message}`,
     relatedArticleId: items[0]?.articleId || null,
   });

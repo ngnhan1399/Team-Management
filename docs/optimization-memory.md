@@ -2,6 +2,9 @@
 
 ## 2026-03-25 - KPI Content automation memory
 
+- Toàn bộ thông báo mới ở UI/API phải dùng tiếng Việt có dấu đầy đủ.
+- Không thêm chuỗi thông báo không dấu hoặc bị lỗi mã hóa kiểu `Khong`, `Dang`, `â€¢`, `KhÃ...`.
+- Khi sửa flow KPI Content hoặc auth, cần rà lại cả `toast`, `error`, `statusLabel`, `automationMessage` để tránh sót chuỗi không dấu.
 - KPI Content da duoc bo sung cho admin/leader, khong danh cho CTV.
 - Dang ky KPI Content gom toi da `5` bai cung nhom.
 - Logic map field van theo `3` page cua Google Form, nhung submit that can gui bang `1 final POST` day du field bat buoc thay vi `3` request pageHistory rieng.

@@ -11,7 +11,7 @@ function padMonth(value: number) {
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
-    return "Chua co";
+    return "Chưa có";
   }
 
   const date = new Date(value);
@@ -93,26 +93,26 @@ export default function KpiContentManagerSection({
     <section className="card" style={{ padding: isMobile ? 18 : 24, borderRadius: 28 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: "var(--text-main)" }}>KPI Content noi bo</h2>
+          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: "var(--text-main)" }}>KPI Content nội bộ</h2>
           <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>
-            Leader/admin dang ky KPI Content ngay tren bai viet. He thong se tu gom toi da 5 bai bien tap cung nhom de gui vao mot form.
+            Leader/admin đăng ký KPI Content ngay trên bài viết. Hệ thống sẽ tự gom tối đa 5 bài biên tập cùng nhóm để gửi vào một form.
           </p>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: 10, minWidth: isMobile ? "100%" : 420 }}>
           <div style={{ padding: "12px 14px", borderRadius: 16, background: "rgba(168, 85, 247, 0.08)", border: "1px solid rgba(168, 85, 247, 0.12)" }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Batch ky nay</p>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Batch kỳ này</p>
             <p style={{ margin: "8px 0 0", fontSize: 22, fontWeight: 900 }}>{compactNumber.format(summary.total)}</p>
           </div>
           <div style={{ padding: "12px 14px", borderRadius: 16, background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.12)" }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Dang xu ly</p>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Đang xử lý</p>
             <p style={{ margin: "8px 0 0", fontSize: 22, fontWeight: 900 }}>{compactNumber.format(summary.queued)}</p>
           </div>
           <div style={{ padding: "12px 14px", borderRadius: 16, background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.12)" }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Hoan thanh</p>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Hoàn thành</p>
             <p style={{ margin: "8px 0 0", fontSize: 22, fontWeight: 900 }}>{compactNumber.format(summary.completed)}</p>
           </div>
           <div style={{ padding: "12px 14px", borderRadius: 16, background: "rgba(37, 99, 235, 0.08)", border: "1px solid rgba(37, 99, 235, 0.12)" }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Tong bai</p>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>Tổng bài</p>
             <p style={{ margin: "8px 0 0", fontSize: 22, fontWeight: 900 }}>{compactNumber.format(summary.articles)}</p>
           </div>
         </div>
@@ -125,10 +125,10 @@ export default function KpiContentManagerSection({
       ) : null}
 
       {loading && filteredBatches.length === 0 ? (
-        <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>Dang tai danh sach KPI Content...</div>
+        <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>Đang tải danh sách KPI Content...</div>
       ) : filteredBatches.length === 0 ? (
         <div style={{ padding: 24, borderRadius: 22, border: "1px dashed rgba(148, 163, 184, 0.28)", color: "var(--text-muted)", textAlign: "center" }}>
-          Chua co batch KPI Content nao cho ky {month}/{year}.
+          Chưa có batch KPI Content nào cho kỳ {month}/{year}.
         </div>
       ) : (
         <div style={{ display: "grid", gap: 14 }}>
@@ -149,7 +149,7 @@ export default function KpiContentManagerSection({
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: isMobile ? "flex-start" : "flex-end" }}>
                     <span style={{ padding: "8px 10px", borderRadius: 999, background: "rgba(15, 23, 42, 0.04)", fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>
-                      {batch.registrations.length}/{batch.batchSize} bai
+                      {batch.registrations.length}/{batch.batchSize} bài
                     </span>
                     {batch.formUrl ? (
                       <a
@@ -159,7 +159,7 @@ export default function KpiContentManagerSection({
                         className="btn-ios-pill btn-ios-secondary"
                         style={{ padding: "8px 12px", textDecoration: "none" }}
                       >
-                        Mo form
+                        Mở form
                       </a>
                     ) : null}
                   </div>
@@ -167,15 +167,15 @@ export default function KpiContentManagerSection({
 
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
                   <div style={{ padding: "12px 14px", borderRadius: 16, background: "rgba(15, 23, 42, 0.03)" }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Tao luc</p>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Tạo lúc</p>
                     <p style={{ margin: "8px 0 0", fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{formatDateTime(batch.createdAt)}</p>
                   </div>
                   <div style={{ padding: "12px 14px", borderRadius: 16, background: "rgba(15, 23, 42, 0.03)" }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Da gui form</p>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Đã gửi form</p>
                     <p style={{ margin: "8px 0 0", fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{formatDateTime(batch.submittedAt)}</p>
                   </div>
                   <div style={{ padding: "12px 14px", borderRadius: 16, background: "rgba(15, 23, 42, 0.03)" }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Hoan tat</p>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Hoàn tất</p>
                     <p style={{ margin: "8px 0 0", fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>{formatDateTime(batch.completedAt)}</p>
                   </div>
                 </div>
@@ -219,7 +219,7 @@ export default function KpiContentManagerSection({
                           className="btn-ios-pill btn-ios-secondary"
                           style={{ padding: "8px 12px", textDecoration: "none", whiteSpace: "nowrap" }}
                         >
-                          Mo bai
+                          Mở bài
                         </a>
                       ) : null}
                     </div>

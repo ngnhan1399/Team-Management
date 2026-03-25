@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return {
         success: false as const,
-        error: "Khong the ket noi den he thong. Vui long thu lai sau.",
+        error: "Không thể kết nối đến hệ thống. Vui lòng thử lại sau.",
       };
     }
   }, [refreshUser]);
@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return {
         success: false as const,
-        error: "Khong the ket noi den he thong. Vui long thu lai sau.",
+        error: "Không thể kết nối đến hệ thống. Vui lòng thử lại sau.",
       };
     }
   }, [refreshUser]);

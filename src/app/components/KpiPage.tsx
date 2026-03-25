@@ -261,12 +261,12 @@ export default function KpiPage() {
       const response = await fetch(`/api/kpi-content${params.toString() ? `?${params}` : ""}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.success === false) {
-        throw new Error(payload?.error || "Khong the tai KPI Content");
+        throw new Error(payload?.error || "Không thể tải KPI Content.");
       }
       setKpiContentData(payload?.data || { batches: [], total: 0 });
     } catch (fetchError) {
       setKpiContentData({ batches: [], total: 0 });
-      setKpiContentError(fetchError instanceof Error ? fetchError.message : "Khong the tai KPI Content");
+      setKpiContentError(fetchError instanceof Error ? fetchError.message : "Không thể tải KPI Content.");
     } finally {
       setKpiContentLoading(false);
     }
