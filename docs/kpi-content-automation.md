@@ -107,3 +107,14 @@ KPI_CONTENT_SCRIPT_SECRET=
 - Batch toi da `5` link.
 - KPI Content hien chi submit form, khong dong bo Google Sheet.
 - Neu form thay doi entry id hoac option label, cap nhat lai backend mapping va neu co dung proxy thi cap nhat lai file Apps Script mau va redeploy.
+
+## Don du lieu response cu bi submit sai
+
+- Ban fix payload moi chi chan loi cho cac luot submit ve sau.
+- Neu dashboard Looker Studio van con hien cac dong sai cu, dung them:
+  - `output/kpi-content-response-cleanup.workdocker.gs`
+  - `docs/kpi-content-response-cleanup.md`
+- Cleanup script duoc thiet ke de:
+  - preview truoc cac dong response nghi ngo
+  - backup sang sheet rieng
+  - roi moi xoa dong goc

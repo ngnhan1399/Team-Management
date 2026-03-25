@@ -1,5 +1,24 @@
 # Optimization Memory
 
+## 2026-03-25 - KPI Content response cleanup memory
+
+- Commit `bfd7b5d` da fix payload submit KPI Content cho cac luot gui moi.
+- Cac dong response bi loi truoc do trong Google Form/Looker Studio khong tu mat di sau khi deploy code fix.
+- Da bo sung cleanup tool rieng:
+  - `output/kpi-content-response-cleanup.workdocker.gs`
+  - `docs/kpi-content-response-cleanup.md`
+- Cleanup tool nay mac dinh target incident:
+  - `targetDatePrefixes = 2026-03-25`
+  - `employeeCodes = [NhanND18]`
+  - chi match dong co `task/detail` sai hoac loi ma hoa va dong thoi tat ca cot link deu trong
+- Quy trinh an toan phai la:
+  - preview
+  - backup sang sheet rieng
+  - roi moi delete
+- Khong nen lap lai:
+  - khong xoa tay tung dong response khi chua co backup
+  - khong ket luan dashboard van loi logic moi neu chi con sot lai response cu bi submit sai
+
 ## 2026-03-25 - KPI Content automation memory
 
 - Toàn bộ thông báo mới ở UI/API phải dùng tiếng Việt có dấu đầy đủ.

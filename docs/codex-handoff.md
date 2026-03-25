@@ -1,5 +1,22 @@
 # Codex Handoff
 
+## Update 2026-03-25 (KPI Content response cleanup for old bad rows)
+
+- Commit `bfd7b5d` da sua payload submit KPI Content cho cac request moi.
+- Neu Looker Studio van hien du lieu sai sau deploy, uu tien nho rang day la response cu da ghi sai truoc do, khong phai app van submit sai tiep.
+- Da bo sung cleanup tool rieng cho Google response sheet:
+  - `output/kpi-content-response-cleanup.workdocker.gs`
+  - `docs/kpi-content-response-cleanup.md`
+- Cleanup tool mac dinh chi quet incident hien tai:
+  - ngay `2026-03-25`
+  - `employeeCode = NhanND18`
+  - task/detail sai hoac loi ma hoa
+  - va tat ca cot link deu trong
+- Luon chay theo thu tu:
+  - `previewSuspiciousKpiContentRows()`
+  - `backupAndDeleteSuspiciousKpiContentRows()`
+- Cleanup script se tao sheet backup trong cung spreadsheet truoc khi xoa dong goc.
+
 ## Update 2026-03-25 (KPI Content automation for admin/leader)
 
 - Từ thời điểm này, toàn bộ thông báo UI/API mới phải dùng tiếng Việt có dấu đầy đủ.
