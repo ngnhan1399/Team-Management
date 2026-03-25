@@ -1,5 +1,14 @@
 # Codex Handoff
 
+## Update 2026-03-25 (KPI Content retest gate)
+
+- Khong coi fix KPI Content la hoan tat neu moi chi sua repo.
+- Can chot du 3 lop:
+  1. payload final POST khop browser payload that, trong do `submissionTimestamp = -1`
+  2. production da redeploy sang commit moi
+  3. KPI Content tables cu sai da duoc backup va xoa de UI gom batch lai sach
+- Da xac nhan live runtime tren VPS hien khong con `KPI_CONTENT_SCRIPT_*`, nen neu van sai thi uu tien nghi den payload direct-form hoac du lieu batch cu trong DB, khong do lai cho Apps Script proxy.
+
 ## Update 2026-03-25 (Coolify redeploy verification rule)
 
 - Root cause cua viec "push code roi nhung production chua doi" la app tren Coolify dang o trang thai:

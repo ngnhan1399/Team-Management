@@ -1,5 +1,19 @@
 # Optimization Memory
 
+## 2026-03-25 - KPI Content retest memory
+
+- Live runtime da duoc xac nhan khong con `KPI_CONTENT_SCRIPT_*`, nen production dang di nhanh submit truc tiep toi Google Form.
+- Browser payload that cua form KPI Content can:
+  - `pageHistory` dung nhanh that cua form
+  - `employeeCode`, `task`, `detail` nam trong `partialResponse`
+  - `submissionTimestamp = -1`
+- Da gap mot nguyen nhan van hanh bo sung:
+  - cac batch `completed` cu bi submit sai trong DB lam UI chi gom duoc it bai hop le hon cho lan gui tiep theo, co the con 1 bai
+- Truoc khi retest that sau dot fix payload, can:
+  1. backup KPI Content tables
+  2. xoa sach `kpi_content_registration_batches` va `kpi_content_registrations` cu sai
+  3. roi moi test lai tren production
+
 ## 2026-03-25 - Coolify redeploy memory
 
 - Coolify tren VPS nay khong co trai nghiem `push la deploy ngay` giong Vercel neu chi dung `Public GitHub` ma khong co webhook trigger hop le.

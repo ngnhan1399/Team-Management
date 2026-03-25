@@ -60,11 +60,22 @@
 - Cach submit da duoc verify an toan hon la:
   - mapping van theo 3 page
   - nhung submit that chi la `1 final POST`
+- Final POST phai khop browser payload that:
+  - `submissionTimestamp = -1`
+  - `employeeCode`, `task`, `detail` chi nam trong `partialResponse`
+  - `pageHistory` phai dung nhanh that cua form
+  - 5 o link phai duoc gui theo dung thu tu `link1 -> link5`
 - Nghia la:
   - logic chon field van theo 3 page
   - nhung khong gui tung page rieng nua
   - khong duoc gui thang `employeeCode`, `task`, `detail` o request cuoi
   - gia tri trang truoc phai nam trong `partialResponse` dung format cua Google Form
+
+## Luu y van hanh batch
+
+- App se co gang gom toi da `5` bai cung nhom KPI Content de gui trong mot luot.
+- Neu trong DB van con cac batch `completed` cu bi submit sai, UI co the chi con gom duoc 1 bai hop le cho lan gui tiep theo.
+- Truoc khi retest sau mot dot fix payload lon, nen backup roi xoa toan bo `kpi_content_registration_batches` va `kpi_content_registrations` cu sai de app gom batch lai tu dau.
 
 ## Env can cau hinh
 

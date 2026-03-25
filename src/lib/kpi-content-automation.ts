@@ -310,7 +310,9 @@ function buildKpiContentFormPayload(input: {
     null,
     input.formState.fbzx,
   ]));
-  payload.set("submissionTimestamp", String(Date.now()));
+  // Google Form nay submit o trang cuoi voi submissionTimestamp = -1.
+  // Dung browser payload that de tranh form an nham chi mot phan du lieu.
+  payload.set("submissionTimestamp", "-1");
 
   const linkKeys = [
     KPI_CONTENT_FORM_ENTRY_IDS.link1,

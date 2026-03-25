@@ -242,7 +242,7 @@ function buildFinalPayload_(formState, input) {
       null,
       formState.fbzx,
     ]),
-    submissionTimestamp: String(new Date().getTime()),
+    submissionTimestamp: "-1",
   };
 
   const linkKeys = [
