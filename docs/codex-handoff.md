@@ -19,7 +19,11 @@
   - page 2: `entry.1511448067`, `entry.1417839557`
   - page 3: `entry.1708619375`, `entry.115890814`, `entry.1057708020`, `entry.779972713`, `entry.1418536144`
 - Batch KPI Content toi da `5` link.
-- Logic chon field van theo `3` page, nhung Apps Script mau da doi sang `1 final POST` day du field bat buoc sau khi fetch `fbzx`, `partialResponse`, `_sentinel`.
+- Logic chon field van theo `3` page, nhung final POST phai giong browser that:
+  - nhanh `Viết bài tin tức` -> `pageHistory = 0,4,6`
+  - nhanh `Mô tả sản phẩm` -> `pageHistory = 0,3,6`
+  - `employeeCode`, `task`, `detail` phai nam trong `partialResponse`
+  - final POST chi gui `partialResponse + pageHistory + fbzx + submissionTimestamp + 5 link`
 - Backend `src/lib/kpi-content-automation.ts` gio co the submit truc tiep toi Google Form neu chua set `KPI_CONTENT_SCRIPT_WEB_APP_URL` va `KPI_CONTENT_SCRIPT_SECRET`.
 - Apps Script KPI Content chi con la phuong an proxy du phong.
 - Da verify truc tiep voi form that:

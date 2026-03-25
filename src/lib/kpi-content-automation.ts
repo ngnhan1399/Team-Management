@@ -26,6 +26,11 @@ const KPI_CONTENT_FORM_ENTRY_IDS = {
   link5: "entry.1418536144",
 } as const;
 
+const KPI_CONTENT_FORM_PAGE_HISTORY = {
+  news: "0,4,6",
+  description: "0,3,6",
+} as const;
+
 const KPI_CONTENT_TASK_OPTIONS = {
   news: "Vi\u1ebft b\u00e0i tin t\u1ee9c",
   description: "M\u00f4 t\u1ea3 s\u1ea3n ph\u1ea9m",
@@ -69,8 +74,6 @@ type LoadedKpiContentBatch = NonNullable<Awaited<ReturnType<typeof loadBatch>>>;
 
 type DirectFormState = {
   fbzx: string;
-  partialResponse: string;
-  sentinelNames: string[];
 };
 
 function normalizeText(value: unknown) {
@@ -92,15 +95,6 @@ function parseJsonSafely(value: string) {
   } catch {
     return null;
   }
-}
-
-function decodeHtmlEntities(value: string) {
-  return normalizeText(value)
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
 }
 
 function normalizeKpiContentAutomationMessage(message: string) {
@@ -149,6 +143,31 @@ function resolveDetailOption(taskLabel: string, detailLabel: string) {
   }
 
   return KPI_CONTENT_NEWS_DETAILS.seoAi;
+}
+
+function getEntryIdNumber(entryName: string) {
+  return Number(entryName.replace("entry.", ""));
+}
+
+function resolveKpiContentFormBranch(taskLabel: string, detailLabel: string) {
+  const taskOption = resolveTaskOption(taskLabel);
+  const detailOption = resolveDetailOption(taskLabel, detailLabel);
+
+  if (taskOption === KPI_CONTENT_TASK_OPTIONS.description) {
+    return {
+      taskOption,
+      detailOption,
+      detailEntryName: KPI_CONTENT_FORM_ENTRY_IDS.descriptionDetail,
+      pageHistory: KPI_CONTENT_FORM_PAGE_HISTORY.description,
+    } as const;
+  }
+
+  return {
+    taskOption,
+    detailOption,
+    detailEntryName: KPI_CONTENT_FORM_ENTRY_IDS.newsDetail,
+    pageHistory: KPI_CONTENT_FORM_PAGE_HISTORY.news,
+  } as const;
 }
 
 async function updateBatch(batchId: number, values: Partial<typeof kpiContentRegistrationBatches.$inferInsert>) {
@@ -253,8 +272,6 @@ async function fetchKpiContentFormState(signal: AbortSignal): Promise<DirectForm
   }
 
   const fbzxMatch = html.match(/name="fbzx"\s+value="([^"]+)"/i);
-  const partialResponseMatch = html.match(/name="partialResponse"\s+value="([^"]*)"/i);
-  const sentinelMatches = html.match(/name="entry\.\d+_sentinel"/g) || [];
 
   if (!fbzxMatch?.[1]) {
     throw new Error("Không lấy được token fbzx của Google Form KPI Content.");
@@ -262,8 +279,6 @@ async function fetchKpiContentFormState(signal: AbortSignal): Promise<DirectForm
 
   return {
     fbzx: fbzxMatch[1],
-    partialResponse: partialResponseMatch?.[1] ? decodeHtmlEntities(partialResponseMatch[1]) : "",
-    sentinelNames: sentinelMatches.map((value) => value.replace(/^name="|"$|\s+/g, "")),
   };
 }
 
@@ -272,27 +287,22 @@ function buildKpiContentFormPayload(input: {
   batch: LoadedKpiContentBatch["batch"];
   items: LoadedKpiContentBatch["items"];
 }) {
-  const taskOption = resolveTaskOption(input.batch.taskLabel);
-  const detailOption = resolveDetailOption(input.batch.taskLabel, input.batch.detailLabel);
+  const branch = resolveKpiContentFormBranch(input.batch.taskLabel, input.batch.detailLabel);
   const payload = new URLSearchParams();
 
   payload.set("fvv", "1");
-  payload.set("pageHistory", "0,1,2");
+  payload.set("pageHistory", branch.pageHistory);
   payload.set("fbzx", input.formState.fbzx);
-  if (input.formState.partialResponse) {
-    payload.set("partialResponse", input.formState.partialResponse);
-  }
-
-  payload.set(KPI_CONTENT_FORM_ENTRY_IDS.employeeCode, normalizeText(input.batch.employeeCode));
-  payload.set(KPI_CONTENT_FORM_ENTRY_IDS.task, taskOption);
-
-  if (taskOption === KPI_CONTENT_TASK_OPTIONS.description) {
-    payload.set(KPI_CONTENT_FORM_ENTRY_IDS.descriptionDetail, detailOption);
-    payload.set(KPI_CONTENT_FORM_ENTRY_IDS.newsDetail, "");
-  } else {
-    payload.set(KPI_CONTENT_FORM_ENTRY_IDS.newsDetail, detailOption);
-    payload.set(KPI_CONTENT_FORM_ENTRY_IDS.descriptionDetail, "");
-  }
+  payload.set("partialResponse", JSON.stringify([
+    [
+      [null, getEntryIdNumber(KPI_CONTENT_FORM_ENTRY_IDS.employeeCode), [normalizeText(input.batch.employeeCode)], 0],
+      [null, getEntryIdNumber(KPI_CONTENT_FORM_ENTRY_IDS.task), [branch.taskOption], 0],
+      [null, getEntryIdNumber(branch.detailEntryName), [branch.detailOption], 0],
+    ],
+    null,
+    input.formState.fbzx,
+  ]));
+  payload.set("submissionTimestamp", String(Date.now()));
 
   const linkKeys = [
     KPI_CONTENT_FORM_ENTRY_IDS.link1,
@@ -304,10 +314,6 @@ function buildKpiContentFormPayload(input: {
 
   linkKeys.forEach((key, index) => {
     payload.set(key, normalizeText(input.items[index]?.articleLink));
-  });
-
-  input.formState.sentinelNames.forEach((name) => {
-    payload.set(name, "");
   });
 
   return payload;
@@ -332,7 +338,9 @@ async function submitKpiContentDirectly(input: {
       method: "POST",
       cache: "no-store",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "Content-Type": "application/x-www-form-urlencoded",
+        Origin: "https://docs.google.com",
+        Referer: KPI_CONTENT_FORM_RESPONSE_URL,
       },
       body: payload.toString(),
       redirect: "follow",

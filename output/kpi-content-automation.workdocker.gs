@@ -18,6 +18,11 @@ const KPI_CONTENT_FORM_ENTRY_IDS = {
   link5: "entry.1418536144",
 };
 
+const KPI_CONTENT_FORM_PAGE_HISTORY = {
+  news: "0,4,6",
+  description: "0,3,6",
+};
+
 const KPI_CONTENT_TASKS = {
   news: "Vi\u1ebft b\u00e0i tin t\u1ee9c",
   description: "M\u00f4 t\u1ea3 s\u1ea3n ph\u1ea9m",
@@ -76,15 +81,6 @@ function foldText_(value) {
     .replace(/\s+/g, " ");
 }
 
-function decodeHtmlEntities_(value) {
-  return normalizeText_(value)
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-}
-
 function isDescriptionTask_(taskLabel) {
   const folded = foldText_(taskLabel);
   return folded === foldText_(KPI_CONTENT_TASKS.description) || folded.includes("mo ta");
@@ -112,6 +108,31 @@ function resolveDetailOption_(taskLabel, detailLabel) {
   }
 
   return KPI_CONTENT_NEWS_DETAILS.seoAi;
+}
+
+function getEntryIdNumber_(entryName) {
+  return Number(String(entryName || "").replace("entry.", ""));
+}
+
+function resolveFormBranch_(taskLabel, detailLabel) {
+  const taskOption = resolveTaskOption_(taskLabel);
+  const detailOption = resolveDetailOption_(taskLabel, detailLabel);
+
+  if (taskOption === KPI_CONTENT_TASKS.description) {
+    return {
+      taskOption: taskOption,
+      detailOption: detailOption,
+      detailEntryName: KPI_CONTENT_FORM_ENTRY_IDS.descriptionDetail,
+      pageHistory: KPI_CONTENT_FORM_PAGE_HISTORY.description,
+    };
+  }
+
+  return {
+    taskOption: taskOption,
+    detailOption: detailOption,
+    detailEntryName: KPI_CONTENT_FORM_ENTRY_IDS.newsDetail,
+    pageHistory: KPI_CONTENT_FORM_PAGE_HISTORY.news,
+  };
 }
 
 function normalizeArticles_(articles) {
@@ -196,8 +217,6 @@ function fetchKpiContentFormState_() {
   }
 
   const fbzxMatch = html.match(/name="fbzx"\s+value="([^"]+)"/i);
-  const partialResponseMatch = html.match(/name="partialResponse"\s+value="([^"]*)"/i);
-  const sentinelMatches = html.match(/name="entry\.\d+_sentinel"/g) || [];
 
   if (!fbzxMatch || !fbzxMatch[1]) {
     throw new Error("Khong lay duoc token fbzx cua Google Form KPI Content.");
@@ -205,36 +224,26 @@ function fetchKpiContentFormState_() {
 
   return {
     fbzx: fbzxMatch[1],
-    partialResponse: partialResponseMatch && partialResponseMatch[1]
-      ? decodeHtmlEntities_(partialResponseMatch[1])
-      : "",
-    sentinelNames: sentinelMatches.map(function (value) {
-      return value.replace(/^name="|"$|\s+/g, "");
-    }),
   };
 }
 
 function buildFinalPayload_(formState, input) {
+  const branch = resolveFormBranch_(input.taskOption, input.detailOption);
   const payload = {
     fvv: "1",
-    pageHistory: "0,1,2",
+    pageHistory: branch.pageHistory,
     fbzx: formState.fbzx,
+    partialResponse: JSON.stringify([
+      [
+        [null, getEntryIdNumber_(KPI_CONTENT_FORM_ENTRY_IDS.employeeCode), [input.employeeCode], 0],
+        [null, getEntryIdNumber_(KPI_CONTENT_FORM_ENTRY_IDS.task), [branch.taskOption], 0],
+        [null, getEntryIdNumber_(branch.detailEntryName), [branch.detailOption], 0],
+      ],
+      null,
+      formState.fbzx,
+    ]),
+    submissionTimestamp: String(new Date().getTime()),
   };
-
-  if (formState.partialResponse) {
-    payload.partialResponse = formState.partialResponse;
-  }
-
-  payload[KPI_CONTENT_FORM_ENTRY_IDS.employeeCode] = input.employeeCode;
-  payload[KPI_CONTENT_FORM_ENTRY_IDS.task] = input.taskOption;
-
-  if (input.taskOption === KPI_CONTENT_TASKS.description) {
-    payload[KPI_CONTENT_FORM_ENTRY_IDS.descriptionDetail] = input.detailOption;
-    payload[KPI_CONTENT_FORM_ENTRY_IDS.newsDetail] = "";
-  } else {
-    payload[KPI_CONTENT_FORM_ENTRY_IDS.newsDetail] = input.detailOption;
-    payload[KPI_CONTENT_FORM_ENTRY_IDS.descriptionDetail] = "";
-  }
 
   const linkKeys = [
     KPI_CONTENT_FORM_ENTRY_IDS.link1,
@@ -247,10 +256,6 @@ function buildFinalPayload_(formState, input) {
   for (var index = 0; index < linkKeys.length; index += 1) {
     payload[linkKeys[index]] = input.articles[index] ? input.articles[index].articleLink : "";
   }
-
-  formState.sentinelNames.forEach(function (name) {
-    payload[name] = "";
-  });
 
   return payload;
 }

@@ -8,6 +8,10 @@
 - KPI Content da duoc bo sung cho admin/leader, khong danh cho CTV.
 - Dang ky KPI Content gom toi da `5` bai cung nhom.
 - Logic map field van theo `3` page cua Google Form, nhung submit that can gui bang `1 final POST` day du field bat buoc thay vi `3` request pageHistory rieng.
+- Payload cuoi cua KPI Content phai giong browser submit that:
+  - `Viết bài tin tức` -> `pageHistory = 0,4,6`
+  - `Mô tả sản phẩm` -> `pageHistory = 0,3,6`
+  - `employeeCode`, `task`, `detail` phai nam trong `partialResponse`, khong gui thang o request cuoi
 - Backend app hien co the submit truc tiep Google Form neu chua cau hinh `KPI_CONTENT_SCRIPT_*`.
 - Apps Script KPI Content tro thanh phuong an proxy du phong, khong con la dependency bat buoc de chay flow co ban.
 - Da verify truc tiep voi form that:
@@ -25,6 +29,8 @@
   - khong chay KPI Content bang luong CTV Content Work
   - khong submit qua 5 link trong mot batch
   - khong quay lai flow submit `3` request pageHistory cho form nay
+  - khong quay lai `pageHistory = 0,1,2`
+  - khong gui top-level `entry.2063490353`, `entry.1997176339`, `entry.1511448067`, `entry.1417839557` trong final POST
   - khong coi `KPI_CONTENT_SCRIPT_*` la bat buoc neu nhu cau chi la submit Google Form
   - khong doi mapping form neu chua cap nhat lai Apps Script mau va docs
 

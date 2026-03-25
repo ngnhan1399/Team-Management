@@ -35,14 +35,24 @@
 ## Luong van hanh mac dinh
 
 - App se:
-  - tai `viewform` de lay `fbzx`, `partialResponse`, va `_sentinel`
+  - tai `viewform` de lay `fbzx`
+  - tu build `partialResponse` dung voi cau tra loi cua trang 1 va trang 2
   - gui `mot request cuoi` toi `formResponse`
-  - request cuoi phai chua day du:
-    - `employeeCode`
-    - `task`
-    - `detail`
+  - request cuoi chi gui:
+    - `partialResponse`
+    - `pageHistory`
+    - `fbzx`
+    - `submissionTimestamp`
     - toi da `5` link
-    - `pageHistory = 0,1,2`
+
+## PageHistory dung theo nhanh form that
+
+- `Viet bai tin tuc`:
+  - page 2 dung `entry.1511448067`
+  - pageHistory cuoi phai la `0,4,6`
+- `Mo ta san pham`:
+  - page 2 dung `entry.1417839557`
+  - pageHistory cuoi phai la `0,3,6`
 
 ## Luu y ky thuat quan trong
 
@@ -53,6 +63,8 @@
 - Nghia la:
   - logic chon field van theo 3 page
   - nhung khong gui tung page rieng nua
+  - khong duoc gui thang `employeeCode`, `task`, `detail` o request cuoi
+  - gia tri trang truoc phai nam trong `partialResponse` dung format cua Google Form
 
 ## Env can cau hinh
 
