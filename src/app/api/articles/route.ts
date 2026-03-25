@@ -1,5 +1,5 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, contentWorkRegistrations, notifications, payments, users } from "@/db/schema";
+import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, contentWorkRegistrations, kpiContentRegistrations, notifications, payments, users } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextIdentityLabels, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, hasArticleReviewAccess, matchesIdentityCandidate } from "@/lib/auth";
 import {
   createArticleInGoogleSheet,
@@ -12,6 +12,7 @@ import { resolveAppArticleFields } from "@/lib/google-sheet-article-mapping";
 import { extractArticleIdFromLink, isLinkIdRequiredForArticleType } from "@/lib/article-link-id";
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { CONTENT_WORK_REGISTRATION_TITLE, getContentWorkStatusLabel, type ContentWorkStatus } from "@/lib/content-work-registration";
+import { getKpiContentStatusLabel, type KpiContentStatus } from "@/lib/kpi-content-registration";
 import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
@@ -86,6 +87,8 @@ type ArticleResponseRow = {
   reviewLink: string | null;
   contentWorkStatus: ContentWorkStatus | null;
   contentWorkStatusLabel: string | null;
+  kpiContentStatus: KpiContentStatus | null;
+  kpiContentStatusLabel: string | null;
   reviewerName: string | null;
   notes: string | null;
   canDelete: boolean;
@@ -286,7 +289,7 @@ async function attachArticleResponseMetadata<
   rows: T[],
   currentUserId: number,
   canManageArticles: boolean
-): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount" | "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole" | "contentWorkStatus" | "contentWorkStatusLabel">>> {
+): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount" | "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole" | "contentWorkStatus" | "contentWorkStatusLabel" | "kpiContentStatus" | "kpiContentStatusLabel">>> {
   const articleIds = rows.map((row) => row.id).filter((id) => Number.isInteger(id) && id > 0);
   const penNames = Array.from(new Set(rows.map((row) => normalizeString(row.penName)).filter(Boolean)));
   const teamIds = Array.from(new Set(rows.map((row) => Number(row.teamId)).filter((teamId) => Number.isInteger(teamId) && teamId > 0)));
@@ -300,7 +303,7 @@ async function attachArticleResponseMetadata<
     )
   );
 
-  const [commentMeta, collaboratorProfiles, creatorProfiles, contentWorkRows] = await Promise.all([
+  const [commentMeta, collaboratorProfiles, creatorProfiles, contentWorkRows, kpiContentRows] = await Promise.all([
     loadArticleCommentMetadata(articleIds, currentUserId),
     penNames.length > 0
       ? db
@@ -348,6 +351,19 @@ async function attachArticleResponseMetadata<
           .orderBy(desc(contentWorkRegistrations.updatedAt), desc(contentWorkRegistrations.id))
           .all()
       : Promise.resolve([]),
+    articleIds.length > 0
+      ? db
+          .select({
+            id: kpiContentRegistrations.id,
+            articleId: kpiContentRegistrations.articleId,
+            status: kpiContentRegistrations.status,
+            updatedAt: kpiContentRegistrations.updatedAt,
+          })
+          .from(kpiContentRegistrations)
+          .where(inArray(kpiContentRegistrations.articleId, articleIds))
+          .orderBy(desc(kpiContentRegistrations.updatedAt), desc(kpiContentRegistrations.id))
+          .all()
+      : Promise.resolve([]),
   ]);
   const { commentCounts, unreadCommentCounts } = commentMeta;
   const collaboratorProfileByKey = new Map(
@@ -378,6 +394,18 @@ async function attachArticleResponseMetadata<
       statusLabel: getContentWorkStatusLabel(status),
     });
   }
+  const kpiContentByArticleId = new Map<number, { status: KpiContentStatus; statusLabel: string }>();
+  for (const row of kpiContentRows) {
+    const articleId = Number(row.articleId || 0);
+    if (!articleId || kpiContentByArticleId.has(articleId)) {
+      continue;
+    }
+    const status = row.status as KpiContentStatus;
+    kpiContentByArticleId.set(articleId, {
+      status,
+      statusLabel: getKpiContentStatusLabel(status),
+    });
+  }
 
   return rows.map((row) => ({
     ...row,
@@ -386,6 +414,8 @@ async function attachArticleResponseMetadata<
     unreadCommentCount: unreadCommentCounts.get(row.id) || 0,
     contentWorkStatus: contentWorkByArticleId.get(row.id)?.status || null,
     contentWorkStatusLabel: contentWorkByArticleId.get(row.id)?.statusLabel || null,
+    kpiContentStatus: kpiContentByArticleId.get(row.id)?.status || null,
+    kpiContentStatusLabel: kpiContentByArticleId.get(row.id)?.statusLabel || null,
     ...(() => {
       const normalizedPenName = normalizeString(row.penName).toLowerCase();
       const collaboratorProfile = collaboratorProfileByKey.get(

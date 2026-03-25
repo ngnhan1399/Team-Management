@@ -3,6 +3,7 @@ import { articleComments, articles, collaborators, editorialTasks, notifications
 import { getCurrentUserContext, hashPassword, generatePassword } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { resolvePreferredCollaboratorName, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
+import { normalizeEmployeeCode } from "@/lib/kpi-content-registration";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
@@ -46,6 +47,7 @@ type LinkedUserSummary = {
     isLeader: boolean;
     collaboratorId: number | null;
     teamId: number | null;
+    employeeCode: string | null;
 };
 
 function normalizeCollaboratorRole(value: unknown): "writer" | "reviewer" | undefined {
@@ -96,6 +98,7 @@ function attachLinkedUsers<T extends { id: number; role?: string | null; name?: 
             linkedUserRole: linkedUser?.role ?? null,
             linkedUserIsLeader: linkedUser?.isLeader ?? false,
             linkedUserTeamId: linkedUser?.teamId ?? null,
+            linkedUserEmployeeCode: linkedUser?.employeeCode ?? null,
         };
     });
 }
@@ -165,7 +168,7 @@ export async function GET(request: NextRequest) {
                 return NextResponse.json({ success: true, data: useDirectoryView ? [] : [], users: [] });
             }
 
-            const allUsers = await db
+    const allUsers = await db
                 .select({
                     id: users.id,
                     email: users.email,
@@ -173,6 +176,7 @@ export async function GET(request: NextRequest) {
                     isLeader: users.isLeader,
                     collaboratorId: users.collaboratorId,
                     teamId: users.teamId,
+                    employeeCode: users.employeeCode,
                 })
                 .from(users)
                 .where(scopedTeamId ? eq(users.teamId, scopedTeamId) : undefined)
@@ -340,12 +344,62 @@ export async function PUT(request: NextRequest) {
 
         const body = (await request.json()) as Record<string, unknown>;
         const id = Number(body.id);
+        const userId = Number(body.userId);
         const normalizedLinkedUserId =
             body.linkedUserId === "" || body.linkedUserId === null || body.linkedUserId === undefined
                 ? null
                 : Number(body.linkedUserId);
+        const employeeCode = normalizeEmployeeCode(body.employeeCode ?? body.employee_code);
 
         if (!Number.isInteger(id)) {
+            if (Number.isInteger(userId) && userId > 0 && (body.employeeCode !== undefined || body.employee_code !== undefined)) {
+                const targetUser = await db.select({
+                    id: users.id,
+                    email: users.email,
+                    role: users.role,
+                    isLeader: users.isLeader,
+                    collaboratorId: users.collaboratorId,
+                    teamId: users.teamId,
+                    employeeCode: users.employeeCode,
+                }).from(users).where(eq(users.id, userId)).get();
+
+                if (!targetUser) {
+                    return NextResponse.json({ success: false, error: "Không tìm thấy tài khoản" }, { status: 404 });
+                }
+                if (targetUser.role !== "admin") {
+                    return NextResponse.json({ success: false, error: "Chỉ hỗ trợ mã nhân viên cho admin/leader" }, { status: 403 });
+                }
+                if (!canAccessTeam(context, targetUser.teamId)) {
+                    return NextResponse.json({ success: false, error: "Bạn không có quyền chỉnh tài khoản của team này" }, { status: 403 });
+                }
+
+                await db.update(users)
+                    .set({ employeeCode: employeeCode })
+                    .where(eq(users.id, targetUser.id))
+                    .run();
+
+                await writeAuditLog({
+                    userId: context.user.id,
+                    action: "admin_employee_code_updated",
+                    entity: "user",
+                    entityId: targetUser.id,
+                    payload: {
+                        email: targetUser.email,
+                        employeeCode,
+                        previousEmployeeCode: targetUser.employeeCode ?? null,
+                    },
+                });
+
+                await publishRealtimeEvent({
+                    channels: ["team", "dashboard"],
+                    toastTitle: "Mã nhân viên đã cập nhật",
+                    toastMessage: `${targetUser.email} đã được gắn mã nhân viên mới.`,
+                    toastVariant: "success",
+                });
+
+                return NextResponse.json({ success: true });
+            }
+
             return NextResponse.json({ success: false, error: "ID is required" }, { status: 400 });
         }
         if (normalizedLinkedUserId !== null && !Number.isInteger(normalizedLinkedUserId)) {
@@ -441,6 +495,7 @@ export async function PUT(request: NextRequest) {
                     isLeader: users.isLeader,
                     collaboratorId: users.collaboratorId,
                     teamId: users.teamId,
+                    employeeCode: users.employeeCode,
                 })
                 .from(users)
                 .where(eq(users.collaboratorId, id))
@@ -456,6 +511,14 @@ export async function PUT(request: NextRequest) {
                     .run();
             }
 
+            const linkedAdminUser = currentlyLinkedUsers.find((linkedUser) => linkedUser.role === "admin") || null;
+            if (linkedAdminUser && (body.employeeCode !== undefined || body.employee_code !== undefined)) {
+                await tx.update(users)
+                    .set({ employeeCode })
+                    .where(eq(users.id, linkedAdminUser.id))
+                    .run();
+            }
+
             if (normalizedLinkedUserId !== null) {
                 const selectedUser = await tx
                     .select({
@@ -465,6 +528,7 @@ export async function PUT(request: NextRequest) {
                         isLeader: users.isLeader,
                         collaboratorId: users.collaboratorId,
                         teamId: users.teamId,
+                        employeeCode: users.employeeCode,
                     })
                     .from(users)
                     .where(eq(users.id, normalizedLinkedUserId))

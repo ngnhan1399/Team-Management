@@ -3,6 +3,7 @@
 import React from "react";
 import type { Article } from "./types";
 import { getDisplayedPenName } from "./articles-page-config";
+import { getKpiContentActionState } from "./kpi-content-ui";
 
 interface MobileArticleCardProps {
   article: Article;
@@ -10,13 +11,17 @@ interface MobileArticleCardProps {
   onDelete?: () => void;
   onComments?: () => void;
   onRegisterContentWork?: () => void;
+  onRegisterKpiContent?: () => void;
   canEdit?: boolean;
   canRegisterContentWork?: boolean;
+  canRegisterKpiContent?: boolean;
   showContentWorkAction?: boolean;
+  showKpiContentAction?: boolean;
   canDelete?: boolean;
   showAuthor?: boolean;
   isDeleting?: boolean;
   isRegisteringContentWork?: boolean;
+  isRegisteringKpiContent?: boolean;
   unreadComments?: number;
 }
 
@@ -26,13 +31,17 @@ export default function MobileArticleCard({
   onDelete,
   onComments,
   onRegisterContentWork,
+  onRegisterKpiContent,
   canEdit = true,
   canRegisterContentWork = false,
+  canRegisterKpiContent = false,
   showContentWorkAction = false,
+  showKpiContentAction = false,
   canDelete = true,
   showAuthor = true,
   isDeleting = false,
   isRegisteringContentWork = false,
+  isRegisteringKpiContent = false,
   unreadComments = 0,
 }: MobileArticleCardProps) {
   const penName = getDisplayedPenName(article.penName) || "N/A";
@@ -60,6 +69,7 @@ export default function MobileArticleCard({
       : contentWorkFailed
         ? { background: "rgba(239, 68, 68, 0.08)", color: "#dc2626" }
         : { background: "rgba(37, 99, 235, 0.08)", color: "#2563eb" };
+  const kpiContentAction = getKpiContentActionState(article, isRegisteringKpiContent);
 
   const getStatusStyle = (s: string) => {
     const map: Record<string, { bg: string; text: string; icon: string; label: string }> = {
@@ -156,6 +166,22 @@ export default function MobileArticleCard({
               style={contentWorkTone}
             >
               {contentWorkLabel}
+            </button>
+          )}
+          {showKpiContentAction && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!kpiContentAction.disabled && onRegisterKpiContent && canRegisterKpiContent) {
+                  onRegisterKpiContent();
+                }
+              }}
+              disabled={kpiContentAction.disabled}
+              title={kpiContentAction.title}
+              className="px-3 h-10 flex items-center justify-center rounded-xl text-[11px] font-bold uppercase tracking-wider active:scale-95 transition-transform disabled:opacity-80"
+              style={{ background: kpiContentAction.background, color: kpiContentAction.color, border: kpiContentAction.border }}
+            >
+              {kpiContentAction.label}
             </button>
           )}
           {canDelete && onDelete && (

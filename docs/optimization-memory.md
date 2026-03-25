@@ -1,5 +1,22 @@
 # Optimization Memory
 
+## 2026-03-25 - KPI Content automation memory
+
+- KPI Content da duoc bo sung cho admin/leader, khong danh cho CTV.
+- Dang ky KPI Content gom toi da `5` bai cung nhom.
+- Logic map field van theo `3` page cua Google Form, nhung submit that can gui bang `1 final POST` day du field bat buoc thay vi `3` request pageHistory rieng.
+- Da verify truc tiep voi form that:
+  - submit tung page rieng de bi `data-validation-failed`
+  - submit mot request cuoi voi day du `employeeCode + task + detail + 5 links + pageHistory=0,1,2` thi on dinh hon
+- Apps Script mau va env mau da co san:
+  - `output/kpi-content-automation.workdocker.gs`
+  - `.env.example` co `KPI_CONTENT_SCRIPT_WEB_APP_URL` va `KPI_CONTENT_SCRIPT_SECRET`
+- Khong nen lap lai:
+  - khong chay KPI Content bang luong CTV Content Work
+  - khong submit qua 5 link trong mot batch
+  - khong quay lai flow submit `3` request pageHistory cho form nay
+  - khong doi mapping form neu chua cap nhat lai Apps Script mau va docs
+
 ## 2026-03-25 - Production copy memory
 
 - Da copy DB production that tu Nile sang PostgreSQL tren VPS thanh cong.

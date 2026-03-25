@@ -156,6 +156,7 @@ export const db = wrapCompat(rawDb) as typeof rawDb;
 let initializationPromise: Promise<void> | null = null;
 let contentWorkSchemaInitializationPromise: Promise<void> | null = null;
 let kpiSchemaInitializationPromise: Promise<void> | null = null;
+let kpiContentSchemaInitializationPromise: Promise<void> | null = null;
 
 async function ensureColumnExists(table: string, column: string, typeSql: string) {
   const result = await pool.query(
@@ -220,6 +221,64 @@ const KPI_SCHEMA_STATEMENTS = [
   "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_team_id ON kpi_monthly_targets(team_id)",
 ];
 
+const KPI_CONTENT_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS kpi_content_registration_batches (
+    id SERIAL PRIMARY KEY,
+    team_id INTEGER,
+    requested_by_user_id INTEGER NOT NULL,
+    employee_code TEXT NOT NULL,
+    batch_key TEXT NOT NULL,
+    batch_size INTEGER NOT NULL DEFAULT 1,
+    task_label TEXT NOT NULL,
+    detail_label TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    automation_message TEXT,
+    last_error TEXT,
+    submitted_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_key ON kpi_content_registration_batches(batch_key)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_team_id ON kpi_content_registration_batches(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_requested_by ON kpi_content_registration_batches(requested_by_user_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_status ON kpi_content_registration_batches(status)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_updated_at ON kpi_content_registration_batches(updated_at)",
+  `CREATE TABLE IF NOT EXISTS kpi_content_registrations (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    team_id INTEGER,
+    requested_by_user_id INTEGER NOT NULL,
+    employee_code TEXT NOT NULL,
+    batch_id TEXT NOT NULL,
+    batch_position INTEGER NOT NULL DEFAULT 1,
+    batch_size INTEGER NOT NULL DEFAULT 1,
+    grouped_article_ids TEXT,
+    pen_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    article_link TEXT,
+    article_date TEXT NOT NULL,
+    article_status TEXT NOT NULL,
+    task_label TEXT NOT NULL,
+    detail_label TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    automation_message TEXT,
+    last_error TEXT,
+    submitted_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_content_registrations_article ON kpi_content_registrations(article_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_batch ON kpi_content_registrations(batch_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_status ON kpi_content_registrations(status)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_requested_by ON kpi_content_registrations(requested_by_user_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_team_id ON kpi_content_registrations(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_updated_at ON kpi_content_registrations(updated_at)",
+];
+
 export function ensureContentWorkSchemaInitialized() {
   if (!contentWorkSchemaInitializationPromise) {
     contentWorkSchemaInitializationPromise = (async () => {
@@ -273,6 +332,58 @@ export function ensureKpiSchemaInitialized() {
   return kpiSchemaInitializationPromise;
 }
 
+export function ensureKpiContentSchemaInitialized() {
+  if (!kpiContentSchemaInitializationPromise) {
+    kpiContentSchemaInitializationPromise = (async () => {
+      for (const statement of KPI_CONTENT_SCHEMA_STATEMENTS) {
+        await pool.query(statement);
+      }
+
+      await ensureColumnExists("users", "employee_code", "TEXT");
+      await ensureColumnExists("kpi_content_registration_batches", "team_id", "INTEGER");
+      await ensureColumnExists("kpi_content_registration_batches", "requested_by_user_id", "INTEGER NOT NULL DEFAULT 0");
+      await ensureColumnExists("kpi_content_registration_batches", "employee_code", "TEXT NOT NULL DEFAULT ''");
+      await ensureColumnExists("kpi_content_registration_batches", "batch_key", "TEXT NOT NULL DEFAULT ''");
+      await ensureColumnExists("kpi_content_registration_batches", "batch_size", "INTEGER NOT NULL DEFAULT 1");
+      await ensureColumnExists("kpi_content_registration_batches", "task_label", "TEXT NOT NULL DEFAULT ''");
+      await ensureColumnExists("kpi_content_registration_batches", "detail_label", "TEXT NOT NULL DEFAULT ''");
+      await ensureColumnExists("kpi_content_registration_batches", "status", "TEXT NOT NULL DEFAULT 'queued'");
+      await ensureColumnExists("kpi_content_registration_batches", "attempt_count", "INTEGER NOT NULL DEFAULT 0");
+      await ensureColumnExists("kpi_content_registration_batches", "automation_message", "TEXT");
+      await ensureColumnExists("kpi_content_registration_batches", "last_error", "TEXT");
+      await ensureColumnExists("kpi_content_registration_batches", "submitted_at", "TEXT");
+      await ensureColumnExists("kpi_content_registration_batches", "completed_at", "TEXT");
+      await ensureColumnExists("kpi_content_registration_batches", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+      await ensureColumnExists("kpi_content_registration_batches", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+      await ensureColumnExists("kpi_content_registrations", "team_id", "INTEGER");
+      await ensureColumnExists("kpi_content_registrations", "requested_by_user_id", "INTEGER NOT NULL DEFAULT 0");
+      await ensureColumnExists("kpi_content_registrations", "employee_code", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "batch_id", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "batch_position", "INTEGER NOT NULL DEFAULT 1");
+      await ensureColumnExists("kpi_content_registrations", "batch_size", "INTEGER NOT NULL DEFAULT 1");
+      await ensureColumnExists("kpi_content_registrations", "grouped_article_ids", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "article_link", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "article_date", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+      await ensureColumnExists("kpi_content_registrations", "article_status", "TEXT NOT NULL DEFAULT 'Submitted'");
+      await ensureColumnExists("kpi_content_registrations", "task_label", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "detail_label", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "status", "TEXT NOT NULL DEFAULT 'queued'");
+      await ensureColumnExists("kpi_content_registrations", "attempt_count", "INTEGER NOT NULL DEFAULT 0");
+      await ensureColumnExists("kpi_content_registrations", "automation_message", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "last_error", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "submitted_at", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "completed_at", "TEXT");
+      await ensureColumnExists("kpi_content_registrations", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+      await ensureColumnExists("kpi_content_registrations", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+    })().catch((error) => {
+      kpiContentSchemaInitializationPromise = null;
+      throw error;
+    });
+  }
+
+  return kpiContentSchemaInitializationPromise;
+}
+
 const bootstrapStatements = [
   `CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -280,6 +391,7 @@ const bootstrapStatements = [
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'ctv',
     is_leader BOOLEAN NOT NULL DEFAULT false,
+    employee_code TEXT,
     collaborator_id INTEGER,
     team_id INTEGER,
     must_change_password BOOLEAN NOT NULL DEFAULT true,
@@ -419,6 +531,50 @@ const bootstrapStatements = [
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
   )`,
+  `CREATE TABLE IF NOT EXISTS kpi_content_registrations (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER NOT NULL,
+    team_id INTEGER,
+    requested_by_user_id INTEGER NOT NULL,
+    employee_code TEXT NOT NULL,
+    batch_id TEXT NOT NULL,
+    batch_position INTEGER NOT NULL DEFAULT 1,
+    batch_size INTEGER NOT NULL DEFAULT 1,
+    grouped_article_ids TEXT,
+    pen_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    article_link TEXT,
+    article_date TEXT NOT NULL,
+    article_status TEXT NOT NULL,
+    task_label TEXT NOT NULL,
+    detail_label TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    automation_message TEXT,
+    last_error TEXT,
+    submitted_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
+  `CREATE TABLE IF NOT EXISTS kpi_content_registration_batches (
+    id SERIAL PRIMARY KEY,
+    team_id INTEGER,
+    requested_by_user_id INTEGER NOT NULL,
+    employee_code TEXT NOT NULL,
+    batch_key TEXT NOT NULL,
+    batch_size INTEGER NOT NULL DEFAULT 1,
+    task_label TEXT NOT NULL,
+    detail_label TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    automation_message TEXT,
+    last_error TEXT,
+    submitted_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  )`,
   `CREATE TABLE IF NOT EXISTS royalty_rates (
     id SERIAL PRIMARY KEY,
     article_type TEXT NOT NULL,
@@ -526,6 +682,15 @@ const bootstrapStatements = [
   "CREATE INDEX IF NOT EXISTS idx_kpi_month_year ON kpi_records(month, year)",
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_monthly_targets_scope ON kpi_monthly_targets(team_id, month, year, role)",
   "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_month_year ON kpi_monthly_targets(month, year)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_content_registrations_article ON kpi_content_registrations(article_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_batch ON kpi_content_registrations(batch_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_status ON kpi_content_registrations(status)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_requested_by ON kpi_content_registrations(requested_by_user_id)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_key ON kpi_content_registration_batches(batch_key)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_team_id ON kpi_content_registration_batches(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_requested_by ON kpi_content_registration_batches(requested_by_user_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_status ON kpi_content_registration_batches(status)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registration_batches_updated_at ON kpi_content_registration_batches(updated_at)",
   "CREATE INDEX IF NOT EXISTS idx_payments_month_year ON payments(month, year)",
   "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
   "CREATE INDEX IF NOT EXISTS idx_notifications_to_user ON notifications(to_user_id)",
@@ -550,6 +715,7 @@ const teamScopedIndexStatements = [
   "CREATE INDEX IF NOT EXISTS idx_editorial_tasks_team_id ON editorial_tasks(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_kpi_team_id ON kpi_records(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_kpi_monthly_targets_team_id ON kpi_monthly_targets(team_id)",
+  "CREATE INDEX IF NOT EXISTS idx_kpi_content_registrations_team_id ON kpi_content_registrations(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_payments_team_id ON payments(team_id)",
   "CREATE INDEX IF NOT EXISTS idx_feedback_entries_team_id ON feedback_entries(team_id)",
 ];
@@ -563,7 +729,7 @@ const RUNTIME_META_TABLE_SQL = `
 `;
 
 const BOOTSTRAP_META_KEY = "bootstrap_schema_version";
-const BOOTSTRAP_SCHEMA_VERSION = "9";
+const BOOTSTRAP_SCHEMA_VERSION = "10";
 
 async function getOrCreateDefaultTeamId() {
   const existingDefault = await pool.query(
@@ -617,6 +783,7 @@ export async function initializeDatabase() {
   await ensureColumnExists("articles", "link_health_check_slot", "TEXT");
   await ensureColumnExists("articles", "review_link", "TEXT");
   await ensureColumnExists("users", "is_leader", "BOOLEAN NOT NULL DEFAULT false");
+  await ensureColumnExists("users", "employee_code", "TEXT");
   await ensureColumnExists("users", "team_id", "INTEGER");
   await ensureColumnExists("collaborators", "team_id", "INTEGER");
   await ensureColumnExists("articles", "team_id", "INTEGER");
@@ -629,6 +796,41 @@ export async function initializeDatabase() {
   await ensureColumnExists("kpi_monthly_targets", "target_kpi", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumnExists("kpi_monthly_targets", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists("kpi_monthly_targets", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+  await ensureColumnExists("kpi_content_registrations", "team_id", "INTEGER");
+  await ensureColumnExists("kpi_content_registrations", "requested_by_user_id", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumnExists("kpi_content_registrations", "employee_code", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "batch_id", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "batch_position", "INTEGER NOT NULL DEFAULT 1");
+  await ensureColumnExists("kpi_content_registrations", "batch_size", "INTEGER NOT NULL DEFAULT 1");
+  await ensureColumnExists("kpi_content_registrations", "grouped_article_ids", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "article_link", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "article_date", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+  await ensureColumnExists("kpi_content_registrations", "article_status", "TEXT NOT NULL DEFAULT 'Submitted'");
+  await ensureColumnExists("kpi_content_registrations", "task_label", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "detail_label", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "status", "TEXT NOT NULL DEFAULT 'queued'");
+  await ensureColumnExists("kpi_content_registrations", "attempt_count", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumnExists("kpi_content_registrations", "automation_message", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "last_error", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "submitted_at", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "completed_at", "TEXT");
+  await ensureColumnExists("kpi_content_registrations", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+  await ensureColumnExists("kpi_content_registrations", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+  await ensureColumnExists("kpi_content_registration_batches", "team_id", "INTEGER");
+  await ensureColumnExists("kpi_content_registration_batches", "requested_by_user_id", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumnExists("kpi_content_registration_batches", "employee_code", "TEXT NOT NULL DEFAULT ''");
+  await ensureColumnExists("kpi_content_registration_batches", "batch_key", "TEXT NOT NULL DEFAULT ''");
+  await ensureColumnExists("kpi_content_registration_batches", "batch_size", "INTEGER NOT NULL DEFAULT 1");
+  await ensureColumnExists("kpi_content_registration_batches", "task_label", "TEXT NOT NULL DEFAULT ''");
+  await ensureColumnExists("kpi_content_registration_batches", "detail_label", "TEXT NOT NULL DEFAULT ''");
+  await ensureColumnExists("kpi_content_registration_batches", "status", "TEXT NOT NULL DEFAULT 'queued'");
+  await ensureColumnExists("kpi_content_registration_batches", "attempt_count", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumnExists("kpi_content_registration_batches", "automation_message", "TEXT");
+  await ensureColumnExists("kpi_content_registration_batches", "last_error", "TEXT");
+  await ensureColumnExists("kpi_content_registration_batches", "submitted_at", "TEXT");
+  await ensureColumnExists("kpi_content_registration_batches", "completed_at", "TEXT");
+  await ensureColumnExists("kpi_content_registration_batches", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
+  await ensureColumnExists("kpi_content_registration_batches", "updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text");
   await ensureColumnExists("payments", "team_id", "INTEGER");
   await ensureColumnExists("feedback_entries", "team_id", "INTEGER");
 

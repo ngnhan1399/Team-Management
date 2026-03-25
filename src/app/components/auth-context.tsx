@@ -7,6 +7,7 @@ export interface AuthCollaborator {
   name?: string;
   penName?: string;
   role?: "writer" | "reviewer";
+  employeeCode?: string | null;
   avatar?: string | null;
   [key: string]: unknown;
 }
@@ -16,6 +17,7 @@ export interface AuthUser {
   email: string;
   role: "admin" | "ctv";
   isLeader: boolean;
+  employeeCode?: string | null;
   mustChangePassword: boolean;
   showDailyKpiPopup?: boolean;
   collaboratorId: number | null;

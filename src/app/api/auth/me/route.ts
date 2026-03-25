@@ -24,6 +24,7 @@ export async function GET() {
                 email: context.user.email,
                 role: context.user.role,
                 isLeader: Boolean(context.user.isLeader),
+                employeeCode: context.user.employeeCode ?? null,
                 mustChangePassword: context.user.mustChangePassword,
                 showDailyKpiPopup,
                 collaboratorId: context.collaborator?.id ?? context.user.collaboratorId,

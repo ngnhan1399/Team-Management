@@ -9,6 +9,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["admin", "ctv"] }).notNull().default("ctv"),
   isLeader: boolean("is_leader").notNull().default(false),
+  employeeCode: text("employee_code"),
   collaboratorId: integer("collaborator_id"),
   teamId: integer("team_id"),
   mustChangePassword: boolean("must_change_password").notNull().default(true),
@@ -118,6 +119,56 @@ export const contentWorkRegistrations = pgTable("content_work_registrations", {
   lastError: text("last_error"),
   formSubmittedAt: text("form_submitted_at"),
   linkWrittenAt: text("link_written_at"),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull().default(timestampTextDefault),
+  updatedAt: text("updated_at").notNull().default(timestampTextDefault),
+});
+
+export const kpiContentRegistrationBatches = pgTable("kpi_content_registration_batches", {
+  id: serial("id").primaryKey(),
+  teamId: integer("team_id"),
+  requestedByUserId: integer("requested_by_user_id").notNull(),
+  employeeCode: text("employee_code").notNull(),
+  batchKey: text("batch_key").notNull(),
+  batchSize: integer("batch_size").notNull().default(1),
+  taskLabel: text("task_label").notNull(),
+  detailLabel: text("detail_label").notNull(),
+  status: text("status", {
+    enum: ["queued", "submitting_form", "form_submitted", "completed", "failed"],
+  }).notNull().default("queued"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  automationMessage: text("automation_message"),
+  lastError: text("last_error"),
+  submittedAt: text("submitted_at"),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull().default(timestampTextDefault),
+  updatedAt: text("updated_at").notNull().default(timestampTextDefault),
+});
+
+export const kpiContentRegistrations = pgTable("kpi_content_registrations", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").notNull(),
+  teamId: integer("team_id"),
+  requestedByUserId: integer("requested_by_user_id").notNull(),
+  employeeCode: text("employee_code").notNull(),
+  batchId: text("batch_id").notNull(),
+  batchPosition: integer("batch_position").notNull().default(1),
+  batchSize: integer("batch_size").notNull().default(1),
+  groupedArticleIds: text("grouped_article_ids"),
+  penName: text("pen_name").notNull(),
+  title: text("title").notNull(),
+  articleLink: text("article_link"),
+  articleDate: text("article_date").notNull(),
+  articleStatus: text("article_status").notNull(),
+  taskLabel: text("task_label").notNull(),
+  detailLabel: text("detail_label").notNull(),
+  status: text("status", {
+    enum: ["queued", "submitting_form", "form_submitted", "completed", "failed"],
+  }).notNull().default("queued"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  automationMessage: text("automation_message"),
+  lastError: text("last_error"),
+  submittedAt: text("submitted_at"),
   completedAt: text("completed_at"),
   createdAt: text("created_at").notNull().default(timestampTextDefault),
   updatedAt: text("updated_at").notNull().default(timestampTextDefault),
@@ -277,7 +328,9 @@ export type NewCollaborator = typeof collaborators.$inferInsert;
 export type Article = typeof articles.$inferSelect;
 export type NewArticle = typeof articles.$inferInsert;
 export type ArticleSyncLink = typeof articleSyncLinks.$inferSelect;
+export type KpiContentRegistrationBatch = typeof kpiContentRegistrationBatches.$inferSelect;
 export type ContentWorkRegistration = typeof contentWorkRegistrations.$inferSelect;
+export type KpiContentRegistration = typeof kpiContentRegistrations.$inferSelect;
 export type ArticleComment = typeof articleComments.$inferSelect;
 export type EditorialTask = typeof editorialTasks.$inferSelect;
 export type KpiRecord = typeof kpiRecords.$inferSelect;

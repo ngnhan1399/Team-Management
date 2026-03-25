@@ -8,6 +8,12 @@ import { useIsMobile } from "./useMediaQuery";
 import MobileArticleCard from "./MobileArticleCard";
 import BottomSheet from "./BottomSheet";
 import {
+  KPI_CONTENT_BATCH_SIZE,
+  getKpiContentActionState,
+  isKpiContentPending,
+  resolveKpiContentClientTaskKey,
+} from "./kpi-content-ui";
+import {
   ARTICLE_PAGE_SIZE,
   ARTICLE_STATUS_OPTIONS,
   ARTICLE_TYPE_OPTIONS,
@@ -168,6 +174,8 @@ export default function ArticlesPage() {
   const [contentWorkBannerArticle, setContentWorkBannerArticle] = useState<Article | null>(null);
   const [registeringContentWork, setRegisteringContentWork] = useState(false);
   const [registeringContentWorkArticleId, setRegisteringContentWorkArticleId] = useState<number | null>(null);
+  const [registeringKpiContent, setRegisteringKpiContent] = useState(false);
+  const [registeringKpiContentArticleId, setRegisteringKpiContentArticleId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [importStep, setImportStep] = useState(1);
@@ -321,6 +329,11 @@ export default function ArticlesPage() {
     if (resolveAuthorBucket(article) === "editorial") return false;
     return Boolean(String(article.link || "").trim());
   }, [canEditArticle, canManageArticles, isWriter, resolveAuthorBucket]);
+  const showKpiContentAction = useCallback((article: Article) => {
+    if (user?.role !== "admin") return false;
+    if (resolveAuthorBucket(article) !== "editorial") return false;
+    return Boolean(String(article.link || "").trim());
+  }, [resolveAuthorBucket, user?.role]);
   const canRegisterContentWork = useCallback((article: Article) => {
     const status = article.contentWorkStatus || null;
     const isPending = status === "queued"
@@ -329,6 +342,10 @@ export default function ArticlesPage() {
       || status === "link_written";
     return showContentWorkAction(article) && status !== "completed" && !isPending;
   }, [showContentWorkAction]);
+  const canRegisterKpiContent = useCallback((article: Article) => {
+    const status = article.kpiContentStatus || null;
+    return showKpiContentAction(article) && status !== "completed" && !isKpiContentPending(status);
+  }, [showKpiContentAction]);
   const getContentWorkActionState = useCallback((article: Article) => {
     const status = article.contentWorkStatus || null;
     const isCurrentRegistration = registeringContentWork && registeringContentWorkArticleId === article.id;
@@ -391,6 +408,22 @@ export default function ArticlesPage() {
       animation: undefined,
     };
   }, [registeringContentWork, registeringContentWorkArticleId]);
+  const collectKpiContentBatchArticles = useCallback((anchorArticle: Article) => {
+    const taskKey = resolveKpiContentClientTaskKey(anchorArticle);
+    const eligibleArticles = articles.filter((candidate) => {
+      if (!showKpiContentAction(candidate)) return false;
+      if (candidate.id === anchorArticle.id) return true;
+      if (!canRegisterKpiContent(candidate)) return false;
+      return resolveKpiContentClientTaskKey(candidate) === taskKey;
+    });
+
+    const orderedArticles = [
+      anchorArticle,
+      ...eligibleArticles.filter((candidate) => candidate.id !== anchorArticle.id),
+    ];
+
+    return orderedArticles.slice(0, KPI_CONTENT_BATCH_SIZE);
+  }, [articles, canRegisterKpiContent, showKpiContentAction]);
 
   const fetchArticles = useCallback((
     p = 1,
@@ -1395,6 +1428,65 @@ export default function ArticlesPage() {
     }
   };
 
+  const handleRegisterKpiContent = async (article: Article, force = false) => {
+    if (registeringKpiContent) return;
+    if (!user?.employeeCode) {
+      showUiToast("Thiếu mã nhân viên", "Vui lòng vào mục Đội ngũ để khai báo mã nhân viên trước khi đăng ký KPI Content.", "warning");
+      return;
+    }
+
+    const batchArticles = collectKpiContentBatchArticles(article);
+    const articleIds = batchArticles.map((item) => item.id);
+
+    try {
+      setRegisteringKpiContent(true);
+      setRegisteringKpiContentArticleId(article.id);
+
+      const res = await fetch("/api/kpi-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articleIds, force }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || "Không thể đăng ký KPI Content");
+      }
+
+      const nextStatus = String(data.batch?.status || (data.alreadyCompleted ? "completed" : "queued")) as Article["kpiContentStatus"];
+      const nextStatusLabel = String(
+        data.batch?.statusLabel
+        || (data.alreadyCompleted ? "Hoàn thành" : "Đang chờ")
+      );
+      const queuedArticleIds = Array.isArray(data.batch?.articleIds) && data.batch.articleIds.length > 0
+        ? data.batch.articleIds.map((value: unknown) => Number(value)).filter((value: number) => Number.isInteger(value) && value > 0)
+        : articleIds;
+
+      setArticles((prev) => prev.map((item) => (
+        queuedArticleIds.includes(item.id)
+          ? { ...item, kpiContentStatus: nextStatus, kpiContentStatusLabel: nextStatusLabel }
+          : item
+      )));
+      setFormData((prev) => Number(prev.id) && queuedArticleIds.includes(Number(prev.id))
+        ? { ...prev, kpiContentStatus: nextStatus, kpiContentStatusLabel: nextStatusLabel }
+        : prev);
+
+      const batchSummary = queuedArticleIds.length > 1
+        ? `Hệ thống đã gom ${queuedArticleIds.length} bài cùng nhóm để gửi KPI Content trong một lượt.`
+        : "Hệ thống đang gửi form KPI Content ở nền.";
+
+      if (data.alreadyCompleted) {
+        showUiToast("KPI Content đã hoàn thành", `"${article.title}" đã thuộc batch KPI Content hoàn thành trước đó.`, "info");
+      } else {
+        showUiToast("Đã xếp hàng KPI Content", batchSummary, "success");
+      }
+    } catch (error) {
+      showUiToast("Đăng ký KPI Content thất bại", error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setRegisteringKpiContent(false);
+      setRegisteringKpiContentArticleId(null);
+    }
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     setImportFile(file);
@@ -2148,6 +2240,43 @@ export default function ArticlesPage() {
                           </button>
                         );
                       })()}
+                      {showKpiContentAction(a) && (() => {
+                        const kpiContentAction = getKpiContentActionState(
+                          a,
+                          registeringKpiContent && registeringKpiContentArticleId === a.id,
+                        );
+                        return (
+                          <button
+                            onClick={() => {
+                              if (!kpiContentAction.disabled) {
+                                void handleRegisterKpiContent(a);
+                              }
+                            }}
+                            disabled={kpiContentAction.disabled}
+                            className="btn-ios-pill"
+                            style={{
+                              padding: "5px 9px",
+                              minWidth: 34,
+                              height: 34,
+                              background: kpiContentAction.background,
+                              color: kpiContentAction.color,
+                              border: kpiContentAction.border,
+                              opacity: kpiContentAction.disabled ? 0.88 : 1,
+                            }}
+                            title={kpiContentAction.title}
+                          >
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: 17,
+                                animation: kpiContentAction.animation,
+                              }}
+                            >
+                              {kpiContentAction.icon}
+                            </span>
+                          </button>
+                        );
+                      })()}
                       {(canManageArticles || a.canDelete) && (
                         <button
                           data-testid={`article-delete-${a.id}`}
@@ -2192,14 +2321,18 @@ export default function ArticlesPage() {
               onEdit={() => openArticleModal({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) })}
               onComments={() => openComments(a)}
               onRegisterContentWork={() => { void handleRegisterContentWork(a); }}
+              onRegisterKpiContent={() => { void handleRegisterKpiContent(a); }}
               onDelete={() => deleteSingleArticle(a)}
               canEdit={canEditArticle(a)}
               canRegisterContentWork={canRegisterContentWork(a)}
+              canRegisterKpiContent={canRegisterKpiContent(a)}
               showContentWorkAction={showContentWorkAction(a)}
+              showKpiContentAction={showKpiContentAction(a)}
               canDelete={canManageArticles || a.canDelete}
               showAuthor={canManageArticles}
               isDeleting={deletingArticleIds.includes(a.id)}
               isRegisteringContentWork={registeringContentWork && registeringContentWorkArticleId === a.id}
+              isRegisteringKpiContent={registeringKpiContent && registeringKpiContentArticleId === a.id}
               unreadComments={Number(a.unreadCommentCount || 0)}
             />
         ))}
@@ -2888,6 +3021,40 @@ export default function ArticlesPage() {
                           {contentWorkAction.icon}
                         </span>
                         {contentWorkAction.disabled || (formData as Article).contentWorkStatus === "failed" ? contentWorkAction.label : "Đăng ký Content Work"}
+                      </button>
+                    );
+                  })()}
+                  {Boolean(formData.id) && showKpiContentAction(formData as Article) && (() => {
+                    const kpiContentAction = getKpiContentActionState(
+                      formData as Article,
+                      registeringKpiContent && registeringKpiContentArticleId === Number(formData.id),
+                    );
+                    return (
+                      <button
+                        className="btn-ios-pill btn-ios-secondary"
+                        onClick={() => {
+                          if (!kpiContentAction.disabled) {
+                            void handleRegisterKpiContent(formData as Article);
+                          }
+                        }}
+                        disabled={kpiContentAction.disabled || savingArticle || movingArticleToNextMonth}
+                        style={{
+                          borderColor: kpiContentAction.border.replace("1px solid ", ""),
+                          color: kpiContentAction.color,
+                          background: kpiContentAction.background,
+                        }}
+                        title={kpiContentAction.title}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: 18,
+                            animation: kpiContentAction.animation,
+                          }}
+                        >
+                          {kpiContentAction.icon}
+                        </span>
+                        {kpiContentAction.disabled || (formData as Article).kpiContentStatus === "failed" ? kpiContentAction.label : "Đăng ký KPI"}
                       </button>
                     );
                   })()}

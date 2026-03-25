@@ -7,8 +7,23 @@ import { useAuth } from "./auth-context";
 import type { Collaborator, TeamSummary, UserAccount } from "./types";
 import { useIsMobile } from "./useMediaQuery";
 import BottomSheet from "./BottomSheet";
+
+type AdminProfile = {
+  id: string;
+  userId: number;
+  collaboratorId: number | null;
+  name: string;
+  penName: string;
+  email: string;
+  status: string;
+  kpiStandard: number | null;
+  employeeCode: string | null;
+  isOwner: boolean;
+  isLeader: boolean;
+};
+
 export default function TeamPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const isMobile = useIsMobile();
   const isLeader = Boolean(user?.role === "admin" && user?.isLeader);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -30,6 +45,10 @@ export default function TeamPage() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferTargetUserId, setTransferTargetUserId] = useState("");
   const [transferring, setTransferring] = useState(false);
+  const [showEmployeeCodeModal, setShowEmployeeCodeModal] = useState(false);
+  const [employeeCodeForm, setEmployeeCodeForm] = useState({ userId: "", employeeCode: "", displayName: "", email: "" });
+  const [employeeCodeError, setEmployeeCodeError] = useState("");
+  const [employeeCodeSaving, setEmployeeCodeSaving] = useState(false);
 
   const fetchTeams = () => {
     if (user?.role !== "admin") return;
@@ -118,6 +137,69 @@ export default function TeamPage() {
     setTransferTargetUserId("");
     setTransferring(false);
   };
+
+  const closeEmployeeCodeModal = () => {
+    setShowEmployeeCodeModal(false);
+    setEmployeeCodeForm({ userId: "", employeeCode: "", displayName: "", email: "" });
+    setEmployeeCodeError("");
+    setEmployeeCodeSaving(false);
+  };
+
+  const openEmployeeCodeModal = (admin: AdminProfile) => {
+    setEmployeeCodeForm({
+      userId: String(admin.userId),
+      employeeCode: admin.employeeCode || "",
+      displayName: admin.name,
+      email: admin.email,
+    });
+    setEmployeeCodeError("");
+    setShowEmployeeCodeModal(true);
+  };
+
+  const saveEmployeeCode = async () => {
+    const userId = Number(employeeCodeForm.userId);
+    const employeeCode = employeeCodeForm.employeeCode.trim();
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      setEmployeeCodeError("Không xác định được tài khoản cần cập nhật.");
+      return;
+    }
+    if (!employeeCode) {
+      setEmployeeCodeError("Vui lòng nhập mã nhân viên.");
+      return;
+    }
+
+    try {
+      setEmployeeCodeSaving(true);
+      setEmployeeCodeError("");
+      const res = await fetch("/api/collaborators", {
+        method: "PUT",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          employeeCode,
+        }),
+      });
+      const data = await res.json().catch(() => ({ success: false, error: "Không thể đọc phản hồi từ máy chủ" }));
+      if (!res.ok || !data.success) {
+        setEmployeeCodeError(data.error || "Không thể lưu mã nhân viên.");
+        return;
+      }
+
+      closeEmployeeCodeModal();
+      fetchCTVs();
+      if (user?.id === userId && typeof refreshUser === "function") {
+        await refreshUser();
+      }
+      alert("✅ Đã cập nhật mã nhân viên thành công.");
+    } catch {
+      setEmployeeCodeError("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
+    } finally {
+      setEmployeeCodeSaving(false);
+    }
+  };
+
   const openCreateModal = () => {
     const nextTeamId = isLeader ? Number(selectedTeamId || 0) || null : user?.teamId ?? null;
     if (isLeader && !nextTeamId) {
@@ -340,22 +422,25 @@ export default function TeamPage() {
       };
     })
     .sort((left, right) => left.label.localeCompare(right.label, "vi"));
-  const adminProfiles = userAccounts
-    .filter((user) => user.role === "admin")
-    .map((user) => {
-      const linkedCollaborator = collaborators.find((collaborator) => collaborator.linkedUserId === user.id || collaborator.linkedUserRole === "admin" && collaborator.linkedUserEmail === user.email) || null;
+  const adminProfiles: AdminProfile[] = userAccounts
+    .filter((account) => account.role === "admin")
+    .map((account) => {
+      const linkedCollaborator = collaborators.find((collaborator) => collaborator.linkedUserId === account.id || (collaborator.linkedUserRole === "admin" && collaborator.linkedUserEmail === account.email)) || null;
       return {
-        id: linkedCollaborator ? `collaborator-${linkedCollaborator.id}` : `user-${user.id}`,
+        id: linkedCollaborator ? `collaborator-${linkedCollaborator.id}` : `user-${account.id}`,
+        userId: account.id,
         collaboratorId: linkedCollaborator?.id ?? null,
-        name: linkedCollaborator?.name || (user.isLeader ? "Leader hệ thống" : "Biên tập viên chính"),
-        penName: linkedCollaborator?.penName || (user.isLeader ? "Leader" : "Admin"),
-        email: linkedCollaborator?.email || user.email,
+        name: linkedCollaborator?.name || (account.isLeader ? "Leader hệ thống" : "Biên tập viên chính"),
+        penName: linkedCollaborator?.penName || (account.isLeader ? "Leader" : "Admin"),
+        email: linkedCollaborator?.email || account.email,
         status: linkedCollaborator?.status || "active",
         kpiStandard: linkedCollaborator?.kpiStandard ?? null,
-        isOwner: currentTeam?.ownerUserId === user.id,
-        isLeader: Boolean(user.isLeader),
+        employeeCode: account.employeeCode ?? linkedCollaborator?.employeeCode ?? null,
+        isOwner: currentTeam?.ownerUserId === account.id,
+        isLeader: Boolean(account.isLeader),
       };
     });
+  const currentAdminProfile = adminProfiles.find((admin) => admin.userId === user?.id) || null;
   const writers = collaborators.filter(c => c.linkedUserRole !== "admin" && c.role === "writer");
   const reviewers = collaborators.filter(c => c.linkedUserRole !== "admin" && c.role === "reviewer");
   const currentLinkedUser = formData.linkedUserId ? userAccounts.find((user) => user.id === formData.linkedUserId) : null;
@@ -697,8 +782,19 @@ export default function TeamPage() {
       </div>
 
       <div className="glass-card" style={{ padding: 0, overflow: "hidden", marginBottom: isMobile ? 80 : 0 }}>
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)" }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>📋 Admin team ({adminProfiles.length})</h3>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", background: "rgba(255,255,255,0.02)", display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>📋 Admin team ({adminProfiles.length})</h3>
+            <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+              Mã nhân viên này sẽ được dùng cho KPI Content và form đăng ký nội bộ của admin/leader.
+            </div>
+          </div>
+          {currentAdminProfile ? (
+            <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => openEmployeeCodeModal(currentAdminProfile)}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>badge</span>
+              {currentAdminProfile.employeeCode ? "Sửa mã NV" : "Thêm mã NV"}
+            </button>
+          ) : null}
         </div>
         {!isMobile ? (
           <div style={{ overflowX: "auto" }}>
@@ -736,6 +832,12 @@ export default function TeamPage() {
                             OWNER
                           </span>
                         )}
+                      </div>
+                      <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 999, background: "rgba(37, 99, 235, 0.08)", color: "var(--accent-blue)", fontSize: 11, fontWeight: 800 }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>badge</span>
+                          {admin.employeeCode || "Chưa có mã"}
+                        </span>
                       </div>
                     </td>
                     <td style={{ padding: "16px 24px", fontSize: 14, color: "var(--accent-orange)", fontWeight: 600 }}>{admin.penName}</td>
@@ -1336,6 +1438,89 @@ export default function TeamPage() {
               <button className="btn-ios-pill btn-ios-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={closeTransferModal} disabled={transferring}>Hủy</button>
               <button className="btn-ios-pill btn-ios-primary" style={{ flex: 2, justifyContent: "center" }} onClick={transferTeamOwner} disabled={!transferTargetUserId || transferring}>
                 {transferring ? "Đang xử lý..." : "Xác nhận"}
+              </button>
+            </div>
+          </div>
+        </BottomSheet>
+      )}
+
+      {!isMobile ? (
+        showEmployeeCodeModal && (
+          <div className="modal-overlay" onClick={() => !employeeCodeSaving && closeEmployeeCodeModal()}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Mã nhân viên KPI Content</h3>
+                <button className="modal-close" onClick={() => !employeeCodeSaving && closeEmployeeCodeModal()}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                </button>
+              </div>
+              <div className="modal-body">
+                {employeeCodeError && (
+                  <div style={{ marginBottom: 20, padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(239, 68, 68, 0.18)", background: "var(--danger-light)", color: "var(--danger)", fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>
+                    {employeeCodeError}
+                  </div>
+                )}
+                <div style={{ marginBottom: 16, padding: 16, borderRadius: 16, border: "1px solid rgba(37, 99, 235, 0.16)", background: "rgba(37, 99, 235, 0.05)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                  Mã nhân viên này sẽ được dùng để tự điền vào form KPI Content và đồng bộ với workflow Google Form.
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tài khoản</label>
+                  <input className="form-input" value={employeeCodeForm.displayName || employeeCodeForm.email} readOnly />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mã nhân viên *</label>
+                  <input
+                    className="form-input"
+                    value={employeeCodeForm.employeeCode}
+                    onChange={(event) => {
+                      setEmployeeCodeForm((current) => ({ ...current, employeeCode: event.target.value }));
+                      if (employeeCodeError) setEmployeeCodeError("");
+                    }}
+                    placeholder="NhanND18"
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-ios-pill btn-ios-secondary" onClick={closeEmployeeCodeModal} disabled={employeeCodeSaving}>Hủy bỏ</button>
+                <button className="btn-ios-pill btn-ios-primary" onClick={saveEmployeeCode} disabled={employeeCodeSaving}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>save</span>
+                  {employeeCodeSaving ? "Đang lưu..." : "Lưu mã nhân viên"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      ) : (
+        <BottomSheet isOpen={showEmployeeCodeModal} onClose={() => !employeeCodeSaving && closeEmployeeCodeModal()} title="Mã nhân viên KPI Content">
+          <div style={{ padding: "0 4px 40px 4px" }}>
+            {employeeCodeError && (
+              <div style={{ marginBottom: 20, padding: 12, borderRadius: 12, background: "var(--danger-light)", color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>
+                {employeeCodeError}
+              </div>
+            )}
+            <div style={{ marginBottom: 16, padding: 16, borderRadius: 16, border: "1px solid rgba(37, 99, 235, 0.16)", background: "rgba(37, 99, 235, 0.05)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
+              Mã nhân viên này sẽ được dùng để tự điền vào form KPI Content.
+            </div>
+            <div className="form-group">
+              <label className="form-label">Tài khoản</label>
+              <input className="form-input" value={employeeCodeForm.displayName || employeeCodeForm.email} readOnly />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Mã nhân viên *</label>
+              <input
+                className="form-input"
+                value={employeeCodeForm.employeeCode}
+                onChange={(event) => {
+                  setEmployeeCodeForm((current) => ({ ...current, employeeCode: event.target.value }));
+                  if (employeeCodeError) setEmployeeCodeError("");
+                }}
+                placeholder="NhanND18"
+              />
+            </div>
+            <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
+              <button className="btn-ios-pill btn-ios-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={closeEmployeeCodeModal} disabled={employeeCodeSaving}>Hủy</button>
+              <button className="btn-ios-pill btn-ios-primary" style={{ flex: 2, justifyContent: "center" }} onClick={saveEmployeeCode} disabled={employeeCodeSaving}>
+                {employeeCodeSaving ? "Đang lưu..." : "Lưu mã nhân viên"}
               </button>
             </div>
           </div>

@@ -1,5 +1,27 @@
 # Codex Handoff
 
+## Update 2026-03-25 (KPI Content automation for admin/leader)
+
+- Da them luong `KPI Content` cho admin/leader:
+  - `ArticlesPage` co nut `Dang ky KPI`
+  - `Team` co luu `employeeCode` cho admin/leader
+  - `KPI` co section quan ly batch KPI Content noi bo
+- Da co Apps Script mau va env mau:
+  - `output/kpi-content-automation.workdocker.gs`
+  - `docs/kpi-content-automation.md`
+  - `.env.example` co:
+    - `KPI_CONTENT_SCRIPT_WEB_APP_URL`
+    - `KPI_CONTENT_SCRIPT_SECRET`
+- Mapping form KPI Content da chot:
+  - page 1: `entry.2063490353`, `entry.1997176339`
+  - page 2: `entry.1511448067`, `entry.1417839557`
+  - page 3: `entry.1708619375`, `entry.115890814`, `entry.1057708020`, `entry.779972713`, `entry.1418536144`
+- Batch KPI Content toi da `5` link.
+- Logic chon field van theo `3` page, nhung Apps Script mau da doi sang `1 final POST` day du field bat buoc sau khi fetch `fbzx`, `partialResponse`, `_sentinel`.
+- Da verify truc tiep voi form that:
+  - flow submit tung page rieng bi validation fail
+  - flow submit mot request cuoi on dinh hon cho form nay
+
 ## Update 2026-03-25 (production copy tu Vercel/Nile da vao VPS)
 
 - Da vao duoc Vercel CLI account va verify production that:

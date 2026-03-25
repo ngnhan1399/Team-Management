@@ -15,6 +15,7 @@ type TokenPayload = {
     role: "admin" | "ctv";
     isLeader: boolean;
     penName: string;
+    employeeCode?: string | null;
     collaboratorId: number | null;
     teamId: number | null;
 };
@@ -176,6 +177,7 @@ export function getContextIdentityCandidates(context: CurrentUserContext): strin
         context.collaborator?.name,
         context.collaborator?.penName,
         context.collaborator?.email,
+        context.user.employeeCode,
         context.token.penName,
         context.user.email.split("@")[0],
         context.user.email,
@@ -200,6 +202,7 @@ export function getContextIdentityLabels(context: CurrentUserContext): string[] 
         context.collaborator?.name,
         context.collaborator?.penName,
         context.collaborator?.email,
+        context.user.employeeCode,
         context.token.penName,
         context.user.email.split("@")[0],
         context.user.email,

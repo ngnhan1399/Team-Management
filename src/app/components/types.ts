@@ -8,6 +8,7 @@ export interface Collaborator {
   role: "writer" | "reviewer";
   kpiStandard: number;
   status: string;
+  employeeCode?: string | null;
   email?: string;
   phone?: string;
   avatar?: string;
@@ -20,6 +21,7 @@ export interface Collaborator {
   linkedUserRole?: "admin" | "ctv" | null;
   linkedUserIsLeader?: boolean;
   linkedUserTeamId?: number | null;
+  linkedUserEmployeeCode?: string | null;
 }
 
 export interface UserAccount {
@@ -27,6 +29,7 @@ export interface UserAccount {
   email: string;
   role: "admin" | "ctv";
   isLeader?: boolean;
+  employeeCode?: string | null;
   collaboratorId: number | null;
   teamId?: number | null;
 }
@@ -70,6 +73,8 @@ export interface Article {
   reviewLink?: string | null;
   contentWorkStatus?: "queued" | "submitting_form" | "form_submitted" | "link_written" | "completed" | "failed" | null;
   contentWorkStatusLabel?: string | null;
+  kpiContentStatus?: "queued" | "submitting_form" | "form_submitted" | "completed" | "failed" | null;
+  kpiContentStatusLabel?: string | null;
   reviewerName: string;
   notes: string;
   canDelete?: boolean;
@@ -180,6 +185,91 @@ export interface ContentWorkRegistrationItem {
   articleStatus: string;
   formUrl: string;
   sheetUrl: string;
+}
+
+export interface KpiContentRegistrationItem {
+  id: number;
+  articleId: number;
+  batchId: string;
+  batchPosition: number;
+  batchSize: number;
+  teamId: number | null;
+  requestedByUserId: number;
+  employeeCode: string;
+  penName: string;
+  title: string;
+  articleLink: string | null;
+  articleDate: string;
+  articleStatus: string;
+  taskLabel: string;
+  detailLabel: string;
+  status: "queued" | "submitting_form" | "form_submitted" | "completed" | "failed";
+  statusLabel: string;
+  attemptCount: number;
+  automationMessage: string | null;
+  lastError: string | null;
+  submittedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  formUrl: string;
+}
+
+export interface KpiContentRegistrationArticleItem {
+  id: number;
+  articleId: number;
+  batchId: string;
+  teamId: number | null;
+  requestedByUserId: number;
+  employeeCode: string;
+  penName: string;
+  title: string;
+  articleLink: string | null;
+  articleDate: string;
+  articleStatus: string;
+  taskLabel: string;
+  detailLabel: string;
+  status: "queued" | "submitting_form" | "form_submitted" | "completed" | "failed";
+  statusLabel: string;
+  attemptCount: number;
+  automationMessage: string | null;
+  lastError: string | null;
+  submittedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  batchPosition: number;
+  batchSize: number;
+}
+
+export interface KpiContentRegistrationBatchItem {
+  id: number;
+  teamId: number | null;
+  requestedByUserId: number;
+  employeeCode: string;
+  batchKey: string;
+  batchSize: number;
+  taskLabel: string;
+  detailLabel: string;
+  status: "queued" | "submitting_form" | "form_submitted" | "completed" | "failed";
+  statusLabel: string;
+  attemptCount: number;
+  automationMessage: string | null;
+  lastError: string | null;
+  submittedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  requestedByEmail?: string | null;
+  requestedByEmployeeCode?: string | null;
+  requestedByDisplayName?: string | null;
+  formUrl?: string;
+  registrations: KpiContentRegistrationArticleItem[];
+}
+
+export interface KpiContentResponseData {
+  batches: KpiContentRegistrationBatchItem[];
+  total: number;
 }
 
 export interface KpiMemberRow {

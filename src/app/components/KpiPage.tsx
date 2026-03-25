@@ -2,9 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CustomSelect from "./CustomSelect";
+import KpiContentManagerSection from "./KpiContentManagerSection";
 import { useRealtimeRefresh } from "./realtime";
 import { useIsMobile } from "./useMediaQuery";
-import type { KpiMemberRow, KpiResponseData } from "./types";
+import type { KpiContentResponseData, KpiMemberRow, KpiResponseData } from "./types";
 
 const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
 const compactNumber = new Intl.NumberFormat("vi-VN");
@@ -226,6 +227,9 @@ export default function KpiPage() {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState<KpiResponseData | null>(null);
+  const [kpiContentData, setKpiContentData] = useState<KpiContentResponseData | null>(null);
+  const [kpiContentLoading, setKpiContentLoading] = useState(false);
+  const [kpiContentError, setKpiContentError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -238,6 +242,35 @@ export default function KpiPage() {
   const monthOptions = monthNames.map((item, index) => ({ value: String(index + 1), label: item }));
 
   const allRows = useMemo(() => data ? [...data.writerRows, ...data.reviewerRows] : [], [data]);
+
+  const fetchKpiContent = useCallback(async (teamId: number | null, canManage: boolean) => {
+    if (!canManage) {
+      setKpiContentData(null);
+      setKpiContentError("");
+      setKpiContentLoading(false);
+      return;
+    }
+
+    try {
+      setKpiContentLoading(true);
+      setKpiContentError("");
+      const params = new URLSearchParams();
+      if (teamId) {
+        params.set("teamId", String(teamId));
+      }
+      const response = await fetch(`/api/kpi-content${params.toString() ? `?${params}` : ""}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || "Khong the tai KPI Content");
+      }
+      setKpiContentData(payload?.data || { batches: [], total: 0 });
+    } catch (fetchError) {
+      setKpiContentData({ batches: [], total: 0 });
+      setKpiContentError(fetchError instanceof Error ? fetchError.message : "Khong the tai KPI Content");
+    } finally {
+      setKpiContentLoading(false);
+    }
+  }, []);
 
   const fetchKpi = useCallback((showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -257,13 +290,17 @@ export default function KpiPage() {
         setDraftMonthlyTargets({ writer: Number(nextData?.monthlyTargets?.writer || 0), reviewer: Number(nextData?.monthlyTargets?.reviewer || 0) });
         setPendingWarnings({});
         setLoading(false);
+        void fetchKpiContent(nextData?.teamId ?? null, Boolean(nextData?.canManage));
       })
       .catch((fetchError: unknown) => {
         setData(null);
+        setKpiContentData(null);
+        setKpiContentError("");
+        setKpiContentLoading(false);
         setError(fetchError instanceof Error ? fetchError.message : "Không thể tải dữ liệu KPI");
         setLoading(false);
       });
-  }, [month, year]);
+  }, [fetchKpiContent, month, year]);
 
   useEffect(() => {
     void fetchKpi(true);
@@ -460,6 +497,14 @@ export default function KpiPage() {
 
       {data.canManage ? (
         <>
+          <KpiContentManagerSection
+            batches={kpiContentData?.batches || []}
+            loading={kpiContentLoading}
+            error={kpiContentError}
+            month={month}
+            year={year}
+            isMobile={isMobile}
+          />
           <KpiRoleSection
             title="CTV viết bài"
             role="writer"
