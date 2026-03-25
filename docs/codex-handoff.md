@@ -7,6 +7,9 @@
   1. payload final POST khop browser payload that, trong do `submissionTimestamp = -1`
   2. production da redeploy sang commit moi
   3. KPI Content tables cu sai da duoc backup va xoa de UI gom batch lai sach
+- Da xac dinh them mot nguyen nhan goc co kha nang cao:
+  - direct-form flow truoc do chi lay `fbzx` tu `viewform` nhung khong mang theo cookie session sang `formResponse`
+  - can forward lai cookie session nay de form backend xu ly day du 5 o link giong browser
 - Da xac nhan live runtime tren VPS hien khong con `KPI_CONTENT_SCRIPT_*`, nen neu van sai thi uu tien nghi den payload direct-form hoac du lieu batch cu trong DB, khong do lai cho Apps Script proxy.
 
 ## Update 2026-03-25 (Coolify redeploy verification rule)

@@ -65,6 +65,7 @@
   - `employeeCode`, `task`, `detail` chi nam trong `partialResponse`
   - `pageHistory` phai dung nhanh that cua form
   - 5 o link phai duoc gui theo dung thu tu `link1 -> link5`
+  - phai giu lai cookie session ma `viewform` tra ve va gui lai cookie do o request `formResponse`
 - Nghia la:
   - logic chon field van theo 3 page
   - nhung khong gui tung page rieng nua

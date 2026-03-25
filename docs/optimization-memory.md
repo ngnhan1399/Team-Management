@@ -7,6 +7,8 @@
   - `pageHistory` dung nhanh that cua form
   - `employeeCode`, `task`, `detail` nam trong `partialResponse`
   - `submissionTimestamp = -1`
+- Google Form nay con tra ve cookie session tu `viewform`.
+- Neu backend chi lay `fbzx` roi POST thang len `formResponse` ma khong forward lai cookie session, co the Google chi ghi nhan mot phan du lieu trang cuoi.
 - Da gap mot nguyen nhan van hanh bo sung:
   - cac batch `completed` cu bi submit sai trong DB lam UI chi gom duoc it bai hop le hon cho lan gui tiep theo, co the con 1 bai
 - Truoc khi retest that sau dot fix payload, can:

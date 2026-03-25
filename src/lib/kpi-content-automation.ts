@@ -74,6 +74,7 @@ type LoadedKpiContentBatch = NonNullable<Awaited<ReturnType<typeof loadBatch>>>;
 
 type DirectFormState = {
   fbzx: string;
+  cookieHeader: string;
 };
 
 function normalizeText(value: unknown) {
@@ -285,8 +286,20 @@ async function fetchKpiContentFormState(signal: AbortSignal): Promise<DirectForm
     throw new Error("Không lấy được token fbzx của Google Form KPI Content.");
   }
 
+  const getSetCookie = typeof (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie === "function"
+    ? (response.headers as Headers & { getSetCookie: () => string[] }).getSetCookie.bind(response.headers)
+    : null;
+  const setCookieHeaders = getSetCookie
+    ? getSetCookie()
+    : [response.headers.get("set-cookie")].filter((value): value is string => Boolean(value));
+  const cookieHeader = setCookieHeaders
+    .map((cookie) => normalizeText(cookie.split(";")[0]))
+    .filter(Boolean)
+    .join("; ");
+
   return {
     fbzx: fbzxMatch[1],
+    cookieHeader,
   };
 }
 
@@ -351,6 +364,7 @@ async function submitKpiContentDirectly(input: {
         "Content-Type": "application/x-www-form-urlencoded",
         Origin: "https://docs.google.com",
         Referer: KPI_CONTENT_FORM_RESPONSE_URL,
+        ...(formState.cookieHeader ? { Cookie: formState.cookieHeader } : {}),
       },
       body: payload.toString(),
       redirect: "follow",
