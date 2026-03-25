@@ -97,13 +97,17 @@ function parseJsonSafely(value: string) {
   }
 }
 
-function normalizeKpiContentAutomationMessage(message: string) {
+export function normalizeKpiContentAutomationMessage(message: string) {
   const normalized = normalizeText(message);
   if (!normalized) {
     return normalized;
   }
 
   const folded = foldText(normalized);
+
+  if (folded === "da gui kpi content form truc tiep." || folded === "da gui kpi content form truc tiep") {
+    return "Đã gửi KPI Content form trực tiếp.";
+  }
 
   if (/urlfetchapp\.fetch/i.test(normalized) || /script\.external_request/i.test(normalized)) {
     return "KPI Content Apps Script chưa được cấp quyền gọi dịch vụ ngoài. Hãy mở script và cấp quyền một lần.";

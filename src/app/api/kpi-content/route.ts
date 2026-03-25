@@ -7,7 +7,7 @@ import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { canAccessTeam, resolveScopedTeamId } from "@/lib/teams";
 import { writeAuditLog } from "@/lib/audit";
-import { processKpiContentRegistrationJob } from "@/lib/kpi-content-automation";
+import { normalizeKpiContentAutomationMessage, processKpiContentRegistrationJob } from "@/lib/kpi-content-automation";
 import { KPI_CONTENT_FORM_URL, getKpiContentStatusLabel, normalizeEmployeeCode, resolveKpiContentTaskSelection, type KpiContentStatus } from "@/lib/kpi-content-registration";
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { normalizeString } from "@/lib/normalize";
@@ -294,12 +294,18 @@ export async function GET(request: NextRequest) {
         const requester = requesterById.get(batch.requestedByUserId) || null;
         return {
           ...batch,
+          automationMessage: batch.automationMessage
+            ? normalizeKpiContentAutomationMessage(batch.automationMessage)
+            : null,
           statusLabel: getKpiContentStatusLabel(batch.status),
           requestedByEmail: requester?.email ?? null,
           requestedByEmployeeCode: requester?.employeeCode ?? null,
           requestedByDisplayName: requester?.employeeCode || requester?.email || `user-${batch.requestedByUserId}`,
           registrations: items.map((item) => ({
             ...item,
+            automationMessage: item.automationMessage
+              ? normalizeKpiContentAutomationMessage(item.automationMessage)
+              : null,
             statusLabel: getKpiContentStatusLabel(item.status),
           })),
           formUrl: KPI_CONTENT_FORM_URL,
