@@ -1,5 +1,31 @@
 # Coolify Auto Redeploy
 
+## Update 2026-03-25 16:12 ICT
+
+- Auto redeploy da duoc nang tu cron moi phut len `systemd timer` moi `15 giay`.
+- Timer hien tai tren VPS:
+  - `/etc/systemd/system/ctv-management-coolify-autodeploy.service`
+  - `/etc/systemd/system/ctv-management-coolify-autodeploy.timer`
+- Cron cu da duoc go bo:
+  - `/etc/cron.d/ctv-management-coolify-autodeploy`
+- Queue script van giu nguyen:
+  - `/usr/local/bin/ctv-management-coolify-queue.sh`
+- Poller wrapper van giu nguyen:
+  - `/usr/local/bin/ctv-management-coolify-autodeploy.sh`
+- Xac nhan live tren VPS:
+  - deployment `17` da `finished`
+  - container dang chay commit `949092c2f8bf3bc05dba35c944dabd02c4ef7c4c`
+  - timer da trigger lap lai thanh cong luc `16:12:24` va `16:12:40`
+
+## Quy tac xac nhan truoc khi test
+
+Khong duoc bao nguoi dung "da xong" neu chua du ca 4 dau hieu sau:
+
+1. Commit da len `origin/main`.
+2. Coolify deployment moi nhat da `finished`.
+3. Container live dang chay dung image tag cua commit vua push.
+4. Production URL that da duoc mo lai va kiem tra.
+
 ## Bối cảnh
 
 - `ctv-management-app` trên Coolify đã bật `is_auto_deploy_enabled = true`.

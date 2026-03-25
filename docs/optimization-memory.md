@@ -1,5 +1,21 @@
 # Optimization Memory
 
+## 2026-03-25 - Coolify redeploy memory
+
+- Coolify tren VPS nay khong co trai nghiem `push la deploy ngay` giong Vercel neu chi dung `Public GitHub` ma khong co webhook trigger hop le.
+- `is_auto_deploy_enabled = true` khong du de dam bao production tu doi commit.
+- Da dat co che nhanh hon de tranh nghen test:
+  - queue script: `/usr/local/bin/ctv-management-coolify-queue.sh`
+  - poller wrapper: `/usr/local/bin/ctv-management-coolify-autodeploy.sh`
+  - `systemd timer` moi `15 giay`
+- Da verify that:
+  - deployment `17` auto queue va `finished`
+  - container live da len commit `949092c2f8bf3bc05dba35c944dabd02c4ef7c4c`
+- Khong nen lap lai:
+  - khong bao da sua live neu moi chi push code
+  - khong coi repo state la production state
+  - khong bat nguoi dung test truoc khi deployment `finished` va live URL da duoc mo lai
+
 ## 2026-03-25 - KPI Content response cleanup memory
 
 - Commit `bfd7b5d` da fix payload submit KPI Content cho cac luot gui moi.

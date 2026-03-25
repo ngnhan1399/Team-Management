@@ -1,5 +1,22 @@
 # Codex Handoff
 
+## Update 2026-03-25 (Coolify redeploy verification rule)
+
+- Root cause cua viec "push code roi nhung production chua doi" la app tren Coolify dang o trang thai:
+  - bat `is_auto_deploy_enabled = true`
+  - nhung source la `Public GitHub`
+  - khong co webhook hop le de tu tao deployment nhu Vercel
+- Tu bay gio, phai coi redeploy la mot buoc rieng va bat buoc verify tren live.
+- Co che hien tai tren VPS:
+  - `/usr/local/bin/ctv-management-coolify-queue.sh`
+  - `/usr/local/bin/ctv-management-coolify-autodeploy.sh`
+  - `systemd timer` moi `15 giay`
+- Chi bao "da xong" khi du ca 4 buoc:
+  1. commit da len `origin/main`
+  2. deployment moi nhat trong Coolify da `finished`
+  3. container live da doi sang commit moi
+  4. URL production that da duoc mo lai va kiem tra
+
 ## Update 2026-03-25 (KPI Content response cleanup for old bad rows)
 
 - Commit `bfd7b5d` da sua payload submit KPI Content cho cac request moi.
