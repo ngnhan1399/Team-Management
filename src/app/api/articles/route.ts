@@ -1,5 +1,5 @@
 import { db, ensureDatabaseInitialized } from "@/db";
-import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, contentWorkRegistrations, kpiContentRegistrations, notifications, payments, users } from "@/db/schema";
+import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, contentWorkRegistrations, kpiContentRegistrations, notifications, payments, reviewRegistrations, users } from "@/db/schema";
 import { getContextArticleOwnerCandidates, getContextDisplayName, getContextIdentityCandidates, getContextIdentityLabels, getContextPenName, getCurrentUserContext, hasArticleManagerAccess, hasArticleReviewAccess, matchesIdentityCandidate } from "@/lib/auth";
 import {
   createArticleInGoogleSheet,
@@ -13,9 +13,10 @@ import { extractArticleIdFromLink, isLinkIdRequiredForArticleType } from "@/lib/
 import { expandCollaboratorIdentityValues, resolvePreferredCollaboratorPenName } from "@/lib/collaborator-identity";
 import { CONTENT_WORK_REGISTRATION_TITLE, getContentWorkStatusLabel, type ContentWorkStatus } from "@/lib/content-work-registration";
 import { getKpiContentStatusLabel, type KpiContentStatus } from "@/lib/kpi-content-registration";
+import { getReviewRegistrationStatusLabel, type ReviewRegistrationStatus } from "@/lib/review-registration";
 import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
-import { isApprovedArticleStatusFilterValue } from "@/lib/article-status";
+import { isApprovedArticleStatus, isApprovedArticleStatusFilterValue } from "@/lib/article-status";
 import { writeAuditLog } from "@/lib/audit";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { normalizeArticleReviewLink } from "@/lib/review-link";
@@ -89,6 +90,11 @@ type ArticleResponseRow = {
   contentWorkStatusLabel: string | null;
   kpiContentStatus: KpiContentStatus | null;
   kpiContentStatusLabel: string | null;
+  reviewRegistrationStatus: ReviewRegistrationStatus | null;
+  reviewRegistrationStatusLabel: string | null;
+  reviewRegistrationMessage: string | null;
+  reviewRegistrationRowNumber: number | null;
+  reviewRegistrationSheetName: string | null;
   reviewerName: string | null;
   notes: string | null;
   canDelete: boolean;
@@ -289,7 +295,7 @@ async function attachArticleResponseMetadata<
   rows: T[],
   currentUserId: number,
   canManageArticles: boolean
-): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount" | "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole" | "contentWorkStatus" | "contentWorkStatusLabel" | "kpiContentStatus" | "kpiContentStatusLabel">>> {
+): Promise<Array<T & Pick<ArticleResponseRow, "canDelete" | "commentCount" | "unreadCommentCount" | "authorBucket" | "authorBucketLabel" | "authorRole" | "authorUserRole" | "contentWorkStatus" | "contentWorkStatusLabel" | "kpiContentStatus" | "kpiContentStatusLabel" | "reviewRegistrationStatus" | "reviewRegistrationStatusLabel" | "reviewRegistrationMessage" | "reviewRegistrationRowNumber" | "reviewRegistrationSheetName">>> {
   const articleIds = rows.map((row) => row.id).filter((id) => Number.isInteger(id) && id > 0);
   const penNames = Array.from(new Set(rows.map((row) => normalizeString(row.penName)).filter(Boolean)));
   const teamIds = Array.from(new Set(rows.map((row) => Number(row.teamId)).filter((teamId) => Number.isInteger(teamId) && teamId > 0)));
@@ -303,7 +309,7 @@ async function attachArticleResponseMetadata<
     )
   );
 
-  const [commentMeta, collaboratorProfiles, creatorProfiles, contentWorkRows, kpiContentRows] = await Promise.all([
+  const [commentMeta, collaboratorProfiles, creatorProfiles, contentWorkRows, kpiContentRows, reviewRegistrationRows] = await Promise.all([
     loadArticleCommentMetadata(articleIds, currentUserId),
     penNames.length > 0
       ? db
@@ -364,6 +370,22 @@ async function attachArticleResponseMetadata<
           .orderBy(desc(kpiContentRegistrations.updatedAt), desc(kpiContentRegistrations.id))
           .all()
       : Promise.resolve([]),
+    articleIds.length > 0
+      ? db
+          .select({
+            id: reviewRegistrations.id,
+            articleId: reviewRegistrations.articleId,
+            status: reviewRegistrations.status,
+            automationMessage: reviewRegistrations.automationMessage,
+            externalRowNumber: reviewRegistrations.externalRowNumber,
+            externalSheetName: reviewRegistrations.externalSheetName,
+            updatedAt: reviewRegistrations.updatedAt,
+          })
+          .from(reviewRegistrations)
+          .where(inArray(reviewRegistrations.articleId, articleIds))
+          .orderBy(desc(reviewRegistrations.updatedAt), desc(reviewRegistrations.id))
+          .all()
+      : Promise.resolve([]),
   ]);
   const { commentCounts, unreadCommentCounts } = commentMeta;
   const collaboratorProfileByKey = new Map(
@@ -406,6 +428,27 @@ async function attachArticleResponseMetadata<
       statusLabel: getKpiContentStatusLabel(status),
     });
   }
+  const reviewRegistrationByArticleId = new Map<number, {
+    status: ReviewRegistrationStatus;
+    statusLabel: string;
+    message: string | null;
+    rowNumber: number | null;
+    sheetName: string | null;
+  }>();
+  for (const row of reviewRegistrationRows) {
+    const articleId = Number(row.articleId || 0);
+    if (!articleId || reviewRegistrationByArticleId.has(articleId)) {
+      continue;
+    }
+    const status = row.status as ReviewRegistrationStatus;
+    reviewRegistrationByArticleId.set(articleId, {
+      status,
+      statusLabel: getReviewRegistrationStatusLabel(status),
+      message: row.automationMessage || null,
+      rowNumber: Number.isInteger(Number(row.externalRowNumber)) ? Number(row.externalRowNumber) : null,
+      sheetName: row.externalSheetName || null,
+    });
+  }
 
   return rows.map((row) => ({
     ...row,
@@ -416,6 +459,11 @@ async function attachArticleResponseMetadata<
     contentWorkStatusLabel: contentWorkByArticleId.get(row.id)?.statusLabel || null,
     kpiContentStatus: kpiContentByArticleId.get(row.id)?.status || null,
     kpiContentStatusLabel: kpiContentByArticleId.get(row.id)?.statusLabel || null,
+    reviewRegistrationStatus: reviewRegistrationByArticleId.get(row.id)?.status || null,
+    reviewRegistrationStatusLabel: reviewRegistrationByArticleId.get(row.id)?.statusLabel || null,
+    reviewRegistrationMessage: reviewRegistrationByArticleId.get(row.id)?.message || null,
+    reviewRegistrationRowNumber: reviewRegistrationByArticleId.get(row.id)?.rowNumber || null,
+    reviewRegistrationSheetName: reviewRegistrationByArticleId.get(row.id)?.sheetName || null,
     ...(() => {
       const normalizedPenName = normalizeString(row.penName).toLowerCase();
       const collaboratorProfile = collaboratorProfileByKey.get(
@@ -1382,6 +1430,110 @@ export async function PUT(request: NextRequest) {
       });
 
       return NextResponse.json({ success: true, updatedCount: ids.length, reviewerName });
+    }
+
+    if (action === "mark-reviewed") {
+      if (!hasArticleReviewAccess(context)) {
+        return NextResponse.json({ success: false, error: "Reviewer access required" }, { status: 403 });
+      }
+
+      const id = Number(rawBody.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return NextResponse.json({ success: false, error: "ID bài viết không hợp lệ" }, { status: 400 });
+      }
+
+      const existing = await db.select().from(articles).where(eq(articles.id, id)).get();
+      if (!existing) {
+        return NextResponse.json({ success: false, error: "Article not found" }, { status: 404 });
+      }
+      if (!canAccessTeam(context, existing.teamId)) {
+        return NextResponse.json({ success: false, error: "Permission denied" }, { status: 403 });
+      }
+
+      const [existingWithMetadata] = await attachArticleResponseMetadata([existing], context.user.id, canManageArticles);
+      if (existingWithMetadata?.authorBucket === "editorial") {
+        return NextResponse.json(
+          { success: false, error: "Chỉ áp dụng duyệt bài cho bài của CTV" },
+          { status: 400 }
+        );
+      }
+
+      const identityCandidates = getContextIdentityCandidates(context);
+      const reviewerName = normalizeString(existing.reviewerName) || getContextDisplayName(context);
+      if (!reviewerName) {
+        return NextResponse.json({ success: false, error: "Bài viết chưa có reviewer hợp lệ" }, { status: 400 });
+      }
+
+      if (!canManageArticles && !matchesIdentityCandidate(identityCandidates, existing.reviewerName)) {
+        return NextResponse.json(
+          { success: false, error: "Bạn chỉ có thể đánh dấu đã duyệt cho bài đang giao cho mình" },
+          { status: 403 }
+        );
+      }
+
+      const normalizedReviewLink = Object.prototype.hasOwnProperty.call(rawBody, "reviewLink")
+        ? (normalizeArticleReviewLink(normalizeString(rawBody.reviewLink)) || null)
+        : (normalizeArticleReviewLink(existing.reviewLink) || null);
+      const alreadyReviewed = isApprovedArticleStatus(existing.status);
+      const updatedAt = new Date().toISOString();
+
+      await db.update(articles)
+        .set({
+          status: "Published",
+          reviewerName,
+          reviewLink: normalizedReviewLink || undefined,
+          updatedAt,
+        })
+        .where(eq(articles.id, id))
+        .run();
+
+      scheduleBackgroundWork(async () => {
+        await runNonBlockingStep(
+          () => writeAuditLog({
+            userId: context.user.id,
+            action: alreadyReviewed ? "article_review_reconfirmed" : "article_review_marked",
+            entity: "article",
+            entityId: id,
+            payload: {
+              previousStatus: existing.status,
+              nextStatus: "Published",
+              reviewerName,
+              reviewLink: normalizedReviewLink,
+            },
+          }),
+          { scope: "articles.put.markReviewed.audit", fallback: undefined }
+        );
+
+        const sheetSyncResult = await runNonBlockingStep(
+          () => mirrorArticleUpdateToGoogleSheet({
+            articleId: id,
+            actorUserId: context.user.id,
+            actorDisplayName: getContextDisplayName(context),
+            reason: "articles_mark_reviewed",
+          }),
+          {
+            scope: "articles.put.markReviewed.sheetSync",
+            fallback: {
+              attempted: true,
+              success: false,
+              skipped: false,
+              message: "Không thể kết nối tới Google Sheet lúc này. Bài viết vẫn đã được cập nhật trong hệ thống.",
+            },
+          }
+        );
+
+        if (sheetSyncResult && (sheetSyncResult.skipped || !sheetSyncResult.success)) {
+          await notifyGoogleSheetSyncIssue(context.user.id, sheetSyncResult.message);
+        }
+
+        await runNonBlockingStep(
+          () => publishRealtimeEvent(["articles", "dashboard", "royalty"]),
+          { scope: "articles.put.markReviewed.realtime", fallback: null }
+        );
+      });
+
+      const article = await loadArticleResponseRow(id, context.user.id, canManageArticles);
+      return NextResponse.json({ success: true, alreadyReviewed, backgroundSyncQueued: true, article });
     }
 
     if (action === "move-to-next-month") {

@@ -174,6 +174,33 @@ export const kpiContentRegistrations = pgTable("kpi_content_registrations", {
   updatedAt: text("updated_at").notNull().default(timestampTextDefault),
 });
 
+export const reviewRegistrations = pgTable("review_registrations", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").notNull(),
+  teamId: integer("team_id"),
+  requestedByUserId: integer("requested_by_user_id").notNull(),
+  writerPenName: text("writer_pen_name").notNull(),
+  reviewerPenName: text("reviewer_pen_name").notNull(),
+  title: text("title").notNull(),
+  articleLink: text("article_link"),
+  articleDate: text("article_date").notNull(),
+  sheetName: text("sheet_name").notNull(),
+  sheetMonth: integer("sheet_month"),
+  sheetYear: integer("sheet_year"),
+  status: text("status", {
+    enum: ["queued", "writing_sheet", "completed", "failed"],
+  }).notNull().default("queued"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  externalSheetName: text("external_sheet_name"),
+  externalRowNumber: integer("external_row_number"),
+  automationMessage: text("automation_message"),
+  lastError: text("last_error"),
+  sheetWrittenAt: text("sheet_written_at"),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull().default(timestampTextDefault),
+  updatedAt: text("updated_at").notNull().default(timestampTextDefault),
+});
+
 export const articleComments = pgTable("article_comments", {
   id: serial("id").primaryKey(),
   articleId: integer("article_id").notNull(),
@@ -331,6 +358,7 @@ export type ArticleSyncLink = typeof articleSyncLinks.$inferSelect;
 export type KpiContentRegistrationBatch = typeof kpiContentRegistrationBatches.$inferSelect;
 export type ContentWorkRegistration = typeof contentWorkRegistrations.$inferSelect;
 export type KpiContentRegistration = typeof kpiContentRegistrations.$inferSelect;
+export type ReviewRegistration = typeof reviewRegistrations.$inferSelect;
 export type ArticleComment = typeof articleComments.$inferSelect;
 export type EditorialTask = typeof editorialTasks.$inferSelect;
 export type KpiRecord = typeof kpiRecords.$inferSelect;

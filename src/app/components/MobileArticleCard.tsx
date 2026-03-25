@@ -4,22 +4,31 @@ import React from "react";
 import type { Article } from "./types";
 import { getDisplayedPenName } from "./articles-page-config";
 import { getKpiContentActionState } from "./kpi-content-ui";
+import { getMarkReviewedActionState, getReviewRegistrationActionState } from "./review-registration-ui";
 
 interface MobileArticleCardProps {
   article: Article;
   onEdit?: () => void;
   onDelete?: () => void;
   onComments?: () => void;
+  onMarkReviewed?: () => void;
+  onRegisterReviewArticle?: () => void;
   onRegisterContentWork?: () => void;
   onRegisterKpiContent?: () => void;
   canEdit?: boolean;
+  canMarkReviewed?: boolean;
+  canRegisterReviewArticle?: boolean;
   canRegisterContentWork?: boolean;
   canRegisterKpiContent?: boolean;
+  showMarkReviewedAction?: boolean;
+  showReviewRegistrationAction?: boolean;
   showContentWorkAction?: boolean;
   showKpiContentAction?: boolean;
   canDelete?: boolean;
   showAuthor?: boolean;
   isDeleting?: boolean;
+  isMarkingReviewed?: boolean;
+  isRegisteringReviewArticle?: boolean;
   isRegisteringContentWork?: boolean;
   isRegisteringKpiContent?: boolean;
   unreadComments?: number;
@@ -30,16 +39,24 @@ export default function MobileArticleCard({
   onEdit,
   onDelete,
   onComments,
+  onMarkReviewed,
+  onRegisterReviewArticle,
   onRegisterContentWork,
   onRegisterKpiContent,
   canEdit = true,
+  canMarkReviewed = false,
+  canRegisterReviewArticle = false,
   canRegisterContentWork = false,
   canRegisterKpiContent = false,
+  showMarkReviewedAction = false,
+  showReviewRegistrationAction = false,
   showContentWorkAction = false,
   showKpiContentAction = false,
   canDelete = true,
   showAuthor = true,
   isDeleting = false,
+  isMarkingReviewed = false,
+  isRegisteringReviewArticle = false,
   isRegisteringContentWork = false,
   isRegisteringKpiContent = false,
   unreadComments = 0,
@@ -70,6 +87,8 @@ export default function MobileArticleCard({
         ? { background: "rgba(239, 68, 68, 0.08)", color: "#dc2626" }
         : { background: "rgba(37, 99, 235, 0.08)", color: "#2563eb" };
   const kpiContentAction = getKpiContentActionState(article, isRegisteringKpiContent);
+  const markReviewedAction = getMarkReviewedActionState(article, isMarkingReviewed);
+  const reviewRegistrationAction = getReviewRegistrationActionState(article, isRegisteringReviewArticle);
 
   const getStatusStyle = (s: string) => {
     const map: Record<string, { bg: string; text: string; icon: string; label: string }> = {
@@ -124,6 +143,20 @@ export default function MobileArticleCard({
           </>
         )}
       </div>
+      {article.reviewRegistrationStatusLabel && (
+        <div
+          className="mb-3 text-[11px] font-medium"
+          style={{
+            color: article.reviewRegistrationStatus === "failed"
+              ? "var(--danger)"
+              : article.reviewRegistrationStatus === "completed"
+                ? "#047857"
+                : "var(--text-muted)",
+          }}
+        >
+          {article.reviewRegistrationStatusLabel}
+        </div>
+      )}
       
       <div className="flex items-center justify-between pt-3 border-t border-slate-50 dark:border-slate-800/50">
         <div className="flex gap-2">
@@ -152,6 +185,38 @@ export default function MobileArticleCard({
         </div>
         
         <div className="flex gap-2">
+          {showMarkReviewedAction && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!markReviewedAction.disabled && onMarkReviewed && canMarkReviewed) {
+                  onMarkReviewed();
+                }
+              }}
+              disabled={markReviewedAction.disabled}
+              title={markReviewedAction.title}
+              className="px-3 h-10 flex items-center justify-center rounded-xl text-[11px] font-bold uppercase tracking-wider active:scale-95 transition-transform disabled:opacity-80"
+              style={{ background: markReviewedAction.background, color: markReviewedAction.color, border: markReviewedAction.border }}
+            >
+              {markReviewedAction.label}
+            </button>
+          )}
+          {showReviewRegistrationAction && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!reviewRegistrationAction.disabled && onRegisterReviewArticle && canRegisterReviewArticle) {
+                  onRegisterReviewArticle();
+                }
+              }}
+              disabled={reviewRegistrationAction.disabled}
+              title={reviewRegistrationAction.title}
+              className="px-3 h-10 flex items-center justify-center rounded-xl text-[11px] font-bold uppercase tracking-wider active:scale-95 transition-transform disabled:opacity-80"
+              style={{ background: reviewRegistrationAction.background, color: reviewRegistrationAction.color, border: reviewRegistrationAction.border }}
+            >
+              {reviewRegistrationAction.label}
+            </button>
+          )}
           {showContentWorkAction && (
             <button
               onClick={(e) => {

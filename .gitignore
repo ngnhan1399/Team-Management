@@ -39,6 +39,7 @@
 !/output/content-work-automation.workdocker.gs
 !/output/kpi-content-automation.workdocker.gs
 !/output/kpi-content-response-cleanup.workdocker.gs
+!/output/review-registration.workdocker.gs
 /tmp/
 /playwright-report/
 /.codex-deploy-temp/

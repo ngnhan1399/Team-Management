@@ -1,5 +1,30 @@
 # Optimization Memory
 
+## 2026-03-25 - Reviewer article registration memory
+
+- Reviewer flow mới không đi qua Google Form.
+- Luồng đúng là:
+  1. reviewer đánh dấu `Đã duyệt`
+  2. reviewer bấm `Đăng ký bài duyệt`
+  3. backend queue `review_registrations`
+  4. Apps Script ghi trực tiếp vào Google Sheet
+- Sheet thật đã được chốt cấu trúc:
+  - spreadsheet `157reP9SMWXgV47XHPcUJNqo1RicwS6vsqQvOlEW5F8Q`
+  - tab `Việt Nguyễn`
+  - block tháng mới nhất nằm trong cùng tab, không phải tab riêng
+  - dòng hợp lệ để ghi là dòng đầu tiên có `Link` và `CTV Viết` còn trống
+  - cột cần ghi:
+    - A ngày
+    - B link
+    - C CTV viết
+    - D reviewer
+    - F -> L checkbox = `TRUE`
+- Metadata trạng thái đăng ký bài duyệt phải được gắn trực tiếp vào `/api/articles`, không fetch rời ở client.
+- Không nên lặp lại:
+  - không dùng generic article update cho reviewer mark reviewed
+  - không nhét logic ghi sheet reviewer vào `articles` route
+  - không tạo flow browser-login Google mới; repo này dùng Apps Script/web app cho automation ngoài hệ thống
+
 ## 2026-03-25 - Admin/team onboarding foundation
 
 - Da bo sung gate onboarding rieng cho admin/leader:

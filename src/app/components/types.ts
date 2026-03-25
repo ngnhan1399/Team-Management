@@ -75,6 +75,11 @@ export interface Article {
   contentWorkStatusLabel?: string | null;
   kpiContentStatus?: "queued" | "submitting_form" | "form_submitted" | "completed" | "failed" | null;
   kpiContentStatusLabel?: string | null;
+  reviewRegistrationStatus?: "queued" | "writing_sheet" | "completed" | "failed" | null;
+  reviewRegistrationStatusLabel?: string | null;
+  reviewRegistrationMessage?: string | null;
+  reviewRegistrationRowNumber?: number | null;
+  reviewRegistrationSheetName?: string | null;
   reviewerName: string;
   notes: string;
   canDelete?: boolean;

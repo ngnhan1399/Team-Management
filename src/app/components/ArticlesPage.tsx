@@ -14,6 +14,11 @@ import {
   resolveKpiContentClientTaskKey,
 } from "./kpi-content-ui";
 import {
+  getMarkReviewedActionState,
+  getReviewRegistrationActionState,
+  isReviewRegistrationPending,
+} from "./review-registration-ui";
+import {
   ARTICLE_PAGE_SIZE,
   ARTICLE_STATUS_OPTIONS,
   ARTICLE_TYPE_OPTIONS,
@@ -176,6 +181,10 @@ export default function ArticlesPage() {
   const [registeringContentWorkArticleId, setRegisteringContentWorkArticleId] = useState<number | null>(null);
   const [registeringKpiContent, setRegisteringKpiContent] = useState(false);
   const [registeringKpiContentArticleId, setRegisteringKpiContentArticleId] = useState<number | null>(null);
+  const [registeringReviewArticle, setRegisteringReviewArticle] = useState(false);
+  const [registeringReviewArticleId, setRegisteringReviewArticleId] = useState<number | null>(null);
+  const [markingReviewed, setMarkingReviewed] = useState(false);
+  const [markingReviewedArticleId, setMarkingReviewedArticleId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [importStep, setImportStep] = useState(1);
@@ -346,6 +355,30 @@ export default function ArticlesPage() {
     const status = article.kpiContentStatus || null;
     return showKpiContentAction(article) && status !== "completed" && !isKpiContentPending(status);
   }, [showKpiContentAction]);
+  const showMarkReviewedAction = useCallback((article: Article) => {
+    if (!isReviewer) return false;
+    if (!articleAssignedToReviewer(article)) return false;
+    if (resolveAuthorBucket(article) === "editorial") return false;
+    return true;
+  }, [articleAssignedToReviewer, isReviewer, resolveAuthorBucket]);
+  const canMarkReviewed = useCallback((article: Article) => {
+    return showMarkReviewedAction(article)
+      && !(markingReviewed && markingReviewedArticleId === article.id);
+  }, [markingReviewed, markingReviewedArticleId, showMarkReviewedAction]);
+  const showReviewRegistrationAction = useCallback((article: Article) => {
+    if (!isReviewer) return false;
+    if (!articleAssignedToReviewer(article)) return false;
+    if (resolveAuthorBucket(article) === "editorial") return false;
+    if (!isApprovedArticleStatus(article.status)) return false;
+    return Boolean(String(article.link || "").trim());
+  }, [articleAssignedToReviewer, isReviewer, resolveAuthorBucket]);
+  const canRegisterReviewArticle = useCallback((article: Article) => {
+    const status = article.reviewRegistrationStatus || null;
+    return showReviewRegistrationAction(article)
+      && status !== "completed"
+      && !isReviewRegistrationPending(status)
+      && !(registeringReviewArticle && registeringReviewArticleId === article.id);
+  }, [registeringReviewArticle, registeringReviewArticleId, showReviewRegistrationAction]);
   const getContentWorkActionState = useCallback((article: Article) => {
     const status = article.contentWorkStatus || null;
     const isCurrentRegistration = registeringContentWork && registeringContentWorkArticleId === article.id;
@@ -1487,6 +1520,115 @@ export default function ArticlesPage() {
     }
   };
 
+  const handleMarkReviewed = async (article: Article) => {
+    if (markingReviewed) return;
+
+    try {
+      setMarkingReviewed(true);
+      setMarkingReviewedArticleId(article.id);
+
+      const res = await fetch("/api/articles", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark-reviewed",
+          id: article.id,
+          reviewLink: article.reviewLink || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || "Không thể cập nhật trạng thái đã duyệt");
+      }
+
+      if (data.article) {
+        const savedArticle = data.article as Article;
+        mergeSavedArticleIntoList(savedArticle, true);
+        setFormData((prev) => Number(prev.id) === savedArticle.id ? { ...prev, ...savedArticle } : prev);
+      }
+
+      if (data.alreadyReviewed) {
+        showUiToast("Bài viết đã được duyệt", `"${article.title}" đã ở trạng thái đã duyệt trước đó.`, "info");
+      } else {
+        showUiToast("Đã cập nhật bài duyệt", `"${article.title}" đã được đánh dấu đã duyệt.`, "success");
+      }
+    } catch (error) {
+      showUiToast("Cập nhật bài duyệt thất bại", error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setMarkingReviewed(false);
+      setMarkingReviewedArticleId(null);
+    }
+  };
+
+  const handleRegisterReviewArticle = async (article: Article, force = false) => {
+    if (registeringReviewArticle) return;
+
+    try {
+      setRegisteringReviewArticle(true);
+      setRegisteringReviewArticleId(article.id);
+
+      const res = await fetch("/api/review-registrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articleId: article.id, force }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || "Không thể đăng ký bài duyệt");
+      }
+
+      const nextStatus = String(data.registration?.status || (data.alreadyCompleted ? "completed" : "queued")) as Article["reviewRegistrationStatus"];
+      const nextStatusLabel = String(
+        data.registration?.statusLabel
+        || (data.alreadyCompleted ? "Đã đăng ký bài duyệt" : "Đang chờ")
+      );
+      const nextMessage = String(
+        data.registration?.automationMessage
+        || (data.alreadyCompleted ? "Bài viết đã được ghi vào sheet bài duyệt." : "Hệ thống đang ghi bài vào sheet bài duyệt ở nền.")
+      );
+      const nextRowNumber = data.registration?.externalRowNumber != null
+        ? Number(data.registration.externalRowNumber)
+        : (data.registration?.rowNumber != null ? Number(data.registration.rowNumber) : null);
+      const nextSheetName = String(data.registration?.externalSheetName || data.registration?.sheetName || "");
+
+      setArticles((prev) => prev.map((item) => (
+        item.id === article.id
+          ? {
+              ...item,
+              reviewRegistrationStatus: nextStatus,
+              reviewRegistrationStatusLabel: nextStatusLabel,
+              reviewRegistrationMessage: nextMessage,
+              reviewRegistrationRowNumber: Number.isInteger(nextRowNumber) ? nextRowNumber : null,
+              reviewRegistrationSheetName: nextSheetName || item.reviewRegistrationSheetName || null,
+            }
+          : item
+      )));
+      setFormData((prev) => Number(prev.id) === article.id
+        ? {
+            ...prev,
+            reviewRegistrationStatus: nextStatus,
+            reviewRegistrationStatusLabel: nextStatusLabel,
+            reviewRegistrationMessage: nextMessage,
+            reviewRegistrationRowNumber: Number.isInteger(nextRowNumber) ? nextRowNumber : null,
+            reviewRegistrationSheetName: nextSheetName || prev.reviewRegistrationSheetName || null,
+          }
+        : prev);
+
+      if (data.alreadyCompleted) {
+        showUiToast("Bài duyệt đã được đăng ký", `"${article.title}" đã được ghi vào sheet bài duyệt trước đó.`, "info");
+      } else if (data.alreadyRunning) {
+        showUiToast("Đang xử lý bài duyệt", `"${article.title}" đang được hệ thống ghi vào sheet ở nền.`, "info");
+      } else {
+        showUiToast("Đã xếp hàng bài duyệt", `"${article.title}" đang được gửi sang sheet bài duyệt.`, "success");
+      }
+    } catch (error) {
+      showUiToast("Đăng ký bài duyệt thất bại", error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setRegisteringReviewArticle(false);
+      setRegisteringReviewArticleId(null);
+    }
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     setImportFile(file);
@@ -2141,6 +2283,26 @@ export default function ArticlesPage() {
                   >
                     {a.reviewerName ? getDisplayedPenName(a.reviewerName) : "—"}
                   </span>
+                  {a.reviewRegistrationStatusLabel && (
+                    <div
+                      title={a.reviewRegistrationMessage || a.reviewRegistrationStatusLabel}
+                      style={{
+                        marginTop: 4,
+                        fontSize: 11,
+                        lineHeight: 1.4,
+                        color: a.reviewRegistrationStatus === "failed"
+                          ? "var(--danger)"
+                          : a.reviewRegistrationStatus === "completed"
+                            ? "#047857"
+                            : "var(--text-muted)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {a.reviewRegistrationStatusLabel}
+                    </div>
+                  )}
                 </td>
                 <td style={{ padding: "12px 14px", textAlign: "center" }}>
                   {articleTypeBadge(a.articleType)}
@@ -2206,6 +2368,80 @@ export default function ArticlesPage() {
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                         </button>
                       )}
+                      {showMarkReviewedAction(a) && (() => {
+                        const reviewAction = getMarkReviewedActionState(
+                          a,
+                          markingReviewed && markingReviewedArticleId === a.id,
+                        );
+                        return (
+                          <button
+                            onClick={() => {
+                              if (!reviewAction.disabled) {
+                                void handleMarkReviewed(a);
+                              }
+                            }}
+                            disabled={reviewAction.disabled}
+                            className="btn-ios-pill"
+                            style={{
+                              padding: "5px 9px",
+                              minWidth: 34,
+                              height: 34,
+                              background: reviewAction.background,
+                              color: reviewAction.color,
+                              border: reviewAction.border,
+                              opacity: reviewAction.disabled ? 0.88 : 1,
+                            }}
+                            title={reviewAction.title}
+                          >
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: 17,
+                                animation: reviewAction.animation,
+                              }}
+                            >
+                              {reviewAction.icon}
+                            </span>
+                          </button>
+                        );
+                      })()}
+                      {showReviewRegistrationAction(a) && (() => {
+                        const reviewRegistrationAction = getReviewRegistrationActionState(
+                          a,
+                          registeringReviewArticle && registeringReviewArticleId === a.id,
+                        );
+                        return (
+                          <button
+                            onClick={() => {
+                              if (!reviewRegistrationAction.disabled) {
+                                void handleRegisterReviewArticle(a);
+                              }
+                            }}
+                            disabled={reviewRegistrationAction.disabled}
+                            className="btn-ios-pill"
+                            style={{
+                              padding: "5px 9px",
+                              minWidth: 34,
+                              height: 34,
+                              background: reviewRegistrationAction.background,
+                              color: reviewRegistrationAction.color,
+                              border: reviewRegistrationAction.border,
+                              opacity: reviewRegistrationAction.disabled ? 0.88 : 1,
+                            }}
+                            title={reviewRegistrationAction.title}
+                          >
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: 17,
+                                animation: reviewRegistrationAction.animation,
+                              }}
+                            >
+                              {reviewRegistrationAction.icon}
+                            </span>
+                          </button>
+                        );
+                      })()}
                       {showContentWorkAction(a) && (() => {
                         const contentWorkAction = getContentWorkActionState(a);
                         return (
@@ -2320,17 +2556,25 @@ export default function ArticlesPage() {
               article={a}
               onEdit={() => openArticleModal({ ...a, status: a.status === "Approved" ? "Published" : a.status, wordCountRange: normalizeWordCountRangeValue(a.wordCountRange) })}
               onComments={() => openComments(a)}
+              onMarkReviewed={() => { void handleMarkReviewed(a); }}
+              onRegisterReviewArticle={() => { void handleRegisterReviewArticle(a); }}
               onRegisterContentWork={() => { void handleRegisterContentWork(a); }}
               onRegisterKpiContent={() => { void handleRegisterKpiContent(a); }}
               onDelete={() => deleteSingleArticle(a)}
               canEdit={canEditArticle(a)}
+              canMarkReviewed={canMarkReviewed(a)}
+              canRegisterReviewArticle={canRegisterReviewArticle(a)}
               canRegisterContentWork={canRegisterContentWork(a)}
               canRegisterKpiContent={canRegisterKpiContent(a)}
+              showMarkReviewedAction={showMarkReviewedAction(a)}
+              showReviewRegistrationAction={showReviewRegistrationAction(a)}
               showContentWorkAction={showContentWorkAction(a)}
               showKpiContentAction={showKpiContentAction(a)}
               canDelete={canManageArticles || a.canDelete}
               showAuthor={canManageArticles}
               isDeleting={deletingArticleIds.includes(a.id)}
+              isMarkingReviewed={markingReviewed && markingReviewedArticleId === a.id}
+              isRegisteringReviewArticle={registeringReviewArticle && registeringReviewArticleId === a.id}
               isRegisteringContentWork={registeringContentWork && registeringContentWorkArticleId === a.id}
               isRegisteringKpiContent={registeringKpiContent && registeringKpiContentArticleId === a.id}
               unreadComments={Number(a.unreadCommentCount || 0)}
@@ -2993,6 +3237,74 @@ export default function ArticlesPage() {
                       {movingArticleToNextMonth ? "Đang chuyển..." : "Chuyển sang tháng sau"}
                     </button>
                   )}
+                  {Boolean(formData.id) && showMarkReviewedAction(formData as Article) && (() => {
+                    const reviewAction = getMarkReviewedActionState(
+                      formData as Article,
+                      markingReviewed && markingReviewedArticleId === Number(formData.id),
+                    );
+                    return (
+                      <button
+                        className="btn-ios-pill btn-ios-secondary"
+                        onClick={() => {
+                          if (!reviewAction.disabled) {
+                            void handleMarkReviewed(formData as Article);
+                          }
+                        }}
+                        disabled={reviewAction.disabled || savingArticle || movingArticleToNextMonth}
+                        style={{
+                          borderColor: reviewAction.border.replace("1px solid ", ""),
+                          color: reviewAction.color,
+                          background: reviewAction.background,
+                        }}
+                        title={reviewAction.title}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: 18,
+                            animation: reviewAction.animation,
+                          }}
+                        >
+                          {reviewAction.icon}
+                        </span>
+                        {reviewAction.label}
+                      </button>
+                    );
+                  })()}
+                  {Boolean(formData.id) && showReviewRegistrationAction(formData as Article) && (() => {
+                    const reviewRegistrationAction = getReviewRegistrationActionState(
+                      formData as Article,
+                      registeringReviewArticle && registeringReviewArticleId === Number(formData.id),
+                    );
+                    return (
+                      <button
+                        className="btn-ios-pill btn-ios-secondary"
+                        onClick={() => {
+                          if (!reviewRegistrationAction.disabled) {
+                            void handleRegisterReviewArticle(formData as Article);
+                          }
+                        }}
+                        disabled={reviewRegistrationAction.disabled || savingArticle || movingArticleToNextMonth}
+                        style={{
+                          borderColor: reviewRegistrationAction.border.replace("1px solid ", ""),
+                          color: reviewRegistrationAction.color,
+                          background: reviewRegistrationAction.background,
+                        }}
+                        title={reviewRegistrationAction.title}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: 18,
+                            animation: reviewRegistrationAction.animation,
+                          }}
+                        >
+                          {reviewRegistrationAction.icon}
+                        </span>
+                        {reviewRegistrationAction.label}
+                      </button>
+                    );
+                  })()}
                   {Boolean(formData.id) && showContentWorkAction(formData as Article) && (() => {
                     const contentWorkAction = getContentWorkActionState(formData as Article);
                     return (

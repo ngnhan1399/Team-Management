@@ -1,5 +1,32 @@
 # Codex Handoff
 
+## Update 2026-03-25 (reviewer article registration)
+
+- Đã thêm scaffold hoàn chỉnh cho luồng reviewer:
+  - nút `Đã duyệt`
+  - nút `Đăng ký bài duyệt`
+- File chính:
+  - `src/app/api/articles/route.ts`
+  - `src/app/api/review-registrations/route.ts`
+  - `src/lib/review-registration.ts`
+  - `src/lib/review-registration-automation.ts`
+  - `src/app/components/review-registration-ui.ts`
+  - `src/app/components/ArticlesPage.tsx`
+  - `src/app/components/MobileArticleCard.tsx`
+  - `output/review-registration.workdocker.gs`
+  - `docs/review-registration-automation.md`
+- `GET /api/articles` hiện đã gắn thêm metadata đăng ký bài duyệt cho từng bài.
+- `PUT /api/articles` có action `mark-reviewed` dành cho reviewer/admin.
+- `POST /api/review-registrations` là endpoint xếp hàng ghi sheet bài duyệt.
+- Sheet thật đã được phân tích theo cấu trúc:
+  - tab `Việt Nguyễn`
+  - block tháng mới nhất trong cùng tab
+  - tìm dòng trống đầu tiên trong block
+  - điền ngày, link, CTV viết, reviewer và tick toàn bộ checkbox.
+- Runtime cần cấu hình:
+  - `REVIEW_REGISTRATION_SCRIPT_WEB_APP_URL`
+  - `REVIEW_REGISTRATION_SCRIPT_SECRET`
+
 ## Update 2026-03-25 (admin/team onboarding foundation)
 
 - Da them gate onboarding cho admin/leader truoc khi vao `MainApp`:
