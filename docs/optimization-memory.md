@@ -10,6 +10,11 @@
 - Da verify truc tiep voi form that:
   - submit tung page rieng de bi `data-validation-failed`
   - submit mot request cuoi voi day du `employeeCode + task + detail + 5 links + pageHistory=0,1,2` thi on dinh hon
+- Da verify production tren `workdocker.com` sau khi deploy commit `6857245`:
+  - hit `GET /api/kpi-content` da tu khoi tao schema KPI Content tren DB khi `DATABASE_BOOTSTRAP_MODE=skip`
+  - DB production da co `users.employee_code`, `kpi_content_registration_batches`, `kpi_content_registrations`
+  - admin `admin@ctvmanager.com` da duoc gan `employee_code = NhanND18`
+  - da tao 1 batch that gom 5 bai editorial SEO AI va batch da ve `completed`
 - Apps Script mau va env mau da co san:
   - `output/kpi-content-automation.workdocker.gs`
   - `.env.example` co `KPI_CONTENT_SCRIPT_WEB_APP_URL` va `KPI_CONTENT_SCRIPT_SECRET`

@@ -23,6 +23,11 @@
 - Da verify truc tiep voi form that:
   - flow submit tung page rieng bi validation fail
   - flow submit mot request cuoi on dinh hon cho form nay
+- Da verify production VPS sau commit `6857245`:
+  - `GET /api/kpi-content` da lazy-init schema KPI Content tren DB production
+  - DB da co `employee_code` trong `users`
+  - admin `admin@ctvmanager.com` da duoc gan `NhanND18`
+  - da tao 1 batch test that cho 5 bai `SEO AI` cua `Nhân BTV` va batch da `completed`
 
 ## Update 2026-03-25 (production copy tu Vercel/Nile da vao VPS)
 
