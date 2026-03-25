@@ -338,3 +338,19 @@ Thứ tự ưu tiên nên là:
 - `docs/optimization-memory.md`
 - `docs/codex-handoff.md`
 - `AGENTS.md`
+
+## 8. Ghi nhớ vận hành 2026-03-25
+
+- Dashboard trang chủ:
+  - danh sách cộng tác viên nổi bật của khối admin không được lấy all-time
+  - phải tính theo tháng mới nhất đang có bài viết trong dữ liệu
+  - logic này hiện nằm ở `src/app/api/statistics/route.ts`
+- Quyền leader:
+  - hệ thống cho phép nhiều leader cùng lúc
+  - thao tác cấp/gỡ leader được thực hiện ngay tại bảng `Admin team` trong `src/app/components/TeamPage.tsx`
+  - backend nhận cập nhật qua `PUT /api/collaborators` với `userId + isLeader`
+  - luôn phải giữ lại tối thiểu 1 leader
+- Bút danh admin/leader:
+  - không được giả định admin nào cũng đã có `collaboratorId`
+  - trang `Hồ sơ cá nhân` phải cho phép tự sửa `họ tên + bút danh`
+  - nếu tài khoản chưa có hồ sơ cộng tác viên, `PUT /api/profile` sẽ tự tạo hồ sơ nền rồi mới đồng bộ bút danh

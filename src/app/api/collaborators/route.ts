@@ -8,7 +8,7 @@ import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { canAccessTeam, getContextTeamId, isLeader, normalizeTeamId, resolveScopedTeamId } from "@/lib/teams";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type CollaboratorInsert = typeof collaborators.$inferInsert;
@@ -350,9 +350,11 @@ export async function PUT(request: NextRequest) {
                 ? null
                 : Number(body.linkedUserId);
         const employeeCode = normalizeEmployeeCode(body.employeeCode ?? body.employee_code);
+        const hasEmployeeCodeUpdate = body.employeeCode !== undefined || body.employee_code !== undefined;
+        const hasLeaderUpdate = typeof body.isLeader === "boolean";
 
         if (!Number.isInteger(id)) {
-            if (Number.isInteger(userId) && userId > 0 && (body.employeeCode !== undefined || body.employee_code !== undefined)) {
+            if (Number.isInteger(userId) && userId > 0 && (hasEmployeeCodeUpdate || hasLeaderUpdate)) {
                 const targetUser = await db.select({
                     id: users.id,
                     email: users.email,
@@ -373,20 +375,41 @@ export async function PUT(request: NextRequest) {
                     return NextResponse.json({ success: false, error: "Bạn không có quyền chỉnh tài khoản của team này" }, { status: 403 });
                 }
 
+                if (hasLeaderUpdate && !isLeader(context)) {
+                    return NextResponse.json({ success: false, error: "Chá»‰ leader há»‡ thá»‘ng má»›i Ä‘Æ°á»£c phÃ©p cáº¥p quyá»n leader." }, { status: 403 });
+                }
+
+                const nextIsLeader = hasLeaderUpdate ? Boolean(body.isLeader) : targetUser.isLeader;
+                if (hasLeaderUpdate && targetUser.isLeader && !nextIsLeader) {
+                    const activeLeaders = await db
+                        .select({ id: users.id })
+                        .from(users)
+                        .where(and(eq(users.role, "admin"), eq(users.isLeader, true)))
+                        .all();
+                    if (activeLeaders.length <= 1) {
+                        return NextResponse.json({ success: false, error: "Há»‡ thá»‘ng cáº§n giá»¯ Ã­t nháº¥t má»™t leader." }, { status: 400 });
+                    }
+                }
+
                 await db.update(users)
-                    .set({ employeeCode: employeeCode })
+                    .set({
+                        ...(hasEmployeeCodeUpdate ? { employeeCode } : {}),
+                        ...(hasLeaderUpdate ? { isLeader: nextIsLeader } : {}),
+                    })
                     .where(eq(users.id, targetUser.id))
                     .run();
 
                 await writeAuditLog({
                     userId: context.user.id,
-                    action: "admin_employee_code_updated",
+                    action: hasLeaderUpdate ? "admin_account_updated" : "admin_employee_code_updated",
                     entity: "user",
                     entityId: targetUser.id,
                     payload: {
                         email: targetUser.email,
-                        employeeCode,
+                        employeeCode: hasEmployeeCodeUpdate ? employeeCode : targetUser.employeeCode ?? null,
                         previousEmployeeCode: targetUser.employeeCode ?? null,
+                        isLeader: nextIsLeader,
+                        previousIsLeader: targetUser.isLeader,
                     },
                 });
 
@@ -394,6 +417,10 @@ export async function PUT(request: NextRequest) {
                     channels: ["team", "dashboard"],
                     toastTitle: "Mã nhân viên đã cập nhật",
                     toastMessage: `${targetUser.email} đã được gắn mã nhân viên mới.`,
+                    ...(hasLeaderUpdate ? {
+                        toastTitle: "Quyá»n admin Ä‘Ã£ cáº­p nháº­t",
+                        toastMessage: `${targetUser.email} ${nextIsLeader ? "Ä‘Ã£ Ä‘Æ°á»£c cáº¥p quyá»n leader." : "Ä‘Ã£ Ä‘Æ°á»£c gá»¡ quyá»n leader."}`,
+                    } : {}),
                     toastVariant: "success",
                 });
 

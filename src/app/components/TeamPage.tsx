@@ -49,6 +49,7 @@ export default function TeamPage() {
   const [employeeCodeForm, setEmployeeCodeForm] = useState({ userId: "", employeeCode: "", displayName: "", email: "" });
   const [employeeCodeError, setEmployeeCodeError] = useState("");
   const [employeeCodeSaving, setEmployeeCodeSaving] = useState(false);
+  const [leaderUpdatingUserId, setLeaderUpdatingUserId] = useState<number | null>(null);
 
   const fetchTeams = () => {
     if (user?.role !== "admin") return;
@@ -197,6 +198,40 @@ export default function TeamPage() {
       setEmployeeCodeError("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
     } finally {
       setEmployeeCodeSaving(false);
+    }
+  };
+
+  const toggleLeaderAccess = async (admin: AdminProfile) => {
+    const actionLabel = admin.isLeader ? "gỡ quyền leader" : "cấp quyền leader";
+    const confirmed = window.confirm(`Bạn có chắc muốn ${actionLabel} cho ${admin.email}?`);
+    if (!confirmed) return;
+
+    try {
+      setLeaderUpdatingUserId(admin.userId);
+      const res = await fetch("/api/collaborators", {
+        method: "PUT",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: admin.userId,
+          isLeader: !admin.isLeader,
+        }),
+      });
+      const data = await res.json().catch(() => ({ success: false, error: "Không thể đọc phản hồi từ máy chủ" }));
+      if (!res.ok || !data.success) {
+        alert(`Không thể cập nhật quyền leader: ${data.error || "Có lỗi xảy ra."}`);
+        return;
+      }
+
+      fetchCTVs();
+      if (typeof refreshUser === "function") {
+        await refreshUser();
+      }
+      alert(`Đã ${admin.isLeader ? "gỡ" : "cấp"} quyền leader cho ${admin.email}.`);
+    } catch {
+      alert("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
+    } finally {
+      setLeaderUpdatingUserId(null);
     }
   };
 
@@ -530,6 +565,7 @@ export default function TeamPage() {
       };
     });
   const currentAdminProfile = adminProfiles.find((admin) => admin.userId === user?.id) || null;
+  const leaderCount = adminProfiles.filter((admin) => admin.isLeader).length;
   const writers = collaborators.filter(c => c.linkedUserRole !== "admin" && c.role === "writer");
   const reviewers = collaborators.filter(c => c.linkedUserRole !== "admin" && c.role === "reviewer");
   const currentLinkedUser = formData.linkedUserId ? userAccounts.find((user) => user.id === formData.linkedUserId) : null;
@@ -950,6 +986,19 @@ export default function TeamPage() {
                       </span>
                     </td>
                     <td style={{ padding: "16px 24px", textAlign: "center" }}>
+                      {isLeader && (
+                        <button
+                          className="btn-ios-pill btn-ios-secondary"
+                          style={{ padding: "6px 12px", marginRight: 8 }}
+                          onClick={() => toggleLeaderAccess(admin)}
+                          disabled={leaderUpdatingUserId === admin.userId || (admin.isLeader && leaderCount <= 1)}
+                          title={admin.isLeader ? "Gỡ quyền leader" : "Cấp quyền leader"}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                            {admin.isLeader ? "shield_person" : "admin_panel_settings"}
+                          </span>
+                        </button>
+                      )}
                       {admin.collaboratorId ? (
                         <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => {
                           const collaborator = collaborators.find((item) => item.id === admin.collaboratorId);
@@ -983,6 +1032,19 @@ export default function TeamPage() {
                     </div>
                     <div style={{ fontSize: 13, color: "var(--accent-orange)", fontWeight: 600, marginTop: 2 }}>{admin.penName}</div>
                   </div>
+                  {isLeader && (
+                    <button
+                      className="btn-ios-pill btn-ios-secondary"
+                      style={{ padding: "6px 12px", marginRight: 8 }}
+                      onClick={() => toggleLeaderAccess(admin)}
+                      disabled={leaderUpdatingUserId === admin.userId || (admin.isLeader && leaderCount <= 1)}
+                      title={admin.isLeader ? "Gỡ quyền leader" : "Cấp quyền leader"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {admin.isLeader ? "shield_person" : "admin_panel_settings"}
+                      </span>
+                    </button>
+                  )}
                   {admin.collaboratorId ? (
                     <button className="btn-ios-pill btn-ios-secondary" style={{ padding: "6px 12px" }} onClick={() => {
                       const collaborator = collaborators.find((item) => item.id === admin.collaboratorId);

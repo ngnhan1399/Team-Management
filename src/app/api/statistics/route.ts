@@ -84,6 +84,49 @@ function groupCount<T extends string>(values: T[]) {
   }, {})).map(([key, count]) => ({ key, count }));
 }
 
+function selectLatestMonthArticles(rows: StatisticsArticleRow[]) {
+  if (rows.length === 0) return [];
+
+  const latestTimestamp = rows.reduce((latest, article) => {
+    const timestamp = getArticleDateTimestamp(article);
+    return timestamp > latest ? timestamp : latest;
+  }, 0);
+
+  if (!latestTimestamp) return [];
+
+  const latestDate = new Date(latestTimestamp);
+  const latestYear = latestDate.getFullYear();
+  const latestMonth = latestDate.getMonth();
+
+  return rows.filter((article) => {
+    const timestamp = getArticleDateTimestamp(article);
+    if (!timestamp) return false;
+
+    const date = new Date(timestamp);
+    return date.getFullYear() === latestYear && date.getMonth() === latestMonth;
+  });
+}
+
+function buildWriterRowsForLatestMonth(rows: StatisticsArticleRow[], collaboratorDirectory: CollaboratorDirectoryItem[]) {
+  const latestMonthRows = selectLatestMonthArticles(rows);
+  const writerRows = latestMonthRows.reduce<Record<string, StatisticsWriterCountRow>>((acc, article) => {
+    const key = String(article.penName || "").trim();
+    if (!key) return acc;
+
+    if (!acc[key]) {
+      acc[key] = {
+        penName: key,
+        count: 0,
+      };
+    }
+
+    acc[key].count += 1;
+    return acc;
+  }, {});
+
+  return mapArticlesByWriter(Object.values(writerRows), collaboratorDirectory);
+}
+
 function collectScopedCollaborators(
   allCollaborators: CollaboratorDirectoryItem[],
   identityCandidates: string[]
@@ -229,8 +272,7 @@ async function getScopedStatistics(
     categoryRows,
     typeRows,
     monthRows,
-    writerRows,
-    latestArticlesRows,
+    allArticlesRows,
   ] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(articles).where(whereClause).get(),
     db.select({
@@ -251,23 +293,7 @@ async function getScopedStatistics(
       date: articles.date,
       count: sql<number>`count(*)`,
     }).from(articles).where(whereClause).groupBy(articles.date).all(),
-    db.select({
-      penName: articles.penName,
-      count: sql<number>`count(*)`,
-    }).from(articles).where(whereClause).groupBy(articles.penName).all() as Promise<StatisticsWriterCountRow[]>,
-    db.select({
-      id: articles.id,
-      articleId: articles.articleId,
-      title: articles.title,
-      penName: articles.penName,
-      articleType: articles.articleType,
-      contentType: articles.contentType,
-      status: articles.status,
-      category: articles.category,
-      date: articles.date,
-      createdAt: articles.createdAt,
-      updatedAt: articles.updatedAt,
-    }).from(articles).where(whereClause).orderBy(desc(articles.date), desc(articles.updatedAt), desc(articles.id)).limit(60).all() as Promise<StatisticsArticleRow[]>,
+    loadStatisticsArticles(whereClause),
   ]);
 
   return {
@@ -275,14 +301,14 @@ async function getScopedStatistics(
     totalCTVs: totalCTVCount,
     articlesByStatus: statusRows.map((row) => ({ status: row.status, count: Number(row.count || 0) })),
     articlesByCategory: mapArticlesByCategory(categoryRows),
-    articlesByWriter: mapArticlesByWriter(writerRows, collaboratorDirectory),
+    articlesByWriter: buildWriterRowsForLatestMonth(allArticlesRows, collaboratorDirectory),
     articlesByType: typeRows.map((row) => ({
       articleType: row.articleType,
       contentType: row.contentType,
       count: Number(row.count || 0),
     })),
     articlesByMonth: monthRows.map((row) => ({ date: row.date, count: Number(row.count || 0) })),
-    latestArticles: mapLatestArticles(latestArticlesRows, collaboratorDirectory),
+    latestArticles: mapLatestArticles(allArticlesRows, collaboratorDirectory),
   };
 }
 
@@ -294,8 +320,7 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[],
     categoryRows,
     typeRows,
     monthRows,
-    writerRows,
-    latestArticlesRows,
+    allArticlesRows,
   ] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(articles).where(articleWhere).get(),
     db.select({ count: sql<number>`count(*)` }).from(collaborators).where(collaboratorWhere).get(),
@@ -317,23 +342,7 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[],
       date: articles.date,
       count: sql<number>`count(*)`,
     }).from(articles).where(articleWhere).groupBy(articles.date).all(),
-    db.select({
-      penName: articles.penName,
-      count: sql<number>`count(*)`,
-    }).from(articles).where(articleWhere).groupBy(articles.penName).all(),
-    db.select({
-      id: articles.id,
-      articleId: articles.articleId,
-      title: articles.title,
-      penName: articles.penName,
-      articleType: articles.articleType,
-      status: articles.status,
-      date: articles.date,
-      createdAt: articles.createdAt,
-      updatedAt: articles.updatedAt,
-      contentType: articles.contentType,
-      category: articles.category,
-    }).from(articles).where(articleWhere).orderBy(desc(articles.date), desc(articles.updatedAt), desc(articles.id)).limit(60).all() as Promise<StatisticsArticleRow[]>,
+    loadStatisticsArticles(articleWhere),
   ]);
 
   return {
@@ -341,14 +350,14 @@ async function getAdminStatistics(allCollaborators: CollaboratorDirectoryItem[],
     totalCTVs: Number(totalCTVRow?.count || 0),
     articlesByStatus: statusRows.map((row) => ({ status: row.status, count: Number(row.count || 0) })),
     articlesByCategory: mapArticlesByCategory(categoryRows),
-    articlesByWriter: mapArticlesByWriter(writerRows as StatisticsWriterCountRow[], allCollaborators),
+    articlesByWriter: buildWriterRowsForLatestMonth(allArticlesRows, allCollaborators),
     articlesByType: typeRows.map((row) => ({
       articleType: row.articleType,
       contentType: row.contentType,
       count: Number(row.count || 0),
     })),
     articlesByMonth: monthRows.map((row) => ({ date: row.date, count: Number(row.count || 0) })),
-    latestArticles: mapLatestArticles(latestArticlesRows, allCollaborators),
+    latestArticles: mapLatestArticles(allArticlesRows, allCollaborators),
   };
 }
 
