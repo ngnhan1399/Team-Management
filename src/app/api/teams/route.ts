@@ -7,7 +7,7 @@ import { publishRealtimeEvent } from "@/lib/realtime";
 import { enforceTrustedOrigin } from "@/lib/request-security";
 import { handleServerError } from "@/lib/server-error";
 import { isLeader } from "@/lib/teams";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 type TeamInsert = typeof teams.$inferInsert;
@@ -40,11 +40,14 @@ export async function GET() {
         })
         .from(collaborators)
         .leftJoin(users, eq(users.collaboratorId, collaborators.id))
-        .where(and(eq(collaborators.status, "active")))
+        .where(and(inArray(collaborators.teamId, teamIds), eq(collaborators.status, "active")))
         .all()
       : [];
 
-    const ownerUserIds = scopedTeams.map((team) => team.ownerUserId).filter((value): value is number => Number.isInteger(value));
+    const ownerUserIds = scopedTeams
+      .map((team) => team.ownerUserId)
+      .filter((value): value is number => Number.isInteger(value));
+
     const ownerRows = ownerUserIds.length > 0
       ? await db
         .select({
@@ -56,29 +59,31 @@ export async function GET() {
         })
         .from(users)
         .leftJoin(collaborators, eq(users.collaboratorId, collaborators.id))
-        .where(and(eq(users.role, "admin")))
+        .where(and(eq(users.role, "admin"), inArray(users.id, ownerUserIds)))
         .all()
       : [];
 
     const ownerById = new Map(ownerRows.map((row) => [row.id, row]));
-    const teamSummaries = scopedTeams.map((team) => {
-      const teamMembers = memberRows.filter((row) => row.teamId === team.id);
-      const owner = team.ownerUserId ? ownerById.get(team.ownerUserId) : null;
-      return {
-        id: team.id,
-        name: team.name,
-        description: team.description,
-        status: team.status,
-        ownerUserId: team.ownerUserId,
-        ownerEmail: owner?.email ?? null,
-        ownerName: owner?.collaboratorName ?? null,
-        ownerPenName: owner?.collaboratorPenName ?? null,
-        memberCount: teamMembers.length,
-        writerCount: teamMembers.filter((member) => member.role === "writer").length,
-        reviewerCount: teamMembers.filter((member) => member.role === "reviewer").length,
-        adminCount: teamMembers.filter((member) => member.linkedUserRole === "admin").length,
-      };
-    }).sort((left, right) => left.name.localeCompare(right.name, "vi"));
+    const teamSummaries = scopedTeams
+      .map((team) => {
+        const teamMembers = memberRows.filter((row) => row.teamId === team.id);
+        const owner = team.ownerUserId ? ownerById.get(team.ownerUserId) : null;
+        return {
+          id: team.id,
+          name: team.name,
+          description: team.description,
+          status: team.status,
+          ownerUserId: team.ownerUserId,
+          ownerEmail: owner?.email ?? null,
+          ownerName: owner?.collaboratorName ?? null,
+          ownerPenName: owner?.collaboratorPenName ?? null,
+          memberCount: teamMembers.length,
+          writerCount: teamMembers.filter((member) => member.role === "writer").length,
+          reviewerCount: teamMembers.filter((member) => member.role === "reviewer").length,
+          adminCount: teamMembers.filter((member) => member.linkedUserRole === "admin").length,
+        };
+      })
+      .sort((left, right) => left.name.localeCompare(right.name, "vi"));
 
     return NextResponse.json({ success: true, data: teamSummaries });
   } catch (error) {
@@ -228,8 +233,8 @@ export async function PUT(request: NextRequest) {
     if (!context) {
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 });
     }
-    if (!isLeader(context)) {
-      return NextResponse.json({ success: false, error: "Leader access required" }, { status: 403 });
+    if (context.user.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
     }
 
     const body = (await request.json()) as Record<string, unknown>;
@@ -239,12 +244,18 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: "teamId không hợp lệ" }, { status: 400 });
     }
 
+    const leaderAccess = isLeader(context);
+    const scopedTeamId = context.team?.id ?? context.user.teamId ?? context.collaborator?.teamId ?? null;
     const existingTeam = await db.select().from(teams).where(eq(teams.id, teamId)).get();
     if (!existingTeam) {
       return NextResponse.json({ success: false, error: "Không tìm thấy team" }, { status: 404 });
     }
 
     if (action === "transfer-owner") {
+      if (!leaderAccess) {
+        return NextResponse.json({ success: false, error: "Leader access required" }, { status: 403 });
+      }
+
       const targetUserId = Number(body.targetUserId);
       if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
         return NextResponse.json({ success: false, error: "targetUserId không hợp lệ" }, { status: 400 });
@@ -271,11 +282,7 @@ export async function PUT(request: NextRequest) {
         if (existingTeam.ownerUserId && existingTeam.ownerUserId !== targetUserId) {
           const previousOwner = await tx.select().from(users).where(eq(users.id, existingTeam.ownerUserId)).get();
           if (previousOwner && !previousOwner.isLeader) {
-            await tx
-              .update(users)
-              .set({ role: "ctv" })
-              .where(eq(users.id, previousOwner.id))
-              .run();
+            await tx.update(users).set({ role: "ctv" }).where(eq(users.id, previousOwner.id)).run();
           }
         }
 
@@ -310,6 +317,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    if (!leaderAccess && scopedTeamId !== teamId) {
+      return NextResponse.json({ success: false, error: "Bạn chỉ có thể cập nhật team của mình." }, { status: 403 });
+    }
+
     const nextName = normalizeOptionalString(body.name);
     const nextDescription = normalizeOptionalString(body.description);
     const nextStatus = normalizeString(body.status);
@@ -319,7 +330,20 @@ export async function PUT(request: NextRequest) {
 
     if (nextName) updates.name = nextName;
     if (nextDescription !== undefined) updates.description = nextDescription;
-    if (nextStatus === "active" || nextStatus === "archived") updates.status = nextStatus as "active" | "archived";
+    if (leaderAccess && (nextStatus === "active" || nextStatus === "archived")) {
+      updates.status = nextStatus as "active" | "archived";
+    }
+
+    if (!leaderAccess && !nextName && nextDescription === undefined) {
+      return NextResponse.json({ success: false, error: "Không có thay đổi nào để lưu." }, { status: 400 });
+    }
+
+    if (nextName && nextName !== existingTeam.name) {
+      const duplicateTeam = await db.select({ id: teams.id }).from(teams).where(eq(teams.name, nextName)).get();
+      if (duplicateTeam && duplicateTeam.id !== teamId) {
+        return NextResponse.json({ success: false, error: "Tên team đã tồn tại" }, { status: 409 });
+      }
+    }
 
     await db.update(teams).set(updates).where(eq(teams.id, teamId)).run();
 
@@ -334,7 +358,7 @@ export async function PUT(request: NextRequest) {
     await publishRealtimeEvent({
       channels: ["team", "dashboard"],
       toastTitle: "Team đã được cập nhật",
-      toastMessage: `Đã cập nhật team ${existingTeam.name}.`,
+      toastMessage: `Đã cập nhật team ${updates.name ?? existingTeam.name}.`,
       toastVariant: "success",
     });
 

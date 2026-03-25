@@ -12,6 +12,14 @@ export interface AuthCollaborator {
   [key: string]: unknown;
 }
 
+export interface AuthAdminSetup {
+  required: boolean;
+  needsEmployeeCode: boolean;
+  needsTeamSetup: boolean;
+  currentTeamName: string | null;
+  currentTeamDescription: string | null;
+}
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -29,6 +37,7 @@ export interface AuthUser {
     status?: "active" | "archived";
   } | null;
   collaborator?: AuthCollaborator;
+  adminSetup?: AuthAdminSetup;
 }
 
 type AuthLoginResult =
@@ -47,10 +56,10 @@ const AuthContext = createContext<{
 }>({
   user: null,
   loading: true,
-  login: async () => ({ success: false, error: "Auth context not initialized" }),
-  register: async () => ({ success: false, error: "Auth context not initialized" }),
-  logout: async () => { },
-  refreshUser: async () => { },
+  login: async () => ({ success: false, error: "Auth context chưa khởi tạo" }),
+  register: async () => ({ success: false, error: "Auth context chưa khởi tạo" }),
+  logout: async () => {},
+  refreshUser: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -73,7 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => { refreshUser(); }, [refreshUser]);
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -122,20 +133,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const contextValue = useMemo(() => ({
-    user,
-    loading,
-    login,
-    register,
-    logout,
-    refreshUser,
-  }), [user, loading, login, register, logout, refreshUser]);
-
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+  const contextValue = useMemo(
+    () => ({
+      user,
+      loading,
+      login,
+      register,
+      logout,
+      refreshUser,
+    }),
+    [user, loading, login, register, logout, refreshUser]
   );
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

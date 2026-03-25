@@ -212,6 +212,40 @@ export default function TeamPage() {
     setShowModal(true);
   };
 
+  const openCreateTeamModal = () => {
+    setTeamForm({ name: "", description: "", ownerName: "", ownerPenName: "", ownerEmail: "" });
+    setTeamError("");
+    setShowTeamModal(true);
+  };
+
+  const openEditTeamModal = async () => {
+    if (!currentTeam) {
+      alert("Chưa có team để cập nhật.");
+      return;
+    }
+
+    const nextName = window.prompt("Tên nhóm CTV", currentTeam.name || "");
+    if (nextName === null) {
+      return;
+    }
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName) {
+      alert("Vui lòng nhập tên nhóm hợp lệ.");
+      return;
+    }
+
+    const nextDescription = window.prompt("Mô tả nhóm", currentTeam.description || "");
+    if (nextDescription === null) {
+      return;
+    }
+
+    await updateTeam({
+      name: trimmedName,
+      description: nextDescription.trim(),
+    });
+  };
+
   const openEditModal = (collaborator: Collaborator) => {
     setFormData(collaborator);
     setFormError("");
@@ -249,6 +283,61 @@ export default function TeamPage() {
         : "✅ Đã tạo team mới.");
     } catch {
       setTeamError("Không thể kết nối tới máy chủ.");
+    } finally {
+      setTeamSaving(false);
+    }
+  };
+
+  const updateTeam = async (overrides?: { name: string; description: string }) => {
+    if (!currentTeam) {
+      setTeamError("Chưa có team để cập nhật.");
+      return;
+    }
+
+    const nextName = (overrides?.name ?? teamForm.name).trim();
+    const nextDescription = overrides?.description ?? teamForm.description;
+
+    if (!nextName) {
+      setTeamError("Vui lòng nhập tên team.");
+      if (overrides) {
+        alert("Vui lòng nhập tên team.");
+      }
+      return;
+    }
+
+    try {
+      setTeamSaving(true);
+      setTeamError("");
+      const res = await fetch("/api/teams", {
+        method: "PUT",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamId: currentTeam.id,
+          name: nextName,
+          description: nextDescription,
+        }),
+      });
+      const data = await res.json().catch(() => ({ success: false, error: "Không thể đọc phản hồi từ máy chủ" }));
+      if (!res.ok || !data.success) {
+        setTeamError(data.error || "Không thể cập nhật team.");
+        if (overrides) {
+          alert(`Không thể cập nhật team: ${data.error || "Có lỗi xảy ra."}`);
+        }
+        return;
+      }
+
+      if (!overrides) {
+        closeTeamModal();
+      }
+      fetchTeams();
+      await refreshUser();
+      alert("✅ Đã cập nhật thông tin team thành công.");
+    } catch {
+      setTeamError("Không thể kết nối tới máy chủ.");
+      if (overrides) {
+        alert("Không thể kết nối tới máy chủ.");
+      }
     } finally {
       setTeamSaving(false);
     }
@@ -503,7 +592,7 @@ export default function TeamPage() {
           </div>
           {isLeader && (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", width: isMobile ? "100%" : "auto" }}>
-              <button className="btn-ios-pill btn-ios-secondary" style={{ flex: isMobile ? 1 : "initial", justifyContent: "center" }} onClick={() => setShowTeamModal(true)}>
+              <button className="btn-ios-pill btn-ios-secondary" style={{ flex: isMobile ? 1 : "initial", justifyContent: "center" }} onClick={openCreateTeamModal}>
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>group_add</span>
                 Tạo team
               </button>
@@ -550,6 +639,16 @@ export default function TeamPage() {
               <div style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
                 {currentTeam.description}
               </div>
+            )}
+            {currentTeam && (
+              <button
+                className="btn-ios-pill btn-ios-secondary"
+                style={{ marginTop: 14, justifyContent: "center", width: "100%" }}
+                onClick={openEditTeamModal}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                Cập nhật thông tin nhóm
+              </button>
             )}
           </div>
 

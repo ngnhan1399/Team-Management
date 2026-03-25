@@ -1,5 +1,32 @@
 # Optimization Memory
 
+## 2026-03-25 - Admin/team onboarding foundation
+
+- Da bo sung gate onboarding rieng cho admin/leader:
+  - `src/app/components/AdminSetupPage.tsx`
+  - `src/app/api/admin/setup/route.ts`
+  - `src/app/components/AppRouter.tsx`
+  - `src/app/api/auth/me/route.ts`
+  - `src/app/components/auth-context.tsx`
+- Quy uoc hien tai:
+  - admin/leader phai co `employeeCode`
+  - admin team (khong phai leader) neu chua co `teamId` thi bi buoc dat ten nhom ngay lan vao dau
+  - onboarding xong moi vao `MainApp`
+- `POST /api/admin/setup` hien tai se:
+  - luu `employeeCode`
+  - tao team moi cho admin team neu chua co
+  - cap nhat `teamId` cho user/collaborator lien ket
+  - tu gan `ownerUserId` neu team chua co owner
+- `PUT /api/teams` da mo them cho admin team:
+  - duoc cap nhat `name/description` cua chinh team minh
+  - khong duoc `transfer-owner`
+  - khong duoc doi `status`
+- `TeamPage` da co luong cap nhat nhanh thong tin nhom hien tai de admin team thao tac de hon.
+- Khong nen lap lai:
+  - khong dua admin team vao `MainApp` khi chua co `employeeCode`
+  - khong bat admin team nhay vao `TeamPage` roi tu do moi "doan" can phai tao team
+  - khong cap quyen sua moi team cho admin team; chi cho sua team scoped cua minh
+
 ## 2026-03-25 - KPI Content retest memory
 
 - Live runtime da duoc xac nhan khong con `KPI_CONTENT_SCRIPT_*`, nen production dang di nhanh submit truc tiep toi Google Form.

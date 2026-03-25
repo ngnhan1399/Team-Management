@@ -1,5 +1,26 @@
 # Codex Handoff
 
+## Update 2026-03-25 (admin/team onboarding foundation)
+
+- Da them gate onboarding cho admin/leader truoc khi vao `MainApp`:
+  - admin neu chua co `employeeCode` se bi chan va vao `AdminSetupPage`
+  - admin team neu chua co `teamId` se bi buoc dat ten nhom ngay lan dau
+- File chinh:
+  - `src/app/components/AdminSetupPage.tsx`
+  - `src/app/api/admin/setup/route.ts`
+  - `src/app/api/auth/me/route.ts`
+  - `src/app/components/auth-context.tsx`
+  - `src/app/components/AppRouter.tsx`
+- `POST /api/admin/setup` da xu ly:
+  - luu `employeeCode`
+  - tao team moi neu admin team chua co team
+  - cap nhat `teamId` cho user/collaborator lien ket
+  - claim `ownerUserId` neu team chua co owner
+- `PUT /api/teams` khong con chi danh rieng cho leader:
+  - leader van co full team update + transfer owner
+  - admin team duoc sua `name/description` cua dung team minh
+- `TeamPage` da co nut cap nhat thong tin nhom hien tai cho admin team de bat dau van hanh de hon.
+
 ## Update 2026-03-25 (KPI Content retest gate)
 
 - Khong coi fix KPI Content la hoan tat neu moi chi sua repo.
