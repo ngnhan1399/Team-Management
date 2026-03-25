@@ -105,7 +105,11 @@ export function normalizeKpiContentAutomationMessage(message: string) {
 
   const folded = foldText(normalized);
 
-  if (folded === "da gui kpi content form truc tiep." || folded === "da gui kpi content form truc tiep") {
+  if (
+    folded === "da gui kpi content form truc tiep."
+    || folded === "da gui kpi content form truc tiep"
+    || /^(\?\?\s*)?g\?i kpi content form tr\?c ti\?p\.?$/i.test(normalized)
+  ) {
     return "Đã gửi KPI Content form trực tiếp.";
   }
 
