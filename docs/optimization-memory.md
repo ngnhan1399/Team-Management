@@ -12,6 +12,7 @@
   - deployment `17` auto queue va `finished`
   - container live da len commit `949092c2f8bf3bc05dba35c944dabd02c4ef7c4c`
 - Khong nen lap lai:
+  - khong de thay doi chi nam o local ma chua push GitHub
   - khong bao da sua live neu moi chi push code
   - khong coi repo state la production state
   - khong bat nguoi dung test truoc khi deployment `finished` va live URL da duoc mo lai

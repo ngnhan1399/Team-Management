@@ -7,6 +7,7 @@
   - nhung source la `Public GitHub`
   - khong co webhook hop le de tu tao deployment nhu Vercel
 - Tu bay gio, phai coi redeploy la mot buoc rieng va bat buoc verify tren live.
+- Tu bay gio, moi thay doi can duoc dua len GitHub, khong duoc de o local roi coi la da xong.
 - Co che hien tai tren VPS:
   - `/usr/local/bin/ctv-management-coolify-queue.sh`
   - `/usr/local/bin/ctv-management-coolify-autodeploy.sh`
