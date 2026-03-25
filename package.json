@@ -20,6 +20,7 @@
     "db:repair-seo-classification:create-missing": "node scripts/repair-seo-classification.mjs --create-missing-pending",
     "db:prune-runtime-data": "node scripts/prune-runtime-data.mjs",
     "db:prune-runtime-data:apply": "node scripts/prune-runtime-data.mjs --apply",
+    "review-registration:save-google-session": "node scripts/save-review-registration-google-session.mjs",
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:e2e-smoke": "npm run build && node scripts/e2e-smoke.mjs"
   },

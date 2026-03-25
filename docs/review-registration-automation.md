@@ -17,7 +17,7 @@
 4. Reviewer bấm `Đăng ký bài duyệt`.
 5. Hệ thống gọi `POST /api/review-registrations`.
 6. Backend tạo hoặc cập nhật bản ghi `review_registrations`, rồi queue job nền.
-7. Job nền gọi Apps Script web app để ghi dữ liệu vào sheet.
+7. Job nền ưu tiên dùng browser automation với phiên Google đã lưu; nếu không có thì mới fallback sang Apps Script web app để ghi dữ liệu vào sheet.
 8. Trạng thái mới nhất của `review_registrations` được gắn ngược vào payload `/api/articles`.
 
 ## Metadata bài viết
@@ -35,6 +35,10 @@ UI desktop/mobile dùng trực tiếp các field này để hiển thị trạng
 ## Quy tắc ghi sheet
 
 Apps Script mẫu: `output/review-registration.workdocker.gs`
+
+Browser-session helper:
+
+- `scripts/save-review-registration-google-session.mjs`
 
 Quy tắc đã chốt từ sheet thật:
 
@@ -56,8 +60,13 @@ Quy tắc đã chốt từ sheet thật:
 
 Trong app:
 
-- `REVIEW_REGISTRATION_SCRIPT_WEB_APP_URL`
-- `REVIEW_REGISTRATION_SCRIPT_SECRET`
+- Browser session:
+  - `REVIEW_REGISTRATION_GOOGLE_STORAGE_STATE_PATH`
+  - hoặc `REVIEW_REGISTRATION_GOOGLE_STORAGE_STATE_JSON`
+  - hoặc `REVIEW_REGISTRATION_GOOGLE_STORAGE_STATE_BASE64`
+- Apps Script fallback:
+  - `REVIEW_REGISTRATION_SCRIPT_WEB_APP_URL`
+  - `REVIEW_REGISTRATION_SCRIPT_SECRET`
 
 Trong Apps Script:
 
@@ -65,10 +74,12 @@ Trong Apps Script:
 
 ## Lưu ý vận hành
 
-- Đây là luồng Apps Script ghi trực tiếp vào Google Sheet, không phải Google Form.
+- Nếu đã có phiên Google editor hợp lệ, hệ thống có thể ghi trực tiếp vào Google Sheet bằng browser automation mà không cần Apps Script riêng.
+- Apps Script vẫn là fallback ổn định hơn khi bạn muốn tránh phụ thuộc phiên đăng nhập Google.
 - Nếu reviewer chưa có cấu hình profile sheet, backend sẽ chặn đăng ký.
 - Nếu bài chưa có link hoặc chưa ở trạng thái đã duyệt, backend sẽ chặn đăng ký.
 - Khi sửa logic sheet thật, phải cập nhật đồng thời:
   - `src/lib/review-registration.ts`
   - `src/lib/review-registration-automation.ts`
+  - `src/lib/review-registration-browser-automation.ts`
   - `output/review-registration.workdocker.gs`

@@ -9,6 +9,10 @@ import {
   resolveReviewRegistrationSheetProfile,
   type ReviewRegistrationStatus,
 } from "@/lib/review-registration";
+import {
+  hasReviewRegistrationBrowserSessionConfig,
+  submitReviewRegistrationThroughBrowser,
+} from "@/lib/review-registration-browser-automation";
 
 const REVIEW_REGISTRATION_AUTOMATION_TIMEOUT_MS = 30000;
 
@@ -38,6 +42,17 @@ type ReviewRegistrationScriptResponse = {
 
 function normalizeText(value: unknown) {
   return String(value || "").trim();
+}
+
+export function hasReviewRegistrationScriptConfig() {
+  return Boolean(
+    normalizeText(process.env.REVIEW_REGISTRATION_SCRIPT_WEB_APP_URL)
+    && normalizeText(process.env.REVIEW_REGISTRATION_SCRIPT_SECRET),
+  );
+}
+
+export function hasReviewRegistrationAutomationConfig() {
+  return hasReviewRegistrationBrowserSessionConfig() || hasReviewRegistrationScriptConfig();
 }
 
 function parseInteger(value: unknown) {
@@ -188,6 +203,51 @@ async function callReviewRegistrationScript(input: {
   }
 }
 
+async function callReviewRegistrationAutomation(input: {
+  article: ReviewRegistrationArticleSnapshot;
+  reviewerLabel: string;
+  requestedByUserId: number;
+  requestedByDisplayName: string;
+}) {
+  const profile = resolveReviewRegistrationSheetProfile([input.reviewerLabel]);
+  if (!profile) {
+    return {
+      skipped: true,
+      message: `Chưa có cấu hình sheet bài duyệt cho reviewer “${input.reviewerLabel}”.`,
+    } as const;
+  }
+
+  if (hasReviewRegistrationBrowserSessionConfig()) {
+    const result = await submitReviewRegistrationThroughBrowser({
+      articleDate: input.article.date,
+      articleLink: normalizeText(input.article.link),
+      writerPenName: input.article.penName,
+      reviewerPenName: input.reviewerLabel,
+      managerLabel: profile.managerLabel || "",
+      profile,
+    });
+
+    return {
+      skipped: false,
+      success: result.success,
+      message: result.message,
+      response: {
+        success: result.success,
+        message: result.message,
+        sheetUpdated: result.success,
+        sheetName: result.sheetName,
+        rowNumber: result.rowNumber,
+        sheetMonth: result.sheetMonth,
+        sheetYear: result.sheetYear,
+        sheetWrittenAt: result.sheetWrittenAt,
+        completedAt: result.completedAt,
+      } satisfies ReviewRegistrationScriptResponse,
+    } as const;
+  }
+
+  return callReviewRegistrationScript(input);
+}
+
 export async function processReviewRegistrationJob(input: {
   registrationId: number;
   article: ReviewRegistrationArticleSnapshot;
@@ -283,7 +343,7 @@ export async function processReviewRegistrationJob(input: {
     completedAt: null,
   });
 
-  const result = await callReviewRegistrationScript({
+  const result = await callReviewRegistrationAutomation({
     article: input.article,
     reviewerLabel,
     requestedByUserId: input.requestedByUserId,

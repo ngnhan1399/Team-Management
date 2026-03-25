@@ -11,7 +11,10 @@ import {
   matchesIdentityCandidate,
 } from "@/lib/auth";
 import { isApprovedArticleStatus } from "@/lib/article-status";
-import { processReviewRegistrationJob } from "@/lib/review-registration-automation";
+import {
+  hasReviewRegistrationAutomationConfig,
+  processReviewRegistrationJob,
+} from "@/lib/review-registration-automation";
 import {
   getReviewRegistrationStatusLabel,
   resolveReviewRegistrationSheetProfile,
@@ -181,13 +184,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "ID bài viết không hợp lệ." }, { status: 400 });
     }
 
-    const scriptUrl = normalizeText(process.env.REVIEW_REGISTRATION_SCRIPT_WEB_APP_URL);
-    const scriptSecret = normalizeText(process.env.REVIEW_REGISTRATION_SCRIPT_SECRET);
-    if (!scriptUrl || !scriptSecret) {
+    if (!hasReviewRegistrationAutomationConfig()) {
       return NextResponse.json(
         {
           success: false,
-          error: "Hệ thống chưa cấu hình Apps Script đăng ký bài duyệt. Vui lòng cập nhật REVIEW_REGISTRATION_SCRIPT_WEB_APP_URL và REVIEW_REGISTRATION_SCRIPT_SECRET trước khi sử dụng.",
+          error: "Hệ thống chưa cấu hình kênh tự động cho đăng ký bài duyệt. Hãy cấu hình Apps Script hoặc phiên đăng nhập Google đã lưu trước khi sử dụng.",
         },
         { status: 400 }
       );

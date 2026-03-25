@@ -24,8 +24,19 @@
   - tìm dòng trống đầu tiên trong block
   - điền ngày, link, CTV viết, reviewer và tick toàn bộ checkbox.
 - Runtime cần cấu hình:
-  - `REVIEW_REGISTRATION_SCRIPT_WEB_APP_URL`
-  - `REVIEW_REGISTRATION_SCRIPT_SECRET`
+- `REVIEW_REGISTRATION_SCRIPT_WEB_APP_URL`
+- `REVIEW_REGISTRATION_SCRIPT_SECRET`
+- Từ vòng sau, reviewer registration có thêm fallback browser-session:
+  - `src/lib/review-registration-browser-automation.ts`
+  - `scripts/save-review-registration-google-session.mjs`
+  - env hỗ trợ:
+    - `REVIEW_REGISTRATION_GOOGLE_STORAGE_STATE_PATH`
+    - `REVIEW_REGISTRATION_GOOGLE_STORAGE_STATE_JSON`
+    - `REVIEW_REGISTRATION_GOOGLE_STORAGE_STATE_BASE64`
+- Thứ tự ưu tiên runtime:
+  1. nếu có session Google đã lưu thì ghi sheet bằng browser automation
+  2. nếu không có session thì fallback Apps Script
+  3. nếu không có cả hai thì backend fail-fast và báo lỗi rõ bằng tiếng Việt
 
 ## Update 2026-03-25 (admin/team onboarding foundation)
 

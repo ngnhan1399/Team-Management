@@ -9,6 +9,7 @@ export type ReviewRegistrationProfile = {
   aliases: string[];
   spreadsheetUrl: string;
   sheetName: string;
+  sheetGid: string;
   managerLabel?: string | null;
 };
 
@@ -19,6 +20,7 @@ const REVIEW_REGISTRATION_PROFILES: ReviewRegistrationProfile[] = [
     aliases: ["Việt Nguyễn", "Viet Nguyen", "Vi?t Nguy?n"],
     spreadsheetUrl: REVIEW_REGISTRATION_SHEET_URL,
     sheetName: "Việt Nguyễn",
+    sheetGid: "184624696",
     managerLabel: "",
   },
 ];

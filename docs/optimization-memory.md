@@ -23,7 +23,15 @@
 - Không nên lặp lại:
   - không dùng generic article update cho reviewer mark reviewed
   - không nhét logic ghi sheet reviewer vào `articles` route
-  - không tạo flow browser-login Google mới; repo này dùng Apps Script/web app cho automation ngoài hệ thống
+  - trước đây không tạo flow browser-login Google mới; từ 2026-03-26 reviewer registration đã có browser-session fallback có kiểm soát
+- Browser-session reviewer registration dùng:
+  - `scripts/save-review-registration-google-session.mjs` để lấy `storageState`
+  - `REVIEW_REGISTRATION_GOOGLE_STORAGE_STATE_PATH` hoặc `...JSON` hoặc `...BASE64`
+  - public CSV export để xác định đúng dòng trước và xác minh lại sau khi ghi
+- Thứ tự runtime đúng hiện tại:
+  1. ưu tiên browser-session nếu có session Google editor
+  2. fallback Apps Script nếu đã cấu hình
+  3. thiếu cả hai thì fail-fast
 
 ## 2026-03-25 - Admin/team onboarding foundation
 
