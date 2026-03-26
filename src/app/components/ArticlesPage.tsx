@@ -3182,11 +3182,6 @@ export default function ArticlesPage() {
                   <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: isMobile ? 38 : 52, height: isMobile ? 38 : 52, padding: "0 14px", borderRadius: 18, background: isMobile ? "rgba(255,255,255,0.75)" : "rgba(255, 255, 255, 0.78)", color: section.accent, fontSize: isMobile ? 16 : 22, fontWeight: 900, boxShadow: "0 12px 30px rgba(15, 23, 42, 0.08)" }}>
                     {section.rows.length}
                   </span>
-                  {"percentage" in section && (
-                    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 68, height: 28, padding: "0 10px", borderRadius: 999, background: "rgba(255,255,255,0.72)", color: section.accent, fontSize: 12, fontWeight: 800 }}>
-                      {section.percentage}%
-                    </span>
-                  )}
                 </div>
               </div>
               {isMobile ? renderArticleCards(section.rows, section.emptyMessage) : renderArticleTable(section.rows, section.emptyMessage, section.allowBulkAssign, isReviewer ? articleEligibleForReviewerBulkPickup : undefined)}
