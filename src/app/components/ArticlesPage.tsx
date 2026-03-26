@@ -2116,6 +2116,17 @@ export default function ArticlesPage() {
   const resolveWriterSectionPercentage = (count: number) => (
     writerArticleTotal > 0 ? Math.round((count / writerArticleTotal) * 100) : 0
   );
+  const getWriterSectionSubtitle = (sectionKey: string) => {
+    if (sectionKey === "writer-new") {
+      return "Nhóm các bài triển khai mới để bạn theo dõi tiến độ dễ hơn.";
+    }
+
+    if (sectionKey === "writer-rewrite") {
+      return "Nhóm các bài viết lại, cập nhật và tối ưu nội dung hiện có.";
+    }
+
+    return "";
+  };
   const reviewQueueArticles = isReviewer
     ? [...articles.filter((article) => articleMatchesReviewerScope(article))]
       .sort((left, right) => {
@@ -3085,14 +3096,44 @@ export default function ArticlesPage() {
           </div>
           {articleSections.map((section) => (
             <div key={section.key} className="glass-card" style={{ padding: 18, background: section.background }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18, color: section.accent }}>{section.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{section.title}</span>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18, color: section.accent }}>{section.icon}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{section.title}</span>
+                  </div>
+                  {"percentage" in section && (
+                    <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>
+                      {getWriterSectionSubtitle(section.key)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-main)", lineHeight: 1 }}>{section.rows.length}</div>
+                  {"percentage" in section && (
+                    <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 70, height: 28, padding: "0 10px", borderRadius: 999, background: "rgba(255,255,255,0.72)", color: section.accent, fontSize: 12, fontWeight: 800 }}>
+                      {section.percentage}%
+                    </div>
+                  )}
+                </div>
               </div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-main)", lineHeight: 1 }}>{section.rows.length}</div>
               {"percentage" in section && (
-                <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>
-                  Chiếm {section.percentage}% tổng số bài
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>Tỷ trọng trong tổng số bài</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: section.accent }}>{section.percentage}%</span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.5)", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${section.percentage}%`,
+                        minWidth: section.rows.length > 0 ? 10 : 0,
+                        height: "100%",
+                        borderRadius: 999,
+                        background: `linear-gradient(90deg, ${section.accent}, rgba(255,255,255,0.92))`,
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -3118,36 +3159,57 @@ export default function ArticlesPage() {
                 data-testid={`article-section-${section.key}`}
                 style={{
                   display: "flex",
-                  alignItems: "center",
+                  alignItems: "flex-start",
                   justifyContent: "space-between",
                   gap: 12,
-                  padding: isMobile ? "12px 0" : "18px 20px",
+                  padding: isMobile ? "12px 0" : ("percentage" in section ? "20px 20px 18px" : "18px 20px"),
                   borderBottom: isMobile ? "none" : "1px solid var(--glass-border)",
                   background: isMobile ? "transparent" : section.background,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: section.accent }}>{section.icon}</span>
-                  <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: "var(--text-main)" }}>{section.title}</h3>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0, flex: 1 }}>
+                  <div style={{ width: isMobile ? 36 : 42, height: isMobile ? 36 : 42, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.72)", color: section.accent, flexShrink: 0 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 18 : 20, color: section.accent }}>{section.icon}</span>
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: "var(--text-main)" }}>{section.title}</h3>
+                    {"percentage" in section && (
+                      <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5, color: "var(--text-muted)" }}>
+                        {getWriterSectionSubtitle(section.key)}
+                      </div>
+                    )}
+                    {"percentage" in section && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>Tỷ trọng trong tổng số bài</span>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: section.accent }}>{section.percentage}%</span>
+                        </div>
+                        <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.55)", overflow: "hidden" }}>
+                          <div
+                            style={{
+                              width: `${section.percentage}%`,
+                              minWidth: section.rows.length > 0 ? 10 : 0,
+                              height: "100%",
+                              borderRadius: 999,
+                              background: `linear-gradient(90deg, ${section.accent}, rgba(255,255,255,0.92))`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: isMobile ? 32 : 38, height: isMobile ? 32 : 38, padding: isMobile ? "0 8px" : "0 12px", borderRadius: 999, background: isMobile ? "rgba(0,0,0,0.05)" : "rgba(255, 255, 255, 0.7)", color: section.accent, fontSize: isMobile ? 14 : 16, fontWeight: 800 }}>
-                  {section.rows.length}
-                </span>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: isMobile ? 38 : 52, height: isMobile ? 38 : 52, padding: "0 14px", borderRadius: 18, background: isMobile ? "rgba(255,255,255,0.75)" : "rgba(255, 255, 255, 0.78)", color: section.accent, fontSize: isMobile ? 16 : 22, fontWeight: 900, boxShadow: "0 12px 30px rgba(15, 23, 42, 0.08)" }}>
+                    {section.rows.length}
+                  </span>
+                  {"percentage" in section && (
+                    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 68, height: 28, padding: "0 10px", borderRadius: 999, background: "rgba(255,255,255,0.72)", color: section.accent, fontSize: 12, fontWeight: 800 }}>
+                      {section.percentage}%
+                    </span>
+                  )}
+                </div>
               </div>
-              {"percentage" in section && (
-                <div
-                  style={{
-                    padding: isMobile ? "0 0 12px" : "0 20px 16px",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: "var(--text-muted)",
-                    borderBottom: isMobile ? "none" : "1px solid var(--glass-border)",
-                    background: isMobile ? "transparent" : section.background,
-                  }}
-                >
-                  Chiếm {section.percentage}% tổng số bài hiện có
-                </div>
-              )}
               {isMobile ? renderArticleCards(section.rows, section.emptyMessage) : renderArticleTable(section.rows, section.emptyMessage, section.allowBulkAssign, isReviewer ? articleEligibleForReviewerBulkPickup : undefined)}
             </section>
           ))}
