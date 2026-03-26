@@ -383,6 +383,14 @@ Thứ tự ưu tiên nên là:
   - `POST /api/review-registrations`
   - `src/lib/review-registration-automation.ts`
   - `src/lib/review-registration-browser-automation.ts`
+- Reviewer workflow:
+  - không tách riêng `Bài đã bàn giao` và `Bài chờ nhận duyệt` thành hai section khác nhau
+  - reviewer nên nhìn một hàng chờ duyệt duy nhất, có nhãn từng dòng để phân biệt
+  - checkbox chọn hàng loạt chỉ áp dụng cho bài chưa có reviewer, không áp vào bài đã giao
+- Google Sheet sync:
+  - không được tự chọn tab tháng/năm ở tương lai khi auto-sync
+  - nếu `articleSyncLinks` hoặc `sheetName` cũ đang trỏ sang kỳ tương lai, phải bỏ qua và fallback về kỳ hợp lệ gần nhất trong workbook
+  - với review registration sheet, suy năm của block `Tháng X` phải ưu tiên bám theo `articleDate`, không chỉ dựa vào đồng hồ hệ thống
 
 - Dashboard trang chủ:
   - danh sách cộng tác viên nổi bật của khối admin không được lấy all-time

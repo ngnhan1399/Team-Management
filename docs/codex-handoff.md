@@ -11,6 +11,17 @@
   - hiện tại là `Việt Nguyễn`
 - Vì vậy reviewer như `Trung` vẫn phải đăng ký được bình thường nếu bài đó đang giao cho họ duyệt.
 
+## Update 2026-03-26 (reviewer queue + sheet future-date guard)
+
+- Reviewer view ở `ArticlesPage` không nên tách thành 2 section `Bài đã giao` và `Bài chờ nhận duyệt`.
+- Hiện reviewer dùng một section chung `Danh sách bài duyệt`, nhưng từng dòng vẫn có badge:
+  - `Đã bàn giao`
+  - `Chờ nhận duyệt`
+- Chọn hàng loạt chỉ áp dụng cho bài chưa có reviewer.
+- Google Sheet sync đã thêm guard bỏ qua tab tháng/năm ở tương lai khi auto-pick.
+- `refreshScopedArticlesFromGoogleSheet()` cũng bỏ qua `sheetMonth/sheetYear` tương lai từ sync link cũ và fallback về kỳ hợp lệ.
+- `review-registration-browser-automation` khi suy năm cho block `Tháng X` giờ ưu tiên bám theo `articleDate` để tránh nhảy sai sang năm sau.
+
 ## Update 2026-03-25 (reviewer article registration)
 
 - Đã thêm scaffold hoàn chỉnh cho luồng reviewer:

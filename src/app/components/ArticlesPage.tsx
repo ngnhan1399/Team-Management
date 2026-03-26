@@ -325,6 +325,28 @@ export default function ArticlesPage() {
   const articleMatchesReviewerScope = useCallback((article: Article) => {
     return articleAssignedToReviewer(article) || articleAvailableForReviewerPickup(article);
   }, [articleAssignedToReviewer, articleAvailableForReviewerPickup]);
+  const articleEligibleForReviewerBulkPickup = useCallback((article: Article) => {
+    return articleAvailableForReviewerPickup(article);
+  }, [articleAvailableForReviewerPickup]);
+  const getReviewerQueueLabel = useCallback((article: Article) => {
+    if (articleAssignedToReviewer(article)) {
+      return {
+        label: "Đã bàn giao",
+        color: "#2563eb",
+        background: "rgba(59, 130, 246, 0.12)",
+        border: "1px solid rgba(59, 130, 246, 0.18)",
+      };
+    }
+    if (articleAvailableForReviewerPickup(article)) {
+      return {
+        label: "Chờ nhận duyệt",
+        color: "#0f766e",
+        background: "rgba(20, 184, 166, 0.12)",
+        border: "1px solid rgba(20, 184, 166, 0.18)",
+      };
+    }
+    return null;
+  }, [articleAssignedToReviewer, articleAvailableForReviewerPickup]);
 
   const canEditArticle = useCallback((article: Article) => {
     if (canManageArticles) return true;
@@ -2084,33 +2106,26 @@ export default function ArticlesPage() {
   const showSplitArticleSections = shouldShowSplitArticleSections;
   const ctvArticles = articles.filter((article) => resolveAuthorBucket(article) !== "editorial");
   const editorialArticles = articles.filter((article) => resolveAuthorBucket(article) === "editorial");
-  const assignedReviewArticles = isReviewer
-    ? articles.filter((article) => articleAssignedToReviewer(article))
-    : [];
-  const availableReviewArticles = isReviewer
-    ? articles.filter((article) => articleAvailableForReviewerPickup(article))
+  const reviewQueueArticles = isReviewer
+    ? [...articles.filter((article) => articleMatchesReviewerScope(article))]
+      .sort((left, right) => {
+        const leftAssigned = articleAssignedToReviewer(left) ? 1 : 0;
+        const rightAssigned = articleAssignedToReviewer(right) ? 1 : 0;
+        if (leftAssigned !== rightAssigned) return rightAssigned - leftAssigned;
+        return String(right.date || "").localeCompare(String(left.date || ""));
+      })
     : [];
   const articleTableMinWidth = showSplitArticleSections ? 1020 : 1080;
   const articleSections = isReviewer
     ? [
       {
-        key: "assigned",
-        title: "Bài đã giao cho bạn",
-        icon: "assignment_ind",
+        key: "review-queue",
+        title: "Danh sách bài duyệt",
+        icon: "assignment",
         accent: "#2563eb",
         background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.04))",
-        rows: assignedReviewArticles,
-        emptyMessage: "Chưa có bài nào đã giao cho bạn.",
-        allowBulkAssign: false,
-      },
-      {
-        key: "available",
-        title: "Bài chờ nhận duyệt",
-        icon: "playlist_add_check_circle",
-        accent: "#0f766e",
-        background: "linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(15, 118, 110, 0.04))",
-        rows: availableReviewArticles,
-        emptyMessage: "Chưa có bài nào đang chờ nhận duyệt.",
+        rows: reviewQueueArticles,
+        emptyMessage: "Chưa có bài nào trong danh sách duyệt hiện tại.",
         allowBulkAssign: canBulkAssignReviewer,
       },
     ] as const
@@ -2136,11 +2151,19 @@ export default function ArticlesPage() {
         allowBulkAssign: false,
       },
     ] as const;
-  const visibleArticleIds = (isReviewer ? availableReviewArticles : ctvArticles).map((article) => article.id);
+  const visibleArticleIds = (isReviewer
+    ? reviewQueueArticles.filter((article) => articleEligibleForReviewerBulkPickup(article))
+    : ctvArticles
+  ).map((article) => article.id);
   const selectedVisibleCount = visibleArticleIds.filter((id) => selectedArticleIds.includes(id)).length;
 
-  const renderArticleTable = (rows: Article[], emptyMessage: string, allowBulkAssign = false) => {
-    const rowIds = rows.map((article) => article.id);
+  const renderArticleTable = (
+    rows: Article[],
+    emptyMessage: string,
+    allowBulkAssign = false,
+    isSelectableRow: (article: Article) => boolean = () => true,
+  ) => {
+    const rowIds = rows.filter((article) => isSelectableRow(article)).map((article) => article.id);
     const areAllRowsSelected = rowIds.length > 0 && rowIds.every((id) => selectedArticleIds.includes(id));
 
     return (
@@ -2196,12 +2219,16 @@ export default function ArticlesPage() {
               <tr key={a.id} data-testid={`article-row-${a.id}`} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.02)", transition: "background 0.2s" }} className="hover:bg-white/[0.02]">
                 {allowBulkAssign && selectionMode && (
                   <td style={{ padding: "12px 10px", textAlign: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedArticleIds.includes(a.id)}
-                      onChange={() => toggleArticleSelection(a.id)}
-                      aria-label={`Chọn bài ${a.title}`}
-                    />
+                    {isSelectableRow(a) ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedArticleIds.includes(a.id)}
+                        onChange={() => toggleArticleSelection(a.id)}
+                        aria-label={`Chọn bài ${a.title}`}
+                      />
+                    ) : (
+                      <span style={{ display: "inline-block", width: 14, height: 14, opacity: 0.2 }}>•</span>
+                    )}
                   </td>
                 )}
                 <td style={{ padding: "12px 12px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
@@ -2301,6 +2328,25 @@ export default function ArticlesPage() {
                       }}
                     >
                       {a.reviewRegistrationStatusLabel}
+                    </div>
+                  )}
+                  {isReviewer && getReviewerQueueLabel(a) && (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: "3px 8px",
+                        borderRadius: 999,
+                        color: getReviewerQueueLabel(a)?.color,
+                        background: getReviewerQueueLabel(a)?.background,
+                        border: getReviewerQueueLabel(a)?.border,
+                      }}
+                    >
+                      {getReviewerQueueLabel(a)?.label}
                     </div>
                   )}
                 </td>
@@ -3048,7 +3094,7 @@ export default function ArticlesPage() {
                   {section.rows.length}
                 </span>
               </div>
-              {isMobile ? renderArticleCards(section.rows, section.emptyMessage) : renderArticleTable(section.rows, section.emptyMessage, section.allowBulkAssign)}
+              {isMobile ? renderArticleCards(section.rows, section.emptyMessage) : renderArticleTable(section.rows, section.emptyMessage, section.allowBulkAssign, isReviewer ? articleEligibleForReviewerBulkPickup : undefined)}
             </section>
           ))}
         </div>

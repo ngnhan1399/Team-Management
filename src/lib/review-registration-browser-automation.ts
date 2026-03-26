@@ -66,6 +66,15 @@ function foldText(value: unknown) {
     .toLowerCase();
 }
 
+function parseYearMonthFromArticleDate(value: string) {
+  const match = normalizeText(value).match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+  };
+}
+
 function extractSpreadsheetId(spreadsheetUrl: string) {
   const match = normalizeText(spreadsheetUrl).match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   return match?.[1] || "";
@@ -165,7 +174,7 @@ async function fetchSheetSnapshot(profile: ReviewRegistrationProfile) {
   }).map((row) => row.map((value) => normalizeText(value)));
 }
 
-function findLatestMonthSection(rows: SheetSnapshotRow[]) {
+function findLatestMonthSection(rows: SheetSnapshotRow[], referenceArticleDate?: string) {
   const markers = rows
     .map((row, index) => {
       const match = normalizeText(row[0]).match(/^Tháng\s+(\d{1,2})$/i);
@@ -185,9 +194,10 @@ function findLatestMonthSection(rows: SheetSnapshotRow[]) {
 
   const latest = markers[markers.length - 1];
   const nextMarker = markers[markers.length] || null;
+  const articlePeriod = parseYearMonthFromArticleDate(referenceArticleDate || "");
   const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const currentYear = now.getFullYear();
+  const currentMonth = articlePeriod?.month ?? (now.getMonth() + 1);
+  const currentYear = articlePeriod?.year ?? now.getFullYear();
   const year = latest.month > currentMonth + 1 ? currentYear - 1 : currentYear;
 
   return {
@@ -305,7 +315,7 @@ export async function submitReviewRegistrationThroughBrowser(input: ReviewRegist
   }
 
   const initialSnapshot = await fetchSheetSnapshot(input.profile);
-  const monthSection = findLatestMonthSection(initialSnapshot);
+  const monthSection = findLatestMonthSection(initialSnapshot, input.articleDate);
   if (!monthSection) {
     return {
       success: false,

@@ -254,12 +254,22 @@ function sortGoogleSheetTabs(tabs: GoogleSheetTabInfo[]) {
   });
 }
 
+function isFutureSheetPeriod(month: number, year: number, referenceDate = new Date()) {
+  const referenceMonth = referenceDate.getMonth() + 1;
+  const referenceYear = referenceDate.getFullYear();
+  return (year * 100 + month) > (referenceYear * 100 + referenceMonth);
+}
+
+function filterFutureSheetTabs(tabs: GoogleSheetTabInfo[]) {
+  return tabs.filter((tab) => !isFutureSheetPeriod(tab.month, tab.year));
+}
+
 export function listPreferredSheetTabs(sheetNames: string[]) {
-  const parsed = sortGoogleSheetTabs(
+  const parsed = sortGoogleSheetTabs(filterFutureSheetTabs(
     sheetNames
       .map(parseSheetTabInfo)
       .filter((item): item is GoogleSheetTabInfo => Boolean(item))
-  );
+  ));
   const seen = new Set<string>();
   const preferred: GoogleSheetTabInfo[] = [];
 
@@ -274,11 +284,11 @@ export function listPreferredSheetTabs(sheetNames: string[]) {
 }
 
 export function listMonthlySheetTabs(sheetNames: string[]) {
-  return sortGoogleSheetTabs(
+  return sortGoogleSheetTabs(filterFutureSheetTabs(
     sheetNames
       .map(parseSheetTabInfo)
       .filter((item): item is GoogleSheetTabInfo => Boolean(item))
-  );
+  ));
 }
 
 function resolveCanonicalSheetRequest(
@@ -312,13 +322,14 @@ export function pickSheetTab(
   const parsed = sheetNames
     .map(parseSheetTabInfo)
     .filter((item): item is GoogleSheetTabInfo => Boolean(item));
+  const nonFutureTabs = filterFutureSheetTabs(parsed);
 
-  if (parsed.length === 0) {
+  if (nonFutureTabs.length === 0) {
     return null;
   }
 
   if (requestedSheetName) {
-    const exactMatch = parsed.find((item) => item.name === requestedSheetName);
+    const exactMatch = nonFutureTabs.find((item) => item.name === requestedSheetName);
     if (exactMatch) {
       return exactMatch;
     }
@@ -326,11 +337,11 @@ export function pickSheetTab(
 
   if (requestedMonth && requestedYear) {
     return sortGoogleSheetTabs(
-      parsed.filter((item) => item.month === requestedMonth && item.year === requestedYear)
+      nonFutureTabs.filter((item) => item.month === requestedMonth && item.year === requestedYear)
     )[0] ?? null;
   }
 
-  return sortGoogleSheetTabs(parsed)[0] ?? null;
+  return sortGoogleSheetTabs(nonFutureTabs)[0] ?? null;
 }
 
 async function downloadGoogleSheetWorkbook(sourceUrlInput?: string) {
@@ -1275,9 +1286,21 @@ export async function refreshScopedArticlesFromGoogleSheet(
   for (const article of targetArticles) {
     const syncLink = syncLinkByArticleId.get(article.id);
     const syncLinkTab = syncLink?.sheetName ? parseSheetTabInfo(syncLink.sheetName) : null;
-    const resolvedMonth = syncLink?.sheetMonth ?? options.month ?? syncLinkTab?.month ?? getYearMonthFromDate(article.date)?.month ?? null;
-    const resolvedYear = syncLink?.sheetYear ?? options.year ?? syncLinkTab?.year ?? getYearMonthFromDate(article.date)?.year ?? null;
-    const resolvedSheetName = syncLinkTab?.isCopy ? undefined : (syncLink?.sheetName || undefined);
+    const syncLinkPeriodIsFuture = Boolean(
+      (syncLink?.sheetMonth && syncLink?.sheetYear && isFutureSheetPeriod(syncLink.sheetMonth, syncLink.sheetYear))
+      || (syncLinkTab && isFutureSheetPeriod(syncLinkTab.month, syncLinkTab.year))
+    );
+    const articleDatePeriod = getYearMonthFromDate(article.date);
+    const articleDatePeriodIsFuture = Boolean(
+      articleDatePeriod && isFutureSheetPeriod(articleDatePeriod.month, articleDatePeriod.year)
+    );
+    const resolvedMonth = syncLinkPeriodIsFuture
+      ? (options.month ?? (articleDatePeriodIsFuture ? null : articleDatePeriod?.month) ?? null)
+      : (syncLink?.sheetMonth ?? options.month ?? syncLinkTab?.month ?? (articleDatePeriodIsFuture ? null : articleDatePeriod?.month) ?? null);
+    const resolvedYear = syncLinkPeriodIsFuture
+      ? (options.year ?? (articleDatePeriodIsFuture ? null : articleDatePeriod?.year) ?? null)
+      : (syncLink?.sheetYear ?? options.year ?? syncLinkTab?.year ?? (articleDatePeriodIsFuture ? null : articleDatePeriod?.year) ?? null);
+    const resolvedSheetName = (syncLinkTab?.isCopy || syncLinkPeriodIsFuture) ? undefined : (syncLink?.sheetName || undefined);
 
     if (!resolvedMonth || !resolvedYear) {
       skipped += 1;
