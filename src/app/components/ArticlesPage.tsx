@@ -2103,9 +2103,19 @@ export default function ArticlesPage() {
     );
   };
 
-  const showSplitArticleSections = shouldShowSplitArticleSections;
+  const showSplitArticleSections = shouldShowSplitArticleSections || isWriter;
   const ctvArticles = articles.filter((article) => resolveAuthorBucket(article) !== "editorial");
   const editorialArticles = articles.filter((article) => resolveAuthorBucket(article) === "editorial");
+  const writerNewArticles = isWriter
+    ? articles.filter((article) => String(article.contentType || "").trim() !== "Viết lại")
+    : [];
+  const writerRewriteArticles = isWriter
+    ? articles.filter((article) => String(article.contentType || "").trim() === "Viết lại")
+    : [];
+  const writerArticleTotal = writerNewArticles.length + writerRewriteArticles.length;
+  const resolveWriterSectionPercentage = (count: number) => (
+    writerArticleTotal > 0 ? Math.round((count / writerArticleTotal) * 100) : 0
+  );
   const reviewQueueArticles = isReviewer
     ? [...articles.filter((article) => articleMatchesReviewerScope(article))]
       .sort((left, right) => {
@@ -2129,6 +2139,31 @@ export default function ArticlesPage() {
         allowBulkAssign: canBulkAssignReviewer,
       },
     ] as const
+    : isWriter
+      ? [
+        {
+          key: "writer-new",
+          title: "Bài viết mới",
+          icon: "edit_square",
+          accent: "#2563eb",
+          background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.04))",
+          rows: writerNewArticles,
+          emptyMessage: "Chưa có bài viết mới nào trong danh sách hiện tại.",
+          allowBulkAssign: false,
+          percentage: resolveWriterSectionPercentage(writerNewArticles.length),
+        },
+        {
+          key: "writer-rewrite",
+          title: "Bài viết lại",
+          icon: "autorenew",
+          accent: "#f97316",
+          background: "linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(234, 88, 12, 0.04))",
+          rows: writerRewriteArticles,
+          emptyMessage: "Chưa có bài viết lại nào trong danh sách hiện tại.",
+          allowBulkAssign: false,
+          percentage: resolveWriterSectionPercentage(writerRewriteArticles.length),
+        },
+      ] as const
     : [
       {
         key: "ctv",
@@ -3039,7 +3074,7 @@ export default function ArticlesPage() {
         )}
       </div>
 
-      {showSplitArticleSections && !loading && articles.length > 0 && (
+      {showSplitArticleSections && !loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
           <div className="glass-card" style={{ padding: 18, background: "linear-gradient(135deg, rgba(15, 23, 42, 0.03), rgba(148, 163, 184, 0.04))" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -3055,6 +3090,11 @@ export default function ArticlesPage() {
                 <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{section.title}</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-main)", lineHeight: 1 }}>{section.rows.length}</div>
+              {"percentage" in section && (
+                <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>
+                  Chiếm {section.percentage}% tổng số bài
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -3094,6 +3134,20 @@ export default function ArticlesPage() {
                   {section.rows.length}
                 </span>
               </div>
+              {"percentage" in section && (
+                <div
+                  style={{
+                    padding: isMobile ? "0 0 12px" : "0 20px 16px",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "var(--text-muted)",
+                    borderBottom: isMobile ? "none" : "1px solid var(--glass-border)",
+                    background: isMobile ? "transparent" : section.background,
+                  }}
+                >
+                  Chiếm {section.percentage}% tổng số bài hiện có
+                </div>
+              )}
               {isMobile ? renderArticleCards(section.rows, section.emptyMessage) : renderArticleTable(section.rows, section.emptyMessage, section.allowBulkAssign, isReviewer ? articleEligibleForReviewerBulkPickup : undefined)}
             </section>
           ))}
