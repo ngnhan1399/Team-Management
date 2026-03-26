@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 type RoyaltyBreakdown = Record<string, { count: number; unitPrice: number; total: number }>;
 
 type RoyaltySourceArticle = {
+    id: number;
     teamId: number | null;
     penName: string;
     reviewerName: string | null;
@@ -65,6 +66,7 @@ async function selectRoyaltyArticles(options?: {
     }
 
     return db.select({
+        id: articles.id,
         teamId: articles.teamId,
         penName: articles.penName,
         reviewerName: articles.reviewerName,
@@ -291,7 +293,7 @@ export async function GET(request: NextRequest) {
 
                 if (articleMonth === currentMonth && articleYear === currentYear) {
                     visibleCurrentPeriodArticles.set(
-                        `${article.penName}::${article.reviewerName || ""}::${article.articleType}::${article.contentType}::${article.date}`,
+                        String(article.id),
                         article
                     );
                 }
@@ -405,9 +407,7 @@ export async function GET(request: NextRequest) {
             const budgetPercentage = budgetAmount > 0 ? Math.round((currentSpent / budgetAmount) * 100) : 0;
             const remainingBudget = Math.max(budgetAmount - currentSpent, 0);
             const toSharePercentage = (amount: number, total: number) => total > 0 ? Math.round((amount / total) * 1000) / 10 : 0;
-            const currentPeriodArticles = Array.from(visibleCurrentPeriodArticles.values()).filter((article) =>
-                matchesRoyaltyMonthYear(article.date, currentMonth, currentYear)
-            );
+            const currentPeriodArticles = Array.from(visibleCurrentPeriodArticles.values());
             const contentBalance = summarizeRoyaltyContentBalance(
                 currentPeriodArticles.map((article) => resolveAppArticleFields({
                     category: article.category,

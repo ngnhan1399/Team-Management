@@ -227,7 +227,7 @@ export default function RoyaltyPage() {
 
   const refreshRoyaltyView = useCallback(() => {
     if (tab === "overview") {
-      void fetchDashboard(false, true);
+      void fetchDashboard(false, false);
     }
     if (tab === "rates") void fetchRates(false);
     if (tab === "calculate") fetchCalculation();
