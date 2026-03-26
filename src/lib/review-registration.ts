@@ -69,6 +69,14 @@ export function resolveReviewRegistrationProfile(values: Array<unknown>) {
   return resolveReviewRegistrationSheetProfile(values);
 }
 
+export function getDefaultReviewRegistrationProfile() {
+  return REVIEW_REGISTRATION_PROFILES[0] || null;
+}
+
+export function resolveReviewRegistrationSheetProfileOrDefault(values: Array<unknown>) {
+  return resolveReviewRegistrationSheetProfile(values) || getDefaultReviewRegistrationProfile();
+}
+
 export function getReviewRegistrationProfiles() {
   return REVIEW_REGISTRATION_PROFILES.slice();
 }

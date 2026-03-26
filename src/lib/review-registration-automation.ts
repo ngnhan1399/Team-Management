@@ -5,8 +5,9 @@ import { writeAuditLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notifications";
 import { publishRealtimeEvent } from "@/lib/realtime";
 import {
+  getDefaultReviewRegistrationProfile,
   getReviewRegistrationStatusLabel,
-  resolveReviewRegistrationSheetProfile,
+  resolveReviewRegistrationSheetProfileOrDefault,
   type ReviewRegistrationStatus,
 } from "@/lib/review-registration";
 import {
@@ -125,11 +126,11 @@ async function callReviewRegistrationScript(input: {
     } as const;
   }
 
-  const profile = resolveReviewRegistrationSheetProfile([input.reviewerLabel]);
+  const profile = resolveReviewRegistrationSheetProfileOrDefault([input.reviewerLabel]);
   if (!profile) {
     return {
       skipped: true,
-      message: `Chưa có cấu hình sheet bài duyệt cho reviewer “${input.reviewerLabel}”.`,
+      message: "Hệ thống chưa có cấu hình sheet bài duyệt mặc định.",
     } as const;
   }
 
@@ -142,7 +143,7 @@ async function callReviewRegistrationScript(input: {
       articleLink: normalizeText(input.article.link),
       articleDate: input.article.date,
       writerPenName: input.article.penName,
-      reviewerPenName: input.reviewerLabel,
+      reviewerPenName: profile.reviewerLabel,
     },
     target: {
       spreadsheetUrl: profile.spreadsheetUrl,
@@ -209,11 +210,11 @@ async function callReviewRegistrationAutomation(input: {
   requestedByUserId: number;
   requestedByDisplayName: string;
 }) {
-  const profile = resolveReviewRegistrationSheetProfile([input.reviewerLabel]);
+  const profile = resolveReviewRegistrationSheetProfileOrDefault([input.reviewerLabel]);
   if (!profile) {
     return {
       skipped: true,
-      message: `Chưa có cấu hình sheet bài duyệt cho reviewer “${input.reviewerLabel}”.`,
+      message: "Hệ thống chưa có cấu hình sheet bài duyệt mặc định.",
     } as const;
   }
 
@@ -222,7 +223,7 @@ async function callReviewRegistrationAutomation(input: {
       articleDate: input.article.date,
       articleLink: normalizeText(input.article.link),
       writerPenName: input.article.penName,
-      reviewerPenName: input.reviewerLabel,
+      reviewerPenName: profile.reviewerLabel,
       managerLabel: profile.managerLabel || "",
       profile,
     });
@@ -258,7 +259,7 @@ export async function processReviewRegistrationJob(input: {
   await ensureReviewRegistrationSchemaInitialized();
 
   const reviewerLabel = normalizeText(input.article.reviewerName);
-  const profile = resolveReviewRegistrationSheetProfile([reviewerLabel]);
+  const profile = getDefaultReviewRegistrationProfile();
 
   if (!normalizeText(input.article.link)) {
     const errorMessage = "Bài viết chưa có link nên chưa thể đăng ký bài duyệt.";
@@ -293,7 +294,7 @@ export async function processReviewRegistrationJob(input: {
 
   if (!reviewerLabel || !profile) {
     const errorMessage = reviewerLabel
-      ? `Chưa có cấu hình sheet bài duyệt cho reviewer “${reviewerLabel}”.`
+      ? "Hệ thống chưa có cấu hình sheet bài duyệt mặc định."
       : "Bài viết chưa có reviewer hợp lệ để đăng ký bài duyệt.";
     await updateRegistration(input.registrationId, {
       status: "failed",

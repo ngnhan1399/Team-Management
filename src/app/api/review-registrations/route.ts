@@ -16,8 +16,9 @@ import {
   processReviewRegistrationJob,
 } from "@/lib/review-registration-automation";
 import {
+  getDefaultReviewRegistrationProfile,
   getReviewRegistrationStatusLabel,
-  resolveReviewRegistrationSheetProfile,
+  resolveReviewRegistrationSheetProfileOrDefault,
   type ReviewRegistrationStatus,
 } from "@/lib/review-registration";
 import { enforceTrustedOrigin } from "@/lib/request-security";
@@ -88,7 +89,7 @@ async function loadRegistrationRow(registrationId: number) {
 }
 
 function mapRegistrationRow(row: ReviewRegistrationListRow) {
-  const profile = resolveReviewRegistrationSheetProfile([row.reviewerPenName]);
+  const profile = resolveReviewRegistrationSheetProfileOrDefault([row.sheetName, row.reviewerPenName]);
   return {
     ...row,
     statusLabel: getReviewRegistrationStatusLabel(row.status),
@@ -230,9 +231,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Bạn chỉ có thể đăng ký bài duyệt cho bài đang giao cho mình." }, { status: 403 });
     }
 
-    const profile = resolveReviewRegistrationSheetProfile([reviewerLabel]);
+    const profile = getDefaultReviewRegistrationProfile();
     if (!profile) {
-      return NextResponse.json({ success: false, error: `Chưa có cấu hình sheet bài duyệt cho reviewer “${reviewerLabel}”.` }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Hệ thống chưa có cấu hình sheet bài duyệt mặc định." }, { status: 400 });
     }
 
     const existing = await db

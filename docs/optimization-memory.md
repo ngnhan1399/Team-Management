@@ -374,6 +374,16 @@ Thứ tự ưu tiên nên là:
 
 ## 8. Ghi nhớ vận hành 2026-03-25
 
+- Review registration:
+  - phân quyền reviewer vẫn bám theo `article.reviewerName` thật
+  - nhưng cấu hình sheet bài duyệt phải dùng profile mặc định chung, không khóa theo từng reviewer
+  - hiện profile mặc định nằm ở `src/lib/review-registration.ts`
+  - tên `Việt Nguyễn` chỉ là nhãn điền xuống sheet, không phải điều kiện để reviewer khác như `Trung` được đăng ký
+- Khi sửa `Đăng ký bài duyệt`, luôn kiểm tra đủ cả:
+  - `POST /api/review-registrations`
+  - `src/lib/review-registration-automation.ts`
+  - `src/lib/review-registration-browser-automation.ts`
+
 - Dashboard trang chủ:
   - danh sách cộng tác viên nổi bật của khối admin không được lấy all-time
   - phải tính theo tháng mới nhất đang có bài viết trong dữ liệu

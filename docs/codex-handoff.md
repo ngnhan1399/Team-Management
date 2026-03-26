@@ -1,5 +1,16 @@
 # Codex Handoff
 
+## Update 2026-03-26 (review registration shared sheet profile)
+
+- `Đăng ký bài duyệt` không được khóa theo tên reviewer thật của bài.
+- Reviewer thật vẫn dùng để phân quyền, lọc danh sách và lưu audit trong app.
+- Cấu hình sheet đăng ký bài duyệt hiện dùng một profile mặc định chung tại:
+  - `src/lib/review-registration.ts`
+- Khi ghi xuống Google Sheet hoặc Apps Script:
+  - luôn dùng `profile.reviewerLabel`
+  - hiện tại là `Việt Nguyễn`
+- Vì vậy reviewer như `Trung` vẫn phải đăng ký được bình thường nếu bài đó đang giao cho họ duyệt.
+
 ## Update 2026-03-25 (reviewer article registration)
 
 - Đã thêm scaffold hoàn chỉnh cho luồng reviewer:
