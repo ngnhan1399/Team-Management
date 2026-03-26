@@ -3143,7 +3143,7 @@ export default function ArticlesPage() {
                 data-testid={`article-section-${section.key}`}
                 style={{
                   display: "flex",
-                  alignItems: "flex-start",
+                  alignItems: "percentage" in section ? "flex-start" : "center",
                   justifyContent: "space-between",
                   gap: 12,
                   padding: isMobile ? "12px 0" : ("percentage" in section ? "20px 20px 18px" : "18px 20px"),
@@ -3151,7 +3151,7 @@ export default function ArticlesPage() {
                   background: isMobile ? "transparent" : section.background,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0, flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "percentage" in section ? "flex-start" : "center", gap: 12, minWidth: 0, flex: 1 }}>
                   <div style={{ width: isMobile ? 36 : 42, height: isMobile ? 36 : 42, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.72)", color: section.accent, flexShrink: 0 }}>
                     <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 18 : 20, color: section.accent }}>{section.icon}</span>
                   </div>
