@@ -18,6 +18,7 @@
     "db:repair-content-work-schema": "node scripts/repair-content-work-schema.mjs",
     "db:repair-seo-classification": "node scripts/repair-seo-classification.mjs",
     "db:repair-seo-classification:create-missing": "node scripts/repair-seo-classification.mjs --create-missing-pending",
+    "db:repair-future-sheet-dates": "node scripts/repair-future-sheet-dates.mjs",
     "db:prune-runtime-data": "node scripts/prune-runtime-data.mjs",
     "db:prune-runtime-data:apply": "node scripts/prune-runtime-data.mjs --apply",
     "review-registration:save-google-session": "node scripts/save-review-registration-google-session.mjs",

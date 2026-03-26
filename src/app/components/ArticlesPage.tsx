@@ -3068,7 +3068,7 @@ export default function ArticlesPage() {
         <div className="glass-card" style={{ padding: 80, textAlign: "center", color: "var(--text-muted)" }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>📄</div>
           <div style={{ fontWeight: 600 }}>Chưa có bài viết nào</div>
-          {!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>{isReviewer ? "Tài khoản duyệt bài chỉ hiển thị 2 nhóm rõ ràng: bài đã giao cho bạn và bài chưa phân công đang chờ nhận duyệt." : `Tài khoản này đang hiển thị dữ liệu của ${collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.`}</div>}
+          {!canManageArticles && <div style={{ marginTop: 8, fontSize: 13 }}>{isReviewer ? "Tài khoản duyệt bài hiển thị một danh sách duyệt chung, trong đó từng bài sẽ có nhãn để phân biệt bài đã bàn giao và bài chờ nhận duyệt." : `Tài khoản này đang hiển thị dữ liệu của ${collaboratorLabel}. Nếu admin đã nhập bài dưới tên khác, hãy cập nhật liên kết hoặc chuẩn hóa bút danh.`}</div>}
         </div>
       ) : showSplitArticleSections ? (
         <div style={{ display: "grid", gap: 24 }}>

@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+﻿import * as XLSX from "xlsx";
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articleComments, articleReviews, articles, articleSyncLinks, collaborators, notifications, payments } from "@/db/schema";
 import { normalizeImportedArticleRow, prepareArticleImportFromWorkbook, type ImportFieldId } from "./article-import";
@@ -139,7 +139,7 @@ function foldText(value: string): string {
   return value
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
-    .replace(/đ/gi, "d")
+    .replace(/Ä‘/gi, "d")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
@@ -182,7 +182,7 @@ function assessGoogleSheetDeleteSafety(options: {
   if (rowsUsingFallbackDate > 0) {
     return {
       allowed: false,
-      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì sheet đang có ${rowsUsingFallbackDate} dòng phải gán ngày tạm. Hãy kiểm tra lại cột "Ngày viết" rồi đồng bộ lại.`,
+      warning: `ÄÃ£ cháº·n xÃ³a ${candidateDeleteCount} bÃ i trong ${scopeLabel} vÃ¬ sheet Ä‘ang cÃ³ ${rowsUsingFallbackDate} dÃ²ng pháº£i gÃ¡n ngÃ y táº¡m. HÃ£y kiá»ƒm tra láº¡i cá»™t "NgÃ y viáº¿t" rá»“i Ä‘á»“ng bá»™ láº¡i.`,
     };
   }
 
@@ -190,14 +190,14 @@ function assessGoogleSheetDeleteSafety(options: {
   if (candidateDeleteCount > maxDeleteCount) {
     return {
       allowed: false,
-      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì vượt ngưỡng an toàn ${maxDeleteCount} bài mỗi lần sync. Có thể tăng ngưỡng bằng GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT nếu đây là thay đổi chủ đích.`,
+      warning: `ÄÃ£ cháº·n xÃ³a ${candidateDeleteCount} bÃ i trong ${scopeLabel} vÃ¬ vÆ°á»£t ngÆ°á»¡ng an toÃ n ${maxDeleteCount} bÃ i má»—i láº§n sync. CÃ³ thá»ƒ tÄƒng ngÆ°á»¡ng báº±ng GOOGLE_SHEETS_SYNC_MAX_DELETE_COUNT náº¿u Ä‘Ã¢y lÃ  thay Ä‘á»•i chá»§ Ä‘Ã­ch.`,
     };
   }
 
   if (referenceRowCount > 0 && (candidateDeleteCount / referenceRowCount) > maxDeleteRatio) {
     return {
       allowed: false,
-      warning: `Đã chặn xóa ${candidateDeleteCount} bài trong ${scopeLabel} vì vượt ${Math.round(maxDeleteRatio * 100)}% số dòng đang đọc từ sheet. Hãy rà lại dữ liệu nguồn trước khi sync tiếp.`,
+      warning: `ÄÃ£ cháº·n xÃ³a ${candidateDeleteCount} bÃ i trong ${scopeLabel} vÃ¬ vÆ°á»£t ${Math.round(maxDeleteRatio * 100)}% sá»‘ dÃ²ng Ä‘ang Ä‘á»c tá»« sheet. HÃ£y rÃ  láº¡i dá»¯ liá»‡u nguá»“n trÆ°á»›c khi sync tiáº¿p.`,
     };
   }
 
@@ -212,7 +212,7 @@ export function parseSpreadsheetId(url: string): string | null {
 export function buildSpreadsheetExportUrl(url: string): string {
   const spreadsheetId = parseSpreadsheetId(url);
   if (!spreadsheetId) {
-    throw new Error("Không đọc được spreadsheet ID từ Google Sheets URL.");
+    throw new Error("KhÃ´ng Ä‘á»c Ä‘Æ°á»£c spreadsheet ID tá»« Google Sheets URL.");
   }
 
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
@@ -235,7 +235,6 @@ export function parseSheetTabInfo(name: string): GoogleSheetTabInfo | null {
   if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year)) {
     return null;
   }
-
   return {
     name,
     month,
@@ -350,7 +349,7 @@ async function downloadGoogleSheetWorkbook(sourceUrlInput?: string) {
   const response = await fetch(exportUrl, { cache: "no-store" });
 
   if (!response.ok) {
-    throw new Error("Không tải được dữ liệu từ Google Sheets.");
+    throw new Error("KhÃ´ng táº£i Ä‘Æ°á»£c dá»¯ liá»‡u tá»« Google Sheets.");
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
@@ -376,7 +375,7 @@ function loadGoogleSheetImportFromWorkbook(options: {
   );
 
   if (!selectedSheet) {
-    throw new Error("Không tìm thấy tab tháng/năm phù hợp trong Google Sheets.");
+    throw new Error("KhÃ´ng tÃ¬m tháº¥y tab thÃ¡ng/nÄƒm phÃ¹ há»£p trong Google Sheets.");
   }
 
   const prepared = prepareArticleImportFromWorkbook(options.workbook, {
@@ -432,7 +431,7 @@ function resolveGoogleSheetSourceUrl(sourceUrlInput?: string) {
     return DEFAULT_GOOGLE_SHEET_SOURCE_URL;
   }
 
-  throw new Error("Chưa cấu hình GOOGLE_SHEETS_ARTICLE_SOURCE_URL cho production.");
+  throw new Error("ChÆ°a cáº¥u hÃ¬nh GOOGLE_SHEETS_ARTICLE_SOURCE_URL cho production.");
 }
 
 function normalizeGoogleSheetSyncIdentityCandidates(values?: string[]) {
@@ -479,6 +478,64 @@ function isConsistentArticleIdIdentity(existing: ArticleIdentityLike, next: Arti
 
 function buildSheetFallbackDate(month: number, year: number) {
   return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
+}
+
+function repairFutureImportedDateForSheet(
+  dateValue: string | null | undefined,
+  sheetMonth: number,
+  sheetYear: number,
+  referenceDate = new Date()
+) {
+  if (!dateValue) {
+    return {
+      date: null,
+      corrected: false,
+    };
+  }
+
+  const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return {
+      date: dateValue,
+      corrected: false,
+    };
+  }
+
+  const parsedYear = Number(match[1]);
+  const parsedMonth = Number(match[2]);
+  const parsedDay = Number(match[3]);
+  if (
+    !Number.isInteger(parsedYear)
+    || !Number.isInteger(parsedMonth)
+    || !Number.isInteger(parsedDay)
+    || parsedMonth < 1
+    || parsedMonth > 12
+    || parsedDay < 1
+  ) {
+    return {
+      date: dateValue,
+      corrected: false,
+    };
+  }
+
+  const selectedSheetIsFuture = isFutureSheetPeriod(sheetMonth, sheetYear, referenceDate);
+  const parsedDateIsFuture = isFutureSheetPeriod(parsedMonth, parsedYear, referenceDate);
+  if (!parsedDateIsFuture || selectedSheetIsFuture || parsedYear <= sheetYear) {
+    return {
+      date: dateValue,
+      corrected: false,
+    };
+  }
+
+  const safeDay = Math.min(parsedDay, getDaysInMonth(sheetYear, parsedMonth));
+  return {
+    date: `${sheetYear}-${String(parsedMonth).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`,
+    corrected: true,
+  };
 }
 
 function buildSourceRowKey(normalized: NormalizedArticle) {
@@ -919,9 +976,15 @@ async function createGoogleSheetSyncSharedState(
     .where(eq(articleSyncLinks.sourceUrl, sourceUrl))
     .all() as SyncLinkRow[];
 
+  const nonFutureSyncLinks = allSyncLinks.filter((link) => {
+    if (!link.sheetMonth || !link.sheetYear) {
+      return true;
+    }
+    return !isFutureSheetPeriod(link.sheetMonth, link.sheetYear);
+  });
   const filteredSyncLinks = (restrictToIdentityScope || restrictToAllowedPenNames || Boolean(teamId))
-    ? allSyncLinks.filter((link) => Number.isInteger(Number(link.articleIdRef || 0)) && existingArticleIds.has(Number(link.articleIdRef)))
-    : allSyncLinks;
+    ? nonFutureSyncLinks.filter((link) => Number.isInteger(Number(link.articleIdRef || 0)) && existingArticleIds.has(Number(link.articleIdRef)))
+    : nonFutureSyncLinks;
 
   const syncLinksBySheet = new Map<string, Map<string, SyncLinkRow>>();
   for (const syncLink of filteredSyncLinks) {
@@ -983,7 +1046,7 @@ function resolvePreparedGoogleSheetMapping(
   );
   const missingRequiredFields = REQUIRED_FIELDS.filter((field) => !Object.values(mapping).includes(field));
   if (missingRequiredFields.length > 0) {
-    throw new Error(`Không thể đồng bộ vì sheet "${sheetName}" thiếu mapping cho: ${missingRequiredFields.join(", ")}.`);
+    throw new Error(`KhÃ´ng thá»ƒ Ä‘á»“ng bá»™ vÃ¬ sheet "${sheetName}" thiáº¿u mapping cho: ${missingRequiredFields.join(", ")}.`);
   }
 
   return {
@@ -997,7 +1060,8 @@ function buildPreparedRowLookup(
   collaboratorPenNames: string[],
   fallbackDate: string,
   mapping: Record<string, ImportFieldId>,
-  mappedFields: Set<ImportFieldId>
+  mappedFields: Set<ImportFieldId>,
+  selectedSheet: Pick<GoogleSheetTabInfo, "month" | "year">
 ): PreparedRowLookup {
   const bySourceRowKey = new Map<string, PreparedRowLookupEntry>();
   const byArticleId = new Map<string, PreparedRowLookupEntry>();
@@ -1009,14 +1073,26 @@ function buildPreparedRowLookup(
   const warnings: string[] = [];
   let skipped = 0;
   let rowsUsingFallbackDate = 0;
+  let correctedFutureDates = 0;
 
   for (const row of prepared.rawRows) {
-    const { normalized, issues, shouldSkip, usedFallbackDate } = normalizeImportedArticleRow(
+    const { normalized: baseNormalized, issues, shouldSkip, usedFallbackDate } = normalizeImportedArticleRow(
       row,
       mapping,
       collaboratorPenNames,
       { fallbackDate }
     );
+    const repairedDate = repairFutureImportedDateForSheet(
+      baseNormalized.date,
+      selectedSheet.month,
+      selectedSheet.year
+    );
+    const normalized = repairedDate.corrected
+      ? {
+        ...baseNormalized,
+        date: repairedDate.date,
+      }
+      : baseNormalized;
     const rowIssues = [...issues];
 
     if (shouldSkip) {
@@ -1026,15 +1102,18 @@ function buildPreparedRowLookup(
     if (usedFallbackDate) {
       rowsUsingFallbackDate += 1;
     }
+    if (repairedDate.corrected) {
+      correctedFutureDates += 1;
+    }
 
     if (!normalized.date || !normalized.title || !normalized.penName) {
-      rowIssues.push("Thiếu dữ liệu bắt buộc");
+      rowIssues.push("Thiáº¿u dá»¯ liá»‡u báº¯t buá»™c");
     }
 
     if (rowIssues.length > 0) {
       skipped += 1;
       if (errors.length < 20) {
-        errors.push(`Dòng ${row.rowNumber}: ${rowIssues.join("; ")}`);
+        errors.push(`DÃ²ng ${row.rowNumber}: ${rowIssues.join("; ")}`);
       }
       continue;
     }
@@ -1089,7 +1168,13 @@ function buildPreparedRowLookup(
 
   if (rowsUsingFallbackDate > 0) {
     warnings.push(
-      `${rowsUsingFallbackDate} dòng không có "Ngày viết" trong sheet gốc đã được gán tạm ngày ${fallbackDate} theo tab hiện tại.`
+      `${rowsUsingFallbackDate} dÃ²ng khÃ´ng cÃ³ "NgÃ y viáº¿t" trong sheet gá»‘c Ä‘Ã£ Ä‘Æ°á»£c gÃ¡n táº¡m ngÃ y ${fallbackDate} theo tab hiá»‡n táº¡i.`
+    );
+  }
+
+  if (correctedFutureDates > 0) {
+    warnings.push(
+      `${correctedFutureDates} dòng có ngày tương lai đã được điều chỉnh lại theo năm của tab sheet đang đồng bộ.`
     );
   }
 
@@ -1137,6 +1222,19 @@ function findPreparedRowForArticle(
   const matchedByComposite = lookup.byComposite.get(compositeKey);
   if (matchedByComposite) {
     return matchedByComposite;
+  }
+
+  const articleYearMonth = getYearMonthFromDate(article.date);
+  const articleDateLooksFuture = Boolean(
+    articleYearMonth && isFutureSheetPeriod(articleYearMonth.month, articleYearMonth.year)
+  );
+  if (articleDateLooksFuture || syncLink) {
+    const matchedByTitlePenName = lookup.byTitlePenName.get(
+      normalizeTitlePenNameKey(article.title, article.penName)
+    );
+    if (matchedByTitlePenName) {
+      return matchedByTitlePenName;
+    }
   }
 
   return undefined;
@@ -1223,7 +1321,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
   );
 
   if (targetArticleIds.length === 0) {
-    throw new Error("Chưa có bài viết nào trong danh sách đang lọc để đồng bộ nhanh.");
+    throw new Error("ChÆ°a cÃ³ bÃ i viáº¿t nÃ o trong danh sÃ¡ch Ä‘ang lá»c Ä‘á»ƒ Ä‘á»“ng bá»™ nhanh.");
   }
 
   const sourceUrl = resolveGoogleSheetSourceUrl(options.sourceUrl);
@@ -1267,7 +1365,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
   const { workbook } = workbookPayload;
 
   if (targetArticles.length === 0) {
-    throw new Error("Không tìm thấy bài viết nào trong hệ thống để đồng bộ nhanh.");
+    throw new Error("KhÃ´ng tÃ¬m tháº¥y bÃ i viáº¿t nÃ o trong há»‡ thá»‘ng Ä‘á»ƒ Ä‘á»“ng bá»™ nhanh.");
   }
   const targetArticleById = new Map(targetArticles.map((article) => [article.id, article]));
 
@@ -1305,7 +1403,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
     if (!resolvedMonth || !resolvedYear) {
       skipped += 1;
       if (warnings.length < 20) {
-        warnings.push(`Không xác định được tab tháng cho bài "${article.title}".`);
+        warnings.push(`KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c tab thÃ¡ng cho bÃ i "${article.title}".`);
       }
       continue;
     }
@@ -1328,7 +1426,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
   }
 
   if (groups.size === 0) {
-    throw new Error("Không tìm thấy tab Google Sheet phù hợp cho danh sách đang lọc.");
+    throw new Error("KhÃ´ng tÃ¬m tháº¥y tab Google Sheet phÃ¹ há»£p cho danh sÃ¡ch Ä‘ang lá»c.");
   }
 
   let updated = 0;
@@ -1355,7 +1453,8 @@ export async function refreshScopedArticlesFromGoogleSheet(
       collaboratorPenNames,
       buildSheetFallbackDate(selectedSheet.month, selectedSheet.year),
       mapping,
-      mappedFields
+      mappedFields,
+      selectedSheet
     );
 
     warnings.push(...lookup.warnings.filter((warning) => !warnings.includes(warning)).slice(0, Math.max(0, 20 - warnings.length)));
@@ -1402,7 +1501,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
 
         skipped += 1;
         if (warnings.length < 20) {
-          warnings.push(`Không tìm thấy bài "${article.title}" trong sheet ${selectedSheet.name}.`);
+          warnings.push(`KhÃ´ng tÃ¬m tháº¥y bÃ i "${article.title}" trong sheet ${selectedSheet.name}.`);
         }
         continue;
       }
@@ -1487,7 +1586,7 @@ export async function refreshScopedArticlesFromGoogleSheet(
 
     if (warnings.length < 20) {
       warnings.push(
-        `${deleted} bài đã bị xóa khỏi hệ thống vì không còn tồn tại trong Google Sheet gốc của tab đang đồng bộ.`
+        `${deleted} bÃ i Ä‘Ã£ bá»‹ xÃ³a khá»i há»‡ thá»‘ng vÃ¬ khÃ´ng cÃ²n tá»“n táº¡i trong Google Sheet gá»‘c cá»§a tab Ä‘ang Ä‘á»“ng bá»™.`
       );
     }
   }
@@ -1538,7 +1637,7 @@ export async function executeGoogleSheetSync(
   const { prepared, selectedSheet, sourceUrl } = importPayload;
 
   if (prepared.rawRows.length === 0) {
-    throw new Error("Tab Google Sheets đang chọn chưa có dòng dữ liệu hợp lệ để đồng bộ.");
+    throw new Error("Tab Google Sheets Ä‘ang chá»n chÆ°a cÃ³ dÃ²ng dá»¯ liá»‡u há»£p lá»‡ Ä‘á»ƒ Ä‘á»“ng bá»™.");
   }
 
   const { mapping, mappedFields } = resolvePreparedGoogleSheetMapping(prepared, selectedSheet.name);
@@ -1560,16 +1659,28 @@ export async function executeGoogleSheetSync(
   const runtimeWarnings: string[] = [];
   let rowsUsingFallbackDate = 0;
   let ignoredOutsideScope = 0;
+  let correctedFutureDates = 0;
   const fallbackDate = buildSheetFallbackDate(selectedSheet.month, selectedSheet.year);
 
   for (const row of prepared.rawRows) {
     try {
-      const { normalized, issues, shouldSkip, usedFallbackDate } = normalizeImportedArticleRow(
+      const { normalized: baseNormalized, issues, shouldSkip, usedFallbackDate } = normalizeImportedArticleRow(
         row,
         mapping,
         collaboratorPenNames,
         { fallbackDate }
       );
+      const repairedDate = repairFutureImportedDateForSheet(
+        baseNormalized.date,
+        selectedSheet.month,
+        selectedSheet.year
+      );
+      const normalized = repairedDate.corrected
+        ? {
+          ...baseNormalized,
+          date: repairedDate.date,
+        }
+        : baseNormalized;
       const rowIssues = [...issues];
 
       if (shouldSkip) {
@@ -1579,15 +1690,18 @@ export async function executeGoogleSheetSync(
       if (usedFallbackDate) {
         rowsUsingFallbackDate += 1;
       }
+      if (repairedDate.corrected) {
+        correctedFutureDates += 1;
+      }
 
       if (!normalized.date || !normalized.title || !normalized.penName) {
-        rowIssues.push("Thiếu dữ liệu bắt buộc");
+        rowIssues.push("Thiáº¿u dá»¯ liá»‡u báº¯t buá»™c");
       }
 
       if (rowIssues.length > 0) {
         skipped += 1;
         if (errors.length < 20) {
-          errors.push(`Dòng ${row.rowNumber}: ${rowIssues.join("; ")}`);
+          errors.push(`DÃ²ng ${row.rowNumber}: ${rowIssues.join("; ")}`);
         }
         continue;
       }
@@ -1742,19 +1856,24 @@ export async function executeGoogleSheetSync(
     } catch (rowError) {
       skipped += 1;
       if (errors.length < 20) {
-        errors.push(`Dòng ${row.rowNumber}: ${String(rowError)}`);
+        errors.push(`DÃ²ng ${row.rowNumber}: ${String(rowError)}`);
       }
     }
   }
 
   if (rowsUsingFallbackDate > 0) {
     runtimeWarnings.push(
-      `${rowsUsingFallbackDate} dòng không có "Ngày viết" trong sheet gốc đã được gán tạm ngày ${fallbackDate} theo tab ${selectedSheet.name}.`
+      `${rowsUsingFallbackDate} dÃ²ng khÃ´ng cÃ³ "NgÃ y viáº¿t" trong sheet gá»‘c Ä‘Ã£ Ä‘Æ°á»£c gÃ¡n táº¡m ngÃ y ${fallbackDate} theo tab ${selectedSheet.name}.`
+    );
+  }
+  if (correctedFutureDates > 0) {
+    runtimeWarnings.push(
+      `${correctedFutureDates} dÃ²ng cÃ³ ngÃ y tÆ°Æ¡ng lai Ä‘Ã£ Ä‘Æ°á»£c Ä‘iá»u chá»‰nh láº¡i theo nÄƒm cá»§a tab ${selectedSheet.name}.`
     );
   }
   if (ignoredOutsideScope > 0) {
     runtimeWarnings.push(
-      `Đã bỏ qua ${ignoredOutsideScope} dòng ngoài phạm vi tài khoản hiện tại để đảm bảo chỉ đồng bộ dữ liệu của chính người dùng.`
+      `ÄÃ£ bá» qua ${ignoredOutsideScope} dÃ²ng ngoÃ i pháº¡m vi tÃ i khoáº£n hiá»‡n táº¡i Ä‘á»ƒ Ä‘áº£m báº£o chá»‰ Ä‘á»“ng bá»™ dá»¯ liá»‡u cá»§a chÃ­nh ngÆ°á»i dÃ¹ng.`
     );
   }
 
@@ -1784,7 +1903,7 @@ export async function executeGoogleSheetSync(
     });
 
     if (!deleteSafety.allowed) {
-      runtimeWarnings.push(deleteSafety.warning || "Đã chặn xóa bài do sync phát hiện bất thường.");
+      runtimeWarnings.push(deleteSafety.warning || "ÄÃ£ cháº·n xÃ³a bÃ i do sync phÃ¡t hiá»‡n báº¥t thÆ°á»ng.");
     } else {
       const deletedResult = await deleteArticlesForSync(staleArticleIds);
       deleted = deletedResult.deletedArticles;
@@ -1829,12 +1948,12 @@ export async function executeGoogleSheetWorkbookSync(
   const skippedDuplicateTabs = Math.max(0, allMonthlyTabs.length - tabs.length);
 
   if (tabs.length === 0) {
-    throw new Error("Không tìm thấy tab tháng/năm hợp lệ trong Google Sheets.");
+    throw new Error("KhÃ´ng tÃ¬m tháº¥y tab thÃ¡ng/nÄƒm há»£p lá»‡ trong Google Sheets.");
   }
 
   const aggregate: GoogleSheetSyncExecutionResult = {
     sourceUrl,
-    sheetName: "Toàn workbook",
+    sheetName: "ToÃ n workbook",
     month: tabs[0]?.month || 0,
     year: tabs[0]?.year || 0,
     requestedMonth: null,
@@ -1885,11 +2004,11 @@ export async function executeGoogleSheetWorkbookSync(
   }
 
   if ((aggregate.processedSheets?.length || 0) > 0 && aggregate.warnings.length < 20) {
-    aggregate.warnings.unshift(`Đã reconcile toàn workbook qua ${aggregate.processedSheets?.length} tab tháng hợp lệ.`);
+    aggregate.warnings.unshift(`ÄÃ£ reconcile toÃ n workbook qua ${aggregate.processedSheets?.length} tab thÃ¡ng há»£p lá»‡.`);
   }
 
   if (skippedDuplicateTabs > 0 && aggregate.warnings.length < 20) {
-    aggregate.warnings.unshift(`Đã bỏ qua ${skippedDuplicateTabs} tab bản sao để tránh ghi đè dữ liệu từ Google Sheet copy.`);
+    aggregate.warnings.unshift(`ÄÃ£ bá» qua ${skippedDuplicateTabs} tab báº£n sao Ä‘á»ƒ trÃ¡nh ghi Ä‘Ã¨ dá»¯ liá»‡u tá»« Google Sheet copy.`);
   }
 
   return aggregate;

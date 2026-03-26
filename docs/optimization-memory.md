@@ -405,3 +405,10 @@ Thứ tự ưu tiên nên là:
   - không được giả định admin nào cũng đã có `collaboratorId`
   - trang `Hồ sơ cá nhân` phải cho phép tự sửa `họ tên + bút danh`
   - nếu tài khoản chưa có hồ sơ cộng tác viên, `PUT /api/profile` sẽ tự tạo hồ sơ nền rồi mới đồng bộ bút danh
+
+## Ghi nhớ vận hành 2026-03-26
+
+- Reviewer phải nhìn một danh sách duyệt chung, không tách thành hai khối `Bài đã giao cho bạn` và `Bài chờ nhận duyệt`.
+- Google Sheet sync phải chặn và tự sửa các ngày tương lai sai năm khi tab sheet hiện tại không phải tab tương lai.
+- Nếu source row có kiểu ngày `2027-09-27` nhưng đang nằm trong tab `Tháng 092025`, hệ thống phải sửa về năm `2025` trước khi ghi DB.
+- Có script repair dữ liệu cũ: `npm run db:repair-future-sheet-dates` và apply thật bằng `node scripts/repair-future-sheet-dates.mjs --apply`.

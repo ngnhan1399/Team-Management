@@ -1014,6 +1014,12 @@ npm run build
 ## Rủi ro / ghi chú
 - Bản vá hiện dùng `tableLayout: fixed` và thu cột `Ngày`, `Người duyệt`, `Link`; nếu sau này badge hoặc text trong các cột này bị nới lại, cụm thao tác có thể lại trôi ra mép phải.
 
+## Update 2026-03-26 (Reviewer queue và future sheet dates)
+- Reviewer UI phải gom thành 1 danh sách duyệt chung; nếu production còn hiện 2 khối thì live chưa ăn đúng bundle mới hoặc đang cache bản cũ.
+- Nguồn Google Sheet hiện thực sự có 19 dòng xuất ra ngày `2027-09-27` và `2027-09-28` trong các tab `Tháng 092025` / `Tháng 102025`.
+- Đã thêm guard trong sync để tự sửa lại năm theo năm của tab sheet trước khi ghi DB, thay vì tin nguyên văn ngày tương lai từ source row.
+- Đã thêm script `scripts/repair-future-sheet-dates.mjs` để sửa các `articles.date` sai năm đã tồn tại sẵn trong DB.
+
 
 
 ### Ghi chú thêm 2026-03-16
