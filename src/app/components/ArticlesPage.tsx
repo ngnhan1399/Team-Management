@@ -3085,9 +3085,9 @@ export default function ArticlesPage() {
           </div>
           {articleSections.map((section) => (
             <div key={section.key} className="glass-card" style={{ padding: 18, background: section.background }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 18, color: section.accent }}>{section.icon}</span>
                     <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{section.title}</span>
                   </div>
