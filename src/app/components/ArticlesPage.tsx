@@ -2116,17 +2116,6 @@ export default function ArticlesPage() {
   const resolveWriterSectionPercentage = (count: number) => (
     writerArticleTotal > 0 ? Math.round((count / writerArticleTotal) * 100) : 0
   );
-  const getWriterSectionSubtitle = (sectionKey: string) => {
-    if (sectionKey === "writer-new") {
-      return "Nhóm các bài triển khai mới để bạn theo dõi tiến độ dễ hơn.";
-    }
-
-    if (sectionKey === "writer-rewrite") {
-      return "Nhóm các bài viết lại, cập nhật và tối ưu nội dung hiện có.";
-    }
-
-    return "";
-  };
   const reviewQueueArticles = isReviewer
     ? [...articles.filter((article) => articleMatchesReviewerScope(article))]
       .sort((left, right) => {
@@ -3102,11 +3091,6 @@ export default function ArticlesPage() {
                     <span className="material-symbols-outlined" style={{ fontSize: 18, color: section.accent }}>{section.icon}</span>
                     <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{section.title}</span>
                   </div>
-                  {"percentage" in section && (
-                    <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>
-                      {getWriterSectionSubtitle(section.key)}
-                    </div>
-                  )}
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
                   <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-main)", lineHeight: 1 }}>{section.rows.length}</div>
@@ -3173,11 +3157,6 @@ export default function ArticlesPage() {
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: "var(--text-main)" }}>{section.title}</h3>
-                    {"percentage" in section && (
-                      <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5, color: "var(--text-muted)" }}>
-                        {getWriterSectionSubtitle(section.key)}
-                      </div>
-                    )}
                     {"percentage" in section && (
                       <div style={{ marginTop: 12 }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
