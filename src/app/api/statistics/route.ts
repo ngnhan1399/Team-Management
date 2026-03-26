@@ -1,11 +1,17 @@
 import { db, ensureDatabaseInitialized } from "@/db";
 import { articles, collaborators } from "@/db/schema";
 import { resolveArticleCategory } from "@/lib/article-category";
-import { getContextArticleOwnerCandidates, getCurrentUserContext, matchesIdentityCandidate } from "@/lib/auth";
+import {
+  getContextArticleOwnerCandidates,
+  getContextIdentityCandidates,
+  getContextIdentityLabels,
+  getCurrentUserContext,
+  matchesIdentityCandidate,
+} from "@/lib/auth";
 import { expandCollaboratorIdentityValues } from "@/lib/collaborator-identity";
 import { handleServerError } from "@/lib/server-error";
 import { getContextTeamId, isLeader } from "@/lib/teams";
-import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 type CollaboratorDirectoryItem = {
@@ -21,6 +27,7 @@ type StatisticsArticleRow = {
   articleId: string | null;
   title: string;
   penName: string;
+  reviewerName: string | null;
   articleType: string;
   contentType: string;
   status: string;
@@ -145,6 +152,7 @@ async function loadStatisticsArticles(whereClause?: SQL) {
       articleId: articles.articleId,
       title: articles.title,
       penName: articles.penName,
+      reviewerName: articles.reviewerName,
       articleType: articles.articleType,
       contentType: articles.contentType,
       status: articles.status,
@@ -238,6 +246,38 @@ function createEmptyStatisticsData() {
     articlesByMonth: [],
     latestArticles: [],
   };
+}
+
+function buildReviewerDashboardScopeWhere(identityLabels: string[], teamScope: number | null) {
+  const normalizedLabels = Array.from(new Set(
+    identityLabels
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  ));
+  const reviewerConditions = normalizedLabels.map((value) => sql`lower(${articles.reviewerName}) = lower(${value})`);
+  const unassignedSubmittedWhere = and(
+    eq(articles.status, "Submitted"),
+    sql`coalesce(trim(${articles.reviewerName}), '') = ''`
+  )!;
+  const reviewScope = reviewerConditions.length === 0
+    ? unassignedSubmittedWhere
+    : or(unassignedSubmittedWhere, ...reviewerConditions)!;
+
+  return teamScope
+    ? and(eq(articles.teamId, teamScope), reviewScope)!
+    : reviewScope;
+}
+
+function isReviewerDashboardArticle(
+  article: Pick<StatisticsArticleRow, "status" | "reviewerName">,
+  reviewerIdentityCandidates: string[]
+) {
+  const hasReviewer = String(article.reviewerName || "").trim().length > 0;
+  if (!hasReviewer) {
+    return article.status === "Submitted";
+  }
+
+  return matchesIdentityCandidate(reviewerIdentityCandidates, article.reviewerName);
 }
 
 function getCachedStatisticsResponse(cacheKey: string) {
@@ -408,6 +448,55 @@ export async function GET() {
             ));
         }
 
+        const isReviewerDashboard = context.collaborator?.role === "reviewer";
+        const teamScope = context.user.teamId ?? context.collaborator?.teamId ?? null;
+        if (isReviewerDashboard) {
+            const reviewerIdentityLabels = getContextIdentityLabels(context);
+            const reviewerIdentityCandidates = getContextIdentityCandidates(context);
+            const collaboratorDirectory = teamScope
+                ? allCollaborators.filter((item) => item.teamId === teamScope)
+                : allCollaborators;
+            const reviewerScopeWhere = buildReviewerDashboardScopeWhere(reviewerIdentityLabels, teamScope);
+            const totalCTVCount = 1;
+            const scopedStatistics = await getScopedStatistics(reviewerScopeWhere, totalCTVCount, collaboratorDirectory);
+            if (scopedStatistics.totalArticles > 0) {
+                return respondWithData(scopedStatistics);
+            }
+
+            const candidateWhere = teamScope
+                ? eq(articles.teamId, teamScope)
+                : undefined;
+            const allArticles = candidateWhere
+                ? await loadStatisticsArticles(candidateWhere)
+                : await loadStatisticsArticles();
+            const scopedArticles = allArticles.filter((article) => isReviewerDashboardArticle(article, reviewerIdentityCandidates));
+
+            const articlesByStatus = groupCount(scopedArticles.map((article) => article.status))
+                .map(({ key, count }) => ({ status: key, count }));
+            const articlesByCategory = groupCount(
+                scopedArticles.map((article) => resolveArticleCategory(article.category, article.articleType))
+            )
+                .map(({ key, count }) => ({ category: key, count }));
+            const articlesByType = groupCount(scopedArticles.map((article) => `${article.articleType}|||${article.contentType}`))
+                .map(({ key, count }) => {
+                    const [articleType, contentType] = key.split("|||");
+                    return { articleType, contentType, count };
+                });
+            const articlesByMonth = groupCount(scopedArticles.map((article) => article.date))
+                .map(({ key, count }) => ({ date: key, count }));
+
+            return respondWithData({
+                totalArticles: scopedArticles.length,
+                totalCTVs: totalCTVCount,
+                articlesByStatus,
+                articlesByCategory,
+                articlesByWriter: buildWriterRowsForLatestMonth(scopedArticles, collaboratorDirectory),
+                articlesByType,
+                articlesByMonth,
+                latestArticles: mapLatestArticles(scopedArticles, collaboratorDirectory),
+            });
+        }
+
         if (articleOwnerCandidates.length === 0) {
             return respondWithData(createEmptyStatisticsData());
         }
@@ -432,7 +521,6 @@ export async function GET() {
                 email: context.collaborator.email,
             }]
             : collectScopedCollaborators(allCollaborators, articleOwnerCandidates);
-        const teamScope = context.user.teamId ?? context.collaborator?.teamId ?? null;
         const scopeWhere = exactScopeValues.length === 1
             ? (teamScope ? and(eq(articles.teamId, teamScope), eq(articles.penName, exactScopeValues[0])) : eq(articles.penName, exactScopeValues[0]))
             : exactScopeValues.length > 1
