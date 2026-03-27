@@ -519,7 +519,7 @@ export default function MainApp() {
         <div className="sidebar-brand-row">
           <div className="sidebar-brand-lockup">
             {isDesktopSidebarCollapsed ? (
-              <BrandMark size={38} />
+              <BrandMark size={34} />
             ) : (
               <BrandLogo
                 markSize={38}
@@ -543,7 +543,7 @@ export default function MainApp() {
           )}
         </div>
 
-        <nav className="flex-1 px-4 mt-4 space-y-1 overflow-y-auto custom-scrollbar">
+        <nav className={`sidebar-nav-shell custom-scrollbar ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}>
           {["Tổng quan", "Quản lý"].map(section => {
             const items = navItems.filter((item) =>
               item.section === section
@@ -554,37 +554,39 @@ export default function MainApp() {
             );
             if (items.length === 0) return null;
             return (
-              <React.Fragment key={section}>
+              <div key={section} className={`sidebar-section-group ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}>
                 <div className={`sidebar-section-label ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}>{section}</div>
-                {items.map(item => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    data-testid={`nav-${item.id}`}
-                    onMouseEnter={() => preloadPage(item.id as Page)}
-                    onFocus={() => preloadPage(item.id as Page)}
-                    onTouchStart={() => preloadPage(item.id as Page)}
-                    onPointerDown={(event) => handleSidebarPointerDown(event, item.id as Page)}
-                    onClick={() => handleSidebarClick(item.id as Page)}
-                    className={`sidebar-nav-item ${page === item.id ? "active" : ""} ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}
-                    aria-label={item.label}
-                    title={item.label}
-                  >
-                    <span className="material-symbols-outlined">{item.icon}</span>
-                    <span className="sidebar-nav-label" style={{ flex: 1 }}>{item.label}</span>
-                    {item.count !== undefined && item.count > 0 && (
-                      <span className="sidebar-nav-count" style={{ background: "var(--danger)", color: "white", fontSize: 10, padding: "2px 6px", borderRadius: 10, minWidth: 20 }}>{item.count}</span>
-                    )}
-                  </button>
-                ))}
-              </React.Fragment>
+                <div className="sidebar-section-items">
+                  {items.map(item => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      data-testid={`nav-${item.id}`}
+                      onMouseEnter={() => preloadPage(item.id as Page)}
+                      onFocus={() => preloadPage(item.id as Page)}
+                      onTouchStart={() => preloadPage(item.id as Page)}
+                      onPointerDown={(event) => handleSidebarPointerDown(event, item.id as Page)}
+                      onClick={() => handleSidebarClick(item.id as Page)}
+                      className={`sidebar-nav-item ${page === item.id ? "active" : ""} ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}
+                      aria-label={item.label}
+                      title={item.label}
+                    >
+                      <span className="material-symbols-outlined">{item.icon}</span>
+                      <span className="sidebar-nav-label" style={{ flex: 1 }}>{item.label}</span>
+                      {item.count !== undefined && item.count > 0 && (
+                        <span className="sidebar-nav-count" style={{ background: "var(--danger)", color: "white", fontSize: 10, padding: "2px 6px", borderRadius: 10, minWidth: 20 }}>{item.count}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-white/5">
+        <div className={`sidebar-footer ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}>
           <div className={`sidebar-user-card ${isDesktopSidebarCollapsed ? "collapsed" : ""}`} style={{ marginTop: 8, padding: "8px 12px" }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="sidebar-avatar-shell" style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {user?.collaborator?.avatar ? (
                 <Image src={user.collaborator.avatar} alt="Avatar" width={34} height={34} unoptimized className="w-full h-full object-cover" />
               ) : (
@@ -595,7 +597,7 @@ export default function MainApp() {
               <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</p>
               <p style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</p>
             </div>
-            <button type="button" onClick={logout} title="Đăng xuất" aria-label="Đăng xuất" className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--text-muted)", cursor: "pointer", border: "none", background: "transparent", padding: 0 }}>logout</button>
+            <button type="button" onClick={logout} title="Đăng xuất" aria-label="Đăng xuất" className="sidebar-logout-button material-symbols-outlined" style={{ fontSize: 20, color: "var(--text-muted)", cursor: "pointer", border: "none", background: "transparent", padding: 0 }}>logout</button>
           </div>
         </div>
       </aside>
