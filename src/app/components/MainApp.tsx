@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import DashboardPage from "./DashboardPage";
 import RealtimeToastLayer from "./RealtimeToastLayer";
-import BrandLogo from "./BrandLogo";
+import BrandLogo, { BrandMark } from "./BrandLogo";
 import { APP_NAVIGATION_START_EVENT } from "./navigation-events";
 import { useAuth } from "./auth-context";
 import { emitRealtimePayload } from "./realtime";
@@ -71,6 +71,7 @@ const pageLoaders: Partial<Record<Page, () => Promise<unknown>>> = {
   team: loadTeamPage,
   trends: loadTrendRadarPage,
 };
+const SIDEBAR_COLLAPSE_STORAGE_KEY = "workdocker:sidebar-collapsed";
 
 const pageLabels: Record<Page, string> = {
   dashboard: "Tổng quan",
@@ -115,6 +116,7 @@ export default function MainApp() {
   const [markingRegistrationReminderRead, setMarkingRegistrationReminderRead] = useState(false);
   const [dailyKpiPopup, setDailyKpiPopup] = useState<DailyKpiPopupState | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isPageTransitionPending, startPageTransition] = useTransition();
   const seenRealtimeIdsRef = useRef<number[]>([]);
   const seenNotificationToastIdsRef = useRef<number[]>([]);
@@ -481,18 +483,64 @@ export default function MainApp() {
   ];
 
   const isMobile = useIsMobile();
+  const isDesktopSidebarCollapsed = !isMobile && sidebarCollapsed;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const savedValue = window.localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY);
+    setSidebarCollapsed(savedValue === "1");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(SIDEBAR_COLLAPSE_STORAGE_KEY, sidebarCollapsed ? "1" : "0");
+  }, [sidebarCollapsed]);
+
+  const toggleSidebarCollapsed = useCallback(() => {
+    if (isMobile) {
+      setSidebarOpen((prev) => !prev);
+      return;
+    }
+
+    setSidebarCollapsed((prev) => !prev);
+  }, [isMobile]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isDesktopSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <RealtimeToastLayer />
       {sidebarOpen && <button className="sidebar-backdrop lg:hidden" aria-label="Đóng menu điều hướng" onClick={() => setSidebarOpen(false)} />}
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div style={{ padding: "20px 24px", display: "flex", alignItems: "flex-start", width: "100%", minWidth: 0, overflow: "hidden" }}>
-          <BrandLogo
-            markSize={38}
-            titleSize={18}
-            subtitle={roleSubtitleWithTeam}
-          />
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""} ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}>
+        <div className="sidebar-brand-row">
+          <div className="sidebar-brand-lockup">
+            {isDesktopSidebarCollapsed ? (
+              <BrandMark size={38} />
+            ) : (
+              <BrandLogo
+                markSize={38}
+                titleSize={18}
+                subtitle={roleSubtitleWithTeam}
+              />
+            )}
+          </div>
+          {!isMobile && (
+            <button
+              type="button"
+              className="sidebar-collapse-trigger"
+              onClick={toggleSidebarCollapsed}
+              aria-label={isDesktopSidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+              title={isDesktopSidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                {isDesktopSidebarCollapsed ? "right_panel_open" : "left_panel_close"}
+              </span>
+            </button>
+          )}
         </div>
 
         <nav className="flex-1 px-4 mt-4 space-y-1 overflow-y-auto custom-scrollbar">
@@ -507,7 +555,7 @@ export default function MainApp() {
             if (items.length === 0) return null;
             return (
               <React.Fragment key={section}>
-                <div className="text-[11px] text-[var(--text-muted)] font-bold uppercase tracking-wider mb-2 mt-6 px-2">{section}</div>
+                <div className={`sidebar-section-label ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}>{section}</div>
                 {items.map(item => (
                   <button
                     type="button"
@@ -518,12 +566,14 @@ export default function MainApp() {
                     onTouchStart={() => preloadPage(item.id as Page)}
                     onPointerDown={(event) => handleSidebarPointerDown(event, item.id as Page)}
                     onClick={() => handleSidebarClick(item.id as Page)}
-                    className={`sidebar-nav-item ${page === item.id ? "active" : ""}`}
+                    className={`sidebar-nav-item ${page === item.id ? "active" : ""} ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}
+                    aria-label={item.label}
+                    title={item.label}
                   >
                     <span className="material-symbols-outlined">{item.icon}</span>
-                    <span style={{ flex: 1 }}>{item.label}</span>
+                    <span className="sidebar-nav-label" style={{ flex: 1 }}>{item.label}</span>
                     {item.count !== undefined && item.count > 0 && (
-                      <span style={{ background: "var(--danger)", color: "white", fontSize: 10, padding: "2px 6px", borderRadius: 10, minWidth: 20 }}>{item.count}</span>
+                      <span className="sidebar-nav-count" style={{ background: "var(--danger)", color: "white", fontSize: 10, padding: "2px 6px", borderRadius: 10, minWidth: 20 }}>{item.count}</span>
                     )}
                   </button>
                 ))}
@@ -533,7 +583,7 @@ export default function MainApp() {
         </nav>
 
         <div className="p-4 border-t border-white/5">
-          <div className="sidebar-user-card" style={{ marginTop: 8, padding: "8px 12px" }}>
+          <div className={`sidebar-user-card ${isDesktopSidebarCollapsed ? "collapsed" : ""}`} style={{ marginTop: 8, padding: "8px 12px" }}>
             <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {user?.collaborator?.avatar ? (
                 <Image src={user.collaborator.avatar} alt="Avatar" width={34} height={34} unoptimized className="w-full h-full object-cover" />
@@ -541,11 +591,11 @@ export default function MainApp() {
                 <span style={{ fontSize: 13, fontWeight: 700 }}>{user?.email[0].toUpperCase()}</span>
               )}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="sidebar-user-meta" style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</p>
               <p style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</p>
             </div>
-            <button type="button" onClick={logout} className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--text-muted)", cursor: "pointer", border: "none", background: "transparent", padding: 0 }}>logout</button>
+            <button type="button" onClick={logout} title="Đăng xuất" aria-label="Đăng xuất" className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--text-muted)", cursor: "pointer", border: "none", background: "transparent", padding: 0 }}>logout</button>
           </div>
         </div>
       </aside>
