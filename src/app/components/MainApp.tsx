@@ -144,9 +144,11 @@ export default function MainApp() {
   const teamName = user?.team?.name?.trim() || "";
   const roleSubtitleWithTeam = teamName && isAdmin ? `${roleSubtitle} • ${teamName}` : roleSubtitle;
   const shouldShowTasksNav = isAdmin || hasVisibleTasks;
-  const shouldKeepRealtimeLive = page === "articles"
+  const shouldKeepRealtimeLive = page === "dashboard"
+    || page === "articles"
     || page === "contentWork"
     || page === "kpi"
+    || page === "royalty"
     || page === "tasks"
     || page === "notifications"
     || page === "team";

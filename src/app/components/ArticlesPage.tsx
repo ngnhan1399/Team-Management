@@ -77,6 +77,7 @@ const EMPTY_ARTICLE_FILTERS: ArticleFilters = {
   month: "",
   year: "",
 };
+const ARTICLES_PASSIVE_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 function normalizeTrendRadarArticleCategory(category: TrendRadarArticleDraft["recommendedCategory"]) {
   switch (category) {
@@ -154,6 +155,8 @@ export default function ArticlesPage() {
   const collaboratorsRequestRef = React.useRef<Promise<void> | null>(null);
   const hasFetchedInitialArticlesRef = React.useRef(false);
   const articlesRealtimeRefreshTimerRef = React.useRef<number | null>(null);
+  const activeArticleFetchModeRef = React.useRef<"idle" | "foreground" | "background">("idle");
+  const pendingArticleRealtimeRefreshRef = React.useRef(false);
   const articleListQueryRef = React.useRef<ArticleListQuery>({
     page: 1,
     search: "",
@@ -499,6 +502,7 @@ export default function ArticlesPage() {
     articlesRequestAbortRef.current?.abort();
     const controller = new AbortController();
     articlesRequestAbortRef.current = controller;
+    activeArticleFetchModeRef.current = background ? "background" : "foreground";
     if (!background) {
       setLoading(true);
     }
@@ -528,8 +532,21 @@ export default function ArticlesPage() {
       .finally(() => {
         if (articlesRequestAbortRef.current === controller) {
           articlesRequestAbortRef.current = null;
+          activeArticleFetchModeRef.current = "idle";
           if (!background) {
             setLoading(false);
+          }
+          if (pendingArticleRealtimeRefreshRef.current) {
+            pendingArticleRealtimeRefreshRef.current = false;
+            const currentQuery = articleListQueryRef.current;
+            const triggerPendingRefresh = () => {
+              fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters, { background: true });
+            };
+            if (typeof window === "undefined") {
+              triggerPendingRefresh();
+            } else {
+              window.setTimeout(triggerPendingRefresh, 0);
+            }
           }
         }
       });
@@ -553,6 +570,8 @@ export default function ArticlesPage() {
 
   useEffect(() => () => {
     articlesRequestAbortRef.current?.abort();
+    activeArticleFetchModeRef.current = "idle";
+    pendingArticleRealtimeRefreshRef.current = false;
     if (articlesRealtimeRefreshTimerRef.current) {
       window.clearTimeout(articlesRealtimeRefreshTimerRef.current);
     }
@@ -1236,11 +1255,13 @@ export default function ArticlesPage() {
     }
   }, []);
 
-  const refreshArticlesView = useCallback(() => {
-    if (loading) {
+  const refreshArticlesView = useCallback((options?: { immediate?: boolean }) => {
+    if (activeArticleFetchModeRef.current === "foreground") {
+      pendingArticleRealtimeRefreshRef.current = true;
       return;
     }
 
+    pendingArticleRealtimeRefreshRef.current = false;
     if (typeof window === "undefined") {
       const currentQuery = articleListQueryRef.current;
       fetchArticles(currentQuery.page || 1, currentQuery.search, currentQuery.filters, { background: true });
@@ -1261,10 +1282,40 @@ export default function ArticlesPage() {
       if (commentArticle) {
         fetchComments(commentArticle.id);
       }
-    }, 600);
-  }, [commentArticle, fetchArticles, fetchComments, loading]);
+    }, options?.immediate ? 0 : 600);
+  }, [commentArticle, fetchArticles, fetchComments]);
 
   useRealtimeRefresh(["articles"], refreshArticlesView);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      refreshArticlesView({ immediate: true });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfVisible();
+      }
+    };
+
+    const interval = window.setInterval(refreshIfVisible, ARTICLES_PASSIVE_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", refreshIfVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", refreshIfVisible);
+    };
+  }, [refreshArticlesView]);
 
   const openComments = (article: Article) => {
     setCommentArticle(article);

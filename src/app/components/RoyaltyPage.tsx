@@ -18,6 +18,7 @@ const ROYALTY_RATES_CACHE_TTL_MS = 10 * 60 * 1000;
 const REVIEWER_ROYALTY_PRICE = 15000;
 const ROYALTY_COLLABORATORS_CACHE_TTL_MS = 10 * 60 * 1000;
 const ROYALTY_DASHBOARD_CACHE_TTL_MS = 30 * 1000;
+const ROYALTY_PASSIVE_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 let royaltyRatesCache: RoyaltyRateItem[] | null = null;
 let royaltyRatesCacheAt = 0;
@@ -257,6 +258,36 @@ export default function RoyaltyPage() {
   }, []);
 
   useRealtimeRefresh(["royalty"], scheduleRoyaltyRefresh);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      refreshRoyaltyView();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfVisible();
+      }
+    };
+
+    const interval = window.setInterval(refreshIfVisible, ROYALTY_PASSIVE_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", refreshIfVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", refreshIfVisible);
+    };
+  }, [refreshRoyaltyView]);
 
   const handleSetBudget = async () => {
     const amount = parseInt(budgetInput);

@@ -8,7 +8,7 @@ import type { DashboardStats, Page } from "./types";
 import { useIsMobile } from "./useMediaQuery";
 
 const DASHBOARD_STATS_CACHE_TTL_MS = 30_000;
-const DASHBOARD_PASSIVE_REFRESH_INTERVAL_MS = 120_000;
+const DASHBOARD_PASSIVE_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 let dashboardStatsCache: DashboardStats | null = null;
 let dashboardStatsCacheAt = 0;
