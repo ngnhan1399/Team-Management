@@ -572,8 +572,10 @@ export default function MainApp() {
                       title={item.label}
                     >
                       <span className="material-symbols-outlined">{item.icon}</span>
-                      <span className="sidebar-nav-label" style={{ flex: 1 }}>{item.label}</span>
-                      {item.count !== undefined && item.count > 0 && (
+                      {!isDesktopSidebarCollapsed && (
+                        <span className="sidebar-nav-label" style={{ flex: 1 }}>{item.label}</span>
+                      )}
+                      {!isDesktopSidebarCollapsed && item.count !== undefined && item.count > 0 && (
                         <span className="sidebar-nav-count" style={{ background: "var(--danger)", color: "white", fontSize: 10, padding: "2px 6px", borderRadius: 10, minWidth: 20 }}>{item.count}</span>
                       )}
                     </button>
@@ -593,10 +595,12 @@ export default function MainApp() {
                 <span style={{ fontSize: 13, fontWeight: 700 }}>{user?.email[0].toUpperCase()}</span>
               )}
             </div>
-            <div className="sidebar-user-meta" style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</p>
-              <p style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</p>
-            </div>
+            {!isDesktopSidebarCollapsed && (
+              <div className="sidebar-user-meta" style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</p>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</p>
+              </div>
+            )}
             <button type="button" onClick={logout} title="Đăng xuất" aria-label="Đăng xuất" className="sidebar-logout-button material-symbols-outlined" style={{ fontSize: 20, color: "var(--text-muted)", cursor: "pointer", border: "none", background: "transparent", padding: 0 }}>logout</button>
           </div>
         </div>
