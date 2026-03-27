@@ -2125,7 +2125,11 @@ export default function ArticlesPage() {
         return String(right.date || "").localeCompare(String(left.date || ""));
       })
     : [];
-  const articleTableMinWidth = showSplitArticleSections ? 1020 : 1080;
+  const articleTitleColumnWidth = previewArticle ? "26%" : "32%";
+  const articleActionColumnWidth = previewArticle ? 188 : 170;
+  const articleTableMinWidth = previewArticle
+    ? (showSplitArticleSections ? 980 : 1040)
+    : (showSplitArticleSections ? 1020 : 1080);
   const articleSections = isReviewer
     ? [
       {
@@ -2207,14 +2211,14 @@ export default function ArticlesPage() {
         <colgroup>
           {allowBulkAssign && selectionMode && <col style={{ width: 44 }} />}
           <col style={{ width: 72 }} />
-          <col style={{ width: 92 }} />
-          <col />
-          <col style={{ width: 132 }} />
-          <col style={{ width: 92 }} />
-          <col style={{ width: 118 }} />
-          <col style={{ width: 132 }} />
-          <col style={{ width: 58 }} />
-          <col style={{ width: 142 }} />
+          <col style={{ width: 88 }} />
+          <col style={{ width: articleTitleColumnWidth }} />
+          <col style={{ width: 124 }} />
+          <col style={{ width: 86 }} />
+          <col style={{ width: 112 }} />
+          <col style={{ width: 120 }} />
+          <col style={{ width: 52 }} />
+          <col style={{ width: articleActionColumnWidth }} />
         </colgroup>
         <thead style={{ pointerEvents: "none" }}>
           <tr style={{ background: "rgba(248, 250, 252, 0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)" }}>
@@ -2268,7 +2272,7 @@ export default function ArticlesPage() {
                 )}
                 <td style={{ padding: "12px 12px", fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{a.articleId || a.id}</td>
                 <td style={{ padding: "12px 10px", fontSize: 13, color: "var(--text-main)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{a.date}</td>
-                <td style={{ padding: "12px 14px" }}>
+                <td style={{ padding: "12px 12px" }}>
                   {getPreferredArticleNavigationLink(a) ? (
                     <button
                       type="button"
@@ -2285,6 +2289,7 @@ export default function ArticlesPage() {
                         WebkitBoxOrient: "vertical",
                         overflow: "hidden",
                         width: "100%",
+                        maxWidth: "100%",
                         padding: 0,
                         cursor: "pointer",
                         textAlign: "left",
@@ -2307,6 +2312,7 @@ export default function ArticlesPage() {
                         WebkitBoxOrient: "vertical",
                         overflow: "hidden",
                         width: "100%",
+                        maxWidth: "100%",
                       }}
                     >
                       {a.title}
@@ -2392,8 +2398,8 @@ export default function ArticlesPage() {
                 <td style={{ padding: "12px 8px", textAlign: "center" }}>
                   {linkBadge(a)}
                 </td>
-                <td style={{ padding: "12px 10px", textAlign: "center" }}>
-                  <div style={{ display: "flex", gap: 6, justifyContent: "center", alignItems: "center", flexWrap: "nowrap", whiteSpace: "nowrap", width: "100%" }}>
+                <td style={{ padding: "12px 8px", textAlign: "center" }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "center", alignItems: "center", flexWrap: "nowrap", whiteSpace: "nowrap", width: "100%", maxWidth: articleActionColumnWidth, margin: "0 auto" }}>
                     <div style={{ position: "relative", display: "inline-flex" }}>
                       <button
                         data-testid={`article-comment-${a.id}`}
